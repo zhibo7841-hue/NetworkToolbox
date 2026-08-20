@@ -60,10 +60,12 @@ kapt {
 dependencies {
     implementation(project(":feature:dashboard"))
     implementation(project(":core:common"))
+    implementation(project(":core:network"))
     implementation(project(":core:permission"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.activity.ktx)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui)
