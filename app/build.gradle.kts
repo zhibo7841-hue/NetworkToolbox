@@ -59,6 +59,7 @@ kapt {
 
 dependencies {
     implementation(project(":feature:dashboard"))
+    implementation(project(":feature:subnet"))
     implementation(project(":core:common"))
     implementation(project(":core:network"))
     implementation(project(":core:permission"))

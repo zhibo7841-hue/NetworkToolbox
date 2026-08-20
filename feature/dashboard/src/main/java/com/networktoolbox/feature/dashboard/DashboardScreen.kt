@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +23,7 @@ import com.networktoolbox.core.network.model.ConnectionType
 @Composable
 fun DashboardScreen(
     uiState: DashboardUiState,
+    onOpenSubnet: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val networkContext = uiState.networkContext
@@ -63,6 +65,11 @@ fun DashboardScreen(
                     "信号级别",
                     networkContext.wifiSignalLevel?.let { "$it / 4" }.orUnknown(),
                 )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = onOpenSubnet) {
+                Text("IPv4 子网计算器")
             }
         }
     }
