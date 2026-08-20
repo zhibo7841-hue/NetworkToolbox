@@ -24,6 +24,7 @@ import com.networktoolbox.core.network.model.ConnectionType
 fun DashboardScreen(
     uiState: DashboardUiState,
     onOpenSubnet: () -> Unit,
+    onOpenPing: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val networkContext = uiState.networkContext
@@ -70,6 +71,9 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(8.dp))
             Button(onClick = onOpenSubnet) {
                 Text("IPv4 子网计算器")
+            }
+            Button(onClick = onOpenPing) {
+                Text("Ping")
             }
         }
     }
