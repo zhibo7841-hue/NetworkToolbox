@@ -15,6 +15,8 @@ import com.networktoolbox.feature.dns.presentation.DnsViewModel
 import com.networktoolbox.feature.dns.ui.DnsScreen
 import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
+import com.networktoolbox.feature.port.presentation.TcpViewModel
+import com.networktoolbox.feature.port.ui.TcpScreen
 import com.networktoolbox.feature.subnet.presentation.SubnetViewModel
 import com.networktoolbox.feature.subnet.ui.SubnetScreen
 import com.networktoolbox.ui.theme.NetworkToolboxTheme
@@ -25,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private val dashboardViewModel: DashboardViewModel by viewModels()
     private val dnsViewModel: DnsViewModel by viewModels()
     private val pingViewModel: PingViewModel by viewModels()
+    private val tcpViewModel: TcpViewModel by viewModels()
     private val subnetViewModel: SubnetViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +36,7 @@ class MainActivity : ComponentActivity() {
             val uiState by dashboardViewModel.uiState.collectAsState()
             val dnsUiState by dnsViewModel.uiState.collectAsState()
             val pingUiState by pingViewModel.uiState.collectAsState()
+            val tcpUiState by tcpViewModel.uiState.collectAsState()
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             var currentScreen by rememberSaveable { mutableStateOf(AppScreen.DASHBOARD) }
 
@@ -43,6 +47,7 @@ class MainActivity : ComponentActivity() {
                         onOpenSubnet = { currentScreen = AppScreen.SUBNET },
                         onOpenPing = { currentScreen = AppScreen.PING },
                         onOpenDns = { currentScreen = AppScreen.DNS },
+                        onOpenTcp = { currentScreen = AppScreen.TCP },
                     )
                     AppScreen.SUBNET -> SubnetScreen(
                         uiState = subnetUiState,
@@ -62,6 +67,13 @@ class MainActivity : ComponentActivity() {
                         onLookup = dnsViewModel::lookup,
                         onBack = { currentScreen = AppScreen.DASHBOARD },
                     )
+                    AppScreen.TCP -> TcpScreen(
+                        uiState = tcpUiState,
+                        onHostChanged = tcpViewModel::onHostChanged,
+                        onPortChanged = tcpViewModel::onPortChanged,
+                        onCheck = tcpViewModel::check,
+                        onBack = { currentScreen = AppScreen.DASHBOARD },
+                    )
                 }
             }
         }
@@ -73,4 +85,5 @@ private enum class AppScreen {
     SUBNET,
     PING,
     DNS,
+    TCP,
 }

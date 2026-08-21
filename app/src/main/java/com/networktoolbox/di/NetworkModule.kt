@@ -4,8 +4,10 @@ import android.content.Context
 import com.networktoolbox.core.network.data.AndroidDnsEngine
 import com.networktoolbox.core.network.data.AndroidNetworkRepository
 import com.networktoolbox.core.network.data.AndroidPingEngine
+import com.networktoolbox.core.network.data.AndroidTcpPortChecker
 import com.networktoolbox.core.network.dns.DnsEngine
 import com.networktoolbox.core.network.ping.PingEngine
+import com.networktoolbox.core.network.tcp.TcpPortChecker
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
 import dagger.Module
@@ -31,6 +33,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideDnsEngine(): DnsEngine = AndroidDnsEngine()
+
+    @Provides
+    @Singleton
+    fun provideTcpPortChecker(): TcpPortChecker = AndroidTcpPortChecker()
 
     @Provides
     @Singleton

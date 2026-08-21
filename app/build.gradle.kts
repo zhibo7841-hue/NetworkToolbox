@@ -60,6 +60,7 @@ kapt {
 dependencies {
     implementation(project(":feature:dashboard"))
     implementation(project(":feature:dns"))
+    implementation(project(":feature:port"))
     implementation(project(":feature:ping"))
     implementation(project(":feature:subnet"))
     implementation(project(":core:common"))

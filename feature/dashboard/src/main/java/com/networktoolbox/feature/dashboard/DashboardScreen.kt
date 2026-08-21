@@ -26,6 +26,7 @@ fun DashboardScreen(
     onOpenSubnet: () -> Unit,
     onOpenPing: () -> Unit,
     onOpenDns: () -> Unit,
+    onOpenTcp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val networkContext = uiState.networkContext
@@ -78,6 +79,9 @@ fun DashboardScreen(
             }
             Button(onClick = onOpenDns) {
                 Text("DNS Lookup")
+            }
+            Button(onClick = onOpenTcp) {
+                Text("TCP Port Check")
             }
         }
     }
