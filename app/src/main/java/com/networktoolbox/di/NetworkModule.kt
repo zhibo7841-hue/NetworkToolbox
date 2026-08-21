@@ -10,6 +10,14 @@ import com.networktoolbox.core.network.ping.PingEngine
 import com.networktoolbox.core.network.tcp.TcpPortChecker
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
+import com.networktoolbox.feature.dns.domain.LookupDnsUseCase
+import com.networktoolbox.feature.ping.domain.ExecutePingUseCase
+import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
+import com.networktoolbox.feature.report.diagnostic.BasicDiagnosticAnalyzer
+import com.networktoolbox.feature.report.diagnostic.DiagnosticAnalyzer
+import com.networktoolbox.feature.report.domain.DnsUseCase as ReportDnsUseCase
+import com.networktoolbox.feature.report.domain.PingUseCase as ReportPingUseCase
+import com.networktoolbox.feature.report.domain.TcpUseCase as ReportTcpUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -43,4 +51,26 @@ object NetworkModule {
     fun provideObserveNetworkContextUseCase(
         repository: NetworkRepository,
     ): ObserveNetworkContextUseCase = ObserveNetworkContextUseCase(repository)
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticAnalyzer(): DiagnosticAnalyzer = BasicDiagnosticAnalyzer()
+
+    @Provides
+    @Singleton
+    fun provideReportPingUseCase(
+        executePing: ExecutePingUseCase,
+    ): ReportPingUseCase = ReportPingUseCase { target -> executePing(target) }
+
+    @Provides
+    @Singleton
+    fun provideReportDnsUseCase(
+        lookupDns: LookupDnsUseCase,
+    ): ReportDnsUseCase = ReportDnsUseCase { domain -> lookupDns(domain) }
+
+    @Provides
+    @Singleton
+    fun provideReportTcpUseCase(
+        checkTcpPort: CheckTcpPortUseCase,
+    ): ReportTcpUseCase = ReportTcpUseCase { host, port -> checkTcpPort(host, port) }
 }

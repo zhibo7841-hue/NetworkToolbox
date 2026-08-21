@@ -62,6 +62,7 @@ dependencies {
     implementation(project(":feature:dns"))
     implementation(project(":feature:port"))
     implementation(project(":feature:ping"))
+    implementation(project(":feature:report"))
     implementation(project(":feature:subnet"))
     implementation(project(":core:common"))
     implementation(project(":core:network"))
