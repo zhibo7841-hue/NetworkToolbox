@@ -1,8 +1,10 @@
 package com.networktoolbox.di
 
 import android.content.Context
+import com.networktoolbox.core.network.data.AndroidDnsEngine
 import com.networktoolbox.core.network.data.AndroidNetworkRepository
 import com.networktoolbox.core.network.data.AndroidPingEngine
+import com.networktoolbox.core.network.dns.DnsEngine
 import com.networktoolbox.core.network.ping.PingEngine
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
@@ -25,6 +27,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun providePingEngine(): PingEngine = AndroidPingEngine()
+
+    @Provides
+    @Singleton
+    fun provideDnsEngine(): DnsEngine = AndroidDnsEngine()
 
     @Provides
     @Singleton
