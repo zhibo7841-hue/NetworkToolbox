@@ -20,3 +20,8 @@ android {
 kotlin {
     jvmToolchain(17)
 }
+
+dependencies {
+    implementation(project(":core:network"))
+    testImplementation(libs.junit)
+}
