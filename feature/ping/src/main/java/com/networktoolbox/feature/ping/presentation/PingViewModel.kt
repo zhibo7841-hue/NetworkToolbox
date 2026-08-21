@@ -7,6 +7,7 @@ import com.networktoolbox.core.network.ping.PingResult
 import com.networktoolbox.feature.ping.domain.ExecutePingUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,16 +54,19 @@ class PingViewModel @Inject constructor(
         _uiState.update { it.copy(status = PingStatus.Running(target)) }
 
         viewModelScope.launch {
-            val result = runCatching { executePing(target) }
-                .getOrElse {
-                    PingResult(
-                        target = target,
-                        success = false,
-                        latencyMs = null,
-                        method = PingMethod.UNAVAILABLE,
-                        errorMessage = "Ping unavailable.",
-                    )
-                }
+            val result = try {
+                executePing(target)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                PingResult(
+                    target = target,
+                    success = false,
+                    latencyMs = null,
+                    method = PingMethod.UNAVAILABLE,
+                    errorMessage = "Ping unavailable.",
+                )
+            }
 
             _uiState.update {
                 it.copy(

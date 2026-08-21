@@ -6,6 +6,7 @@ import com.networktoolbox.core.network.tcp.TcpProbeResult
 import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,16 +66,19 @@ class TcpViewModel @Inject constructor(
         _uiState.update { it.copy(status = TcpStatus.Loading(host, port)) }
 
         viewModelScope.launch {
-            val result = runCatching { checkTcpPort(host, port) }
-                .getOrElse {
-                    TcpProbeResult(
-                        host = host,
-                        port = port.toIntOrNull() ?: 0,
-                        success = false,
-                        latencyMs = null,
-                        errorMessage = "Unknown error",
-                    )
-                }
+            val result = try {
+                checkTcpPort(host, port)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                TcpProbeResult(
+                    host = host,
+                    port = port.toIntOrNull() ?: 0,
+                    success = false,
+                    latencyMs = null,
+                    errorMessage = "Unknown error",
+                )
+            }
 
             _uiState.update {
                 it.copy(

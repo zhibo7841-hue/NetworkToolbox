@@ -6,6 +6,7 @@ import com.networktoolbox.core.network.ping.PingResult
 import java.io.IOException
 import java.net.InetAddress
 import java.net.UnknownHostException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -55,6 +56,8 @@ class AndroidPingEngine(
             unavailable(normalizedTarget, "System reachability is unavailable.")
         } catch (_: SecurityException) {
             unavailable(normalizedTarget, "System reachability is unavailable.")
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: RuntimeException) {
             unavailable(normalizedTarget, "System reachability is unavailable.")
         }

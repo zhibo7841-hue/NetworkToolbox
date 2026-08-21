@@ -4,6 +4,7 @@ import com.networktoolbox.core.network.dns.DnsMethod
 import com.networktoolbox.core.network.dns.DnsRecord
 import com.networktoolbox.core.network.dns.DnsRecordType
 import java.net.UnknownHostException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -119,5 +120,12 @@ class AndroidDnsEngineTest {
         assertEquals(DnsMethod.SYSTEM_RESOLVER, result.method)
         assertEquals("No A or AAAA records found.", result.errorMessage)
         assertNotNull(result.durationMs)
+    }
+
+    @Test(expected = CancellationException::class)
+    fun resolverCancellationIsPropagated() = runBlocking {
+        AndroidDnsEngine { throw CancellationException("cancelled") }
+            .lookup("example.test")
+        Unit
     }
 }

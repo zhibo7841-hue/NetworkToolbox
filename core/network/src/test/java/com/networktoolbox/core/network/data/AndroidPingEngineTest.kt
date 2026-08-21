@@ -3,6 +3,7 @@ package com.networktoolbox.core.network.data
 import com.networktoolbox.core.network.ping.PingEngine
 import com.networktoolbox.core.network.ping.PingMethod
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -107,5 +108,12 @@ class AndroidPingEngineTest {
     @Test
     fun defaultTimeoutIsThreeSeconds() {
         assertEquals(3_000, PingEngine.DEFAULT_TIMEOUT_MS)
+    }
+
+    @Test(expected = CancellationException::class)
+    fun reachabilityCancellationIsPropagated() = runBlocking {
+        AndroidPingEngine { _, _ -> throw CancellationException("cancelled") }
+            .ping("127.0.0.1")
+        Unit
     }
 }

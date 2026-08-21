@@ -9,6 +9,7 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.UnknownHostException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -70,6 +71,8 @@ class AndroidDnsEngine(
             failedSystemLookup(normalizedDomain, startedAt, "Domain could not be resolved.")
         } catch (_: SecurityException) {
             unavailable(normalizedDomain, "System resolver is unavailable.")
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: RuntimeException) {
             unavailable(normalizedDomain, "System resolver is unavailable.")
         }

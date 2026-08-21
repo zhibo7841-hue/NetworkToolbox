@@ -7,6 +7,7 @@ import com.networktoolbox.core.network.dns.DnsResult
 import com.networktoolbox.feature.dns.domain.LookupDnsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,17 +54,20 @@ class DnsViewModel @Inject constructor(
         _uiState.update { it.copy(status = DnsStatus.Loading(domain)) }
 
         viewModelScope.launch {
-            val result = runCatching { lookupDns(domain) }
-                .getOrElse {
-                    DnsResult(
-                        domain = domain,
-                        success = false,
-                        records = emptyList(),
-                        durationMs = null,
-                        method = DnsMethod.UNAVAILABLE,
-                        errorMessage = "DNS lookup unavailable.",
-                    )
-                }
+            val result = try {
+                lookupDns(domain)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                DnsResult(
+                    domain = domain,
+                    success = false,
+                    records = emptyList(),
+                    durationMs = null,
+                    method = DnsMethod.UNAVAILABLE,
+                    errorMessage = "DNS lookup unavailable.",
+                )
+            }
 
             _uiState.update {
                 it.copy(
