@@ -1,10 +1,13 @@
 package com.networktoolbox.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 private val NetworkToolboxColorScheme = lightColorScheme(
     primary = Color(0xFF1565C0),
@@ -20,11 +23,18 @@ private val NetworkToolboxColorScheme = lightColorScheme(
 
 private val NetworkToolboxTypography = Typography()
 
+private val NetworkToolboxShapes = Shapes(
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+)
+
 @Composable
 fun NetworkToolboxTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = NetworkToolboxColorScheme,
         typography = NetworkToolboxTypography,
+        shapes = NetworkToolboxShapes,
         content = content,
     )
 }
