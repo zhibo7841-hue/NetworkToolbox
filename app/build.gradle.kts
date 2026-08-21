@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":feature:report"))
     implementation(project(":feature:subnet"))
     implementation(project(":core:common"))
+    implementation(project(":core:database"))
     implementation(project(":core:network"))
     implementation(project(":core:permission"))
 

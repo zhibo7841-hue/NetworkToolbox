@@ -28,7 +28,11 @@ kapt {
 
 dependencies {
     implementation(project(":core:common"))
+    implementation(libs.com.google.dagger.hilt.android)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.core)
 }
