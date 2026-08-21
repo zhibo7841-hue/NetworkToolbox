@@ -3,10 +3,8 @@ package com.networktoolbox.feature.port.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,48 +41,65 @@ fun TcpScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isLoading) {
                 Text("返回 Dashboard")
             }
             Text(
                 text = "TCP Port Check",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
             )
             Text(
-                text = "对指定 Host 和 Port 执行一次 TCP Connect",
+                text = "检查指定服务端口连接",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = uiState.hostInput,
-                onValueChange = onHostChanged,
-                label = { Text("Host") },
-                singleLine = true,
-                enabled = !isLoading,
-                isError = uiState.status.isInvalidHost(),
-            )
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = uiState.portInput,
-                onValueChange = onPortChanged,
-                label = { Text("Port") },
-                singleLine = true,
-                enabled = !isLoading,
-                isError = uiState.status.isInvalidPort(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Button(
-                onClick = onCheck,
-                enabled = !isLoading,
-            ) {
-                Text(if (isLoading) "Checking..." else "Check")
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Input", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = uiState.hostInput,
+                        onValueChange = onHostChanged,
+                        label = { Text("Host") },
+                        singleLine = true,
+                        enabled = !isLoading,
+                        isError = uiState.status.isInvalidHost(),
+                    )
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = uiState.portInput,
+                        onValueChange = onPortChanged,
+                        label = { Text("Port") },
+                        singleLine = true,
+                        enabled = !isLoading,
+                        isError = uiState.status.isInvalidPort(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                    if (uiState.status.isInvalidHost() || uiState.status.isInvalidPort()) {
+                        Text(
+                            "输入无效。请输入 Host 和 1–65535 范围内的端口。",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onCheck,
+                        enabled = !isLoading,
+                    ) {
+                        Text(if (isLoading) "Checking..." else "Check")
+                    }
+                }
             }
 
             when (val status = uiState.status) {
                 TcpStatus.Idle -> Unit
-                is TcpStatus.Loading -> Text("Checking...")
+                is TcpStatus.Loading -> LoadingMessage()
                 is TcpStatus.Success -> TcpResultCard(status.result)
                 is TcpStatus.Error -> TcpResultCard(status.result)
             }
@@ -99,21 +114,31 @@ private fun TcpResultCard(result: TcpProbeResult) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("TCP Result", style = MaterialTheme.typography.titleLarge)
+            Text("Result", style = MaterialTheme.typography.titleMedium)
             ResultRow("Host", result.host.ifBlank { "未知" })
             ResultRow("Port", result.port.takeIf { it in 1..65_535 }?.toString() ?: "未知")
-            ResultRow("Status", if (result.success) "Connected" else "Failed")
+            ResultRow("Status", if (result.success) "Completed" else "Failed")
             ResultRow("Latency", result.latencyMs?.let { "$it ms" } ?: "未知")
             result.errorMessage
                 ?.takeIf { it.isNotBlank() }
                 ?.let { errorMessage ->
-                    ResultRow("Reason", errorMessage.toDisplayError())
+                    ResultRow("Reason", errorMessage)
                     errorMessage.toExplanation()?.let { explanation ->
                         ResultRow("说明", explanation)
                     }
                 }
-            Spacer(modifier = Modifier.height(2.dp))
         }
+    }
+}
+
+@Composable
+private fun LoadingMessage() {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            modifier = Modifier.padding(16.dp),
+            text = "Checking...",
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 
@@ -139,15 +164,8 @@ private fun TcpStatus.isInvalidHost(): Boolean =
 private fun TcpStatus.isInvalidPort(): Boolean =
     this is TcpStatus.Error && result.errorMessage == "Invalid port."
 
-private fun String.toDisplayError(): String = when (this) {
-    "Invalid host." -> "请输入 Host。"
-    "Invalid port." -> "请输入有效端口。"
-    "Timeout must be greater than zero." -> "超时时间无效。"
-    else -> this
-}
-
 private fun String.toExplanation(): String? = when (this) {
-    "Connection refused" -> "目标可达，但端口未开放。"
+    "Connection refused" -> "目标设备可访问，但该端口没有服务响应。"
     "Timeout" -> "连接没有及时响应。"
     "Unknown error" -> "无法确定连接失败原因。"
     else -> null

@@ -2,16 +2,13 @@ package com.networktoolbox.feature.report.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,18 +40,19 @@ fun ReportScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isRunning) {
                 Text("返回 Dashboard")
             }
             Text(
                 text = "Network Diagnostic",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
             )
             Text(
                 text = "执行一次本地网络检测并生成参考报告。",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = "固定目标：Ping ${GenerateDiagnosticReportUseCase.DEFAULT_PING_TARGET} · " +
@@ -63,11 +61,20 @@ fun ReportScreen(
                     GenerateDiagnosticReportUseCase.DEFAULT_TCP_PORT,
                 style = MaterialTheme.typography.bodySmall,
             )
-            Button(
-                onClick = onRunCheck,
-                enabled = !isRunning,
-            ) {
-                Text(if (isRunning) "Checking..." else "Run Check")
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Action", style = MaterialTheme.typography.titleMedium)
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onRunCheck,
+                        enabled = !isRunning,
+                    ) {
+                        Text(if (isRunning) "Checking..." else "Run Check")
+                    }
+                }
             }
 
             when (val status = uiState.status) {
@@ -82,7 +89,7 @@ fun ReportScreen(
 
 @Composable
 private fun RunningContent(progress: ReportProgress) {
-    Text("Checking network...", style = MaterialTheme.typography.titleLarge)
+    Text("Checking...", style = MaterialTheme.typography.titleLarge)
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -110,30 +117,41 @@ private fun StepRow(
 
 @Composable
 private fun ReportContent(report: DiagnosticReport) {
-    Text("Diagnostic Report", style = MaterialTheme.typography.titleLarge)
+    Text("Result", style = MaterialTheme.typography.titleLarge)
+    ReportSectionCard(title = "Summary") {
+        Text("Status: Completed", style = MaterialTheme.typography.bodyMedium)
+        Text(report.summary)
+    }
+    ReportSectionCard(title = "Findings") {
+        if (report.findings.isEmpty()) {
+            Text("未发现需要关注的现象。")
+        } else {
+            report.findings.forEach { finding -> FindingItem(finding) }
+        }
+    }
+    ReportSectionCard(title = "Suggestions") {
+        if (report.suggestions.isEmpty()) {
+            Text("暂无额外建议。")
+        } else {
+            report.suggestions.forEach { suggestion ->
+                Text("• $suggestion")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportSectionCard(
+    title: String,
+    content: @Composable () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Summary", style = MaterialTheme.typography.titleMedium)
-            Text(report.summary)
-            HorizontalDivider()
-            Text("Findings", style = MaterialTheme.typography.titleMedium)
-            if (report.findings.isEmpty()) {
-                Text("未发现需要关注的现象。")
-            } else {
-                report.findings.forEach { finding -> FindingItem(finding) }
-            }
-            HorizontalDivider()
-            Text("Suggestions", style = MaterialTheme.typography.titleMedium)
-            if (report.suggestions.isEmpty()) {
-                Text("暂无额外建议。")
-            } else {
-                report.suggestions.forEach { suggestion ->
-                    Text("建议：$suggestion")
-                }
-            }
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            content()
         }
     }
 }
@@ -142,11 +160,10 @@ private fun ReportContent(report: DiagnosticReport) {
 private fun FindingItem(finding: DiagnosticFinding) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
-            text = "${finding.level.displayName()} · ${finding.title}",
+            text = "${finding.level.marker()} ${finding.level.displayName()} · ${finding.title}",
             style = MaterialTheme.typography.bodyLarge,
         )
         Text(finding.description, style = MaterialTheme.typography.bodyMedium)
-        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
@@ -157,7 +174,7 @@ private fun ErrorContent(message: String) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("检测流程失败", style = MaterialTheme.typography.titleMedium)
+            Text("Status: Failed", style = MaterialTheme.typography.titleMedium)
             Text(message)
         }
     }
@@ -174,4 +191,10 @@ private fun FindingLevel.displayName(): String = when (this) {
     FindingLevel.INFO -> "INFO"
     FindingLevel.WARNING -> "WARNING"
     FindingLevel.ERROR -> "ERROR"
+}
+
+private fun FindingLevel.marker(): String = when (this) {
+    FindingLevel.INFO -> "✓"
+    FindingLevel.WARNING -> "!"
+    FindingLevel.ERROR -> "×"
 }

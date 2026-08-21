@@ -3,10 +3,8 @@ package com.networktoolbox.feature.ping.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -41,38 +39,55 @@ fun PingScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isRunning) {
                 Text("返回 Dashboard")
             }
             Text(
                 text = "Ping",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
             )
             Text(
-                text = "检测 IPv4 地址或域名的系统网络可达性",
+                text = "测试目标是否可达",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = uiState.targetInput,
-                onValueChange = onTargetChanged,
-                label = { Text("Target") },
-                singleLine = true,
-                enabled = !isRunning,
-                isError = uiState.status.isInvalidInput(),
-            )
-            Button(
-                onClick = onPing,
-                enabled = !isRunning,
-            ) {
-                Text(if (isRunning) "正在检测..." else "Ping")
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Input", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = uiState.targetInput,
+                        onValueChange = onTargetChanged,
+                        label = { Text("Target") },
+                        singleLine = true,
+                        enabled = !isRunning,
+                        isError = uiState.status.isInvalidInput(),
+                    )
+                    if (uiState.status.isInvalidInput()) {
+                        Text(
+                            "输入无效。请输入 IPv4 地址或域名。",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onPing,
+                        enabled = !isRunning,
+                    ) {
+                        Text(if (isRunning) "Checking..." else "Start")
+                    }
+                }
             }
 
             when (val status = uiState.status) {
                 PingStatus.Idle -> Unit
-                is PingStatus.Running -> Text("正在检测...")
+                is PingStatus.Running -> LoadingMessage()
                 is PingStatus.Success -> PingResultCard(status.result)
                 is PingStatus.Failed -> PingResultCard(status.result)
             }
@@ -88,19 +103,32 @@ private fun PingResultCard(result: PingResult) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("检测结果", style = MaterialTheme.typography.titleLarge)
-            ResultRow("目标", result.target.ifBlank { "未知" })
-            ResultRow("状态", if (success) "可达" else "不可达")
-            ResultRow("延迟", result.latencyMs?.let { "$it ms" } ?: "未知")
-            ResultRow("检测方式", result.method.displayName())
+            Text("Result", style = MaterialTheme.typography.titleMedium)
+            ResultRow("Target", result.target.ifBlank { "未知" })
+            ResultRow("Status", if (success) "Completed" else "Failed")
+            ResultRow("Latency", result.latencyMs?.let { "$it ms" } ?: "未知")
+            ResultRow("Detection", result.method.displayName())
             ResultRow("Method", result.method.name)
             result.errorMessage
                 ?.takeIf { it.isNotBlank() }
                 ?.let { errorMessage ->
-                    ResultRow("原因", errorMessage.toDisplayError())
+                    ResultRow("Reason", errorMessage)
+                    errorMessage.toExplanation()?.let { explanation ->
+                        ResultRow("说明", explanation)
+                    }
                 }
-            Spacer(modifier = Modifier.height(2.dp))
         }
+    }
+}
+
+@Composable
+private fun LoadingMessage() {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            modifier = Modifier.padding(16.dp),
+            text = "Checking...",
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 
@@ -128,5 +156,11 @@ private fun PingMethod.displayName(): String = when (this) {
 private fun PingStatus.isInvalidInput(): Boolean =
     this is PingStatus.Failed && result.errorMessage == "Invalid target."
 
-private fun String.toDisplayError(): String =
-    if (this == "Invalid target.") "输入无效。" else this
+private fun String.toExplanation(): String? = when (this) {
+    "Invalid target." -> "请输入有效的 IPv4 地址或域名。"
+    "Target could not be resolved." -> "目标无法解析，请检查地址或域名。"
+    "Target is not reachable." -> "目标未响应本次系统可达性检测。"
+    "System reachability is unavailable.", "Ping unavailable." ->
+        "系统可达性检测暂时不可用。"
+    else -> null
+}
