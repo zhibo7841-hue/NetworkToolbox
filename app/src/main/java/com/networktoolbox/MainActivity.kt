@@ -13,6 +13,8 @@ import com.networktoolbox.feature.dashboard.DashboardScreen
 import com.networktoolbox.feature.dashboard.DashboardViewModel
 import com.networktoolbox.feature.dns.presentation.DnsViewModel
 import com.networktoolbox.feature.dns.ui.DnsScreen
+import com.networktoolbox.feature.history.presentation.HistoryViewModel
+import com.networktoolbox.feature.history.ui.HistoryScreen
 import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
 import com.networktoolbox.feature.port.presentation.TcpViewModel
@@ -28,6 +30,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val dashboardViewModel: DashboardViewModel by viewModels()
     private val dnsViewModel: DnsViewModel by viewModels()
+    private val historyViewModel: HistoryViewModel by viewModels()
     private val pingViewModel: PingViewModel by viewModels()
     private val tcpViewModel: TcpViewModel by viewModels()
     private val reportViewModel: ReportViewModel by viewModels()
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val uiState by dashboardViewModel.uiState.collectAsState()
             val dnsUiState by dnsViewModel.uiState.collectAsState()
+            val historyUiState by historyViewModel.uiState.collectAsState()
             val pingUiState by pingViewModel.uiState.collectAsState()
             val tcpUiState by tcpViewModel.uiState.collectAsState()
             val reportUiState by reportViewModel.uiState.collectAsState()
@@ -53,6 +57,7 @@ class MainActivity : ComponentActivity() {
                         onOpenDns = { currentScreen = AppScreen.DNS },
                         onOpenTcp = { currentScreen = AppScreen.TCP },
                         onOpenReport = { currentScreen = AppScreen.REPORT },
+                        onOpenHistory = { currentScreen = AppScreen.HISTORY },
                     )
                     AppScreen.SUBNET -> SubnetScreen(
                         uiState = subnetUiState,
@@ -84,6 +89,13 @@ class MainActivity : ComponentActivity() {
                         onRunCheck = reportViewModel::runCheck,
                         onBack = { currentScreen = AppScreen.DASHBOARD },
                     )
+                    AppScreen.HISTORY -> HistoryScreen(
+                        uiState = historyUiState,
+                        onLoad = historyViewModel::load,
+                        onDelete = historyViewModel::delete,
+                        onClear = historyViewModel::clear,
+                        onBack = { currentScreen = AppScreen.DASHBOARD },
+                    )
                 }
             }
         }
@@ -97,4 +109,5 @@ private enum class AppScreen {
     DNS,
     TCP,
     REPORT,
+    HISTORY,
 }

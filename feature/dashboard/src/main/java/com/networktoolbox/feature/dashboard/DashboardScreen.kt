@@ -26,6 +26,7 @@ fun DashboardScreen(
     onOpenDns: () -> Unit,
     onOpenTcp: () -> Unit,
     onOpenReport: () -> Unit,
+    onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val networkContext = uiState.networkContext
@@ -81,6 +82,9 @@ fun DashboardScreen(
 
             SectionTitle("Diagnostics")
             ToolButton("Network Diagnostic Report", onOpenReport)
+
+            SectionTitle("History")
+            ToolButton("History", onOpenHistory)
         }
     }
 }
