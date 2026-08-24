@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.WifiTethering
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -44,13 +42,11 @@ data class RecentHistoryPreview(
 )
 
 @Composable
-fun DashboardScreen(
+fun HomeScreen(
     uiState: DashboardUiState,
     recentHistory: RecentHistoryPreview?,
-    onOpenSubnet: () -> Unit,
     onOpenPing: () -> Unit,
     onOpenDns: () -> Unit,
-    onOpenTcp: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
@@ -75,24 +71,69 @@ fun DashboardScreen(
             NetworkStatusCard(uiState.networkContext)
 
             SectionHeader(
-                title = "Quick Check",
+                title = "Quick Actions",
                 subtitle = "常用检测工具",
             )
-            QuickCheckGrid(
-                onOpenPing = onOpenPing,
-                onOpenDns = onOpenDns,
-                onOpenTcp = onOpenTcp,
-                onOpenSubnet = onOpenSubnet,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ToolCard(
+                    icon = Icons.Outlined.WifiTethering,
+                    title = "Ping",
+                    description = "测试连通性",
+                    onClick = onOpenPing,
+                    modifier = Modifier.weight(1f),
+                )
+                ToolCard(
+                    icon = Icons.Outlined.Dns,
+                    title = "DNS",
+                    description = "检查域名解析",
+                    onClick = onOpenDns,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Assessment,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            "Network Diagnostic",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            "一键检测网络状态",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                    Button(onClick = onOpenReport) {
+                        Text("Run Check")
+                    }
+                }
+            }
 
-            SectionHeader(
-                title = "Diagnostics",
-                subtitle = "集中查看网络检测结果",
-            )
-            DiagnosticCard(onOpenReport)
-
-            SectionHeader(title = "History")
-            RecentHistoryCard(
+            SectionHeader(title = "Recent Diagnostic")
+            RecentDiagnosticCard(
                 recentHistory = recentHistory,
                 onOpenHistory = onOpenHistory,
             )
@@ -101,7 +142,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun NetworkStatusCard(context: NetworkContext) {
+internal fun NetworkStatusCard(context: NetworkContext) {
     val connectionType = context.connectionType.displayName()
     val connectionStatus = context.connectionStatus()
 
@@ -187,56 +228,7 @@ private fun StatusMetric(
 }
 
 @Composable
-private fun QuickCheckGrid(
-    onOpenPing: () -> Unit,
-    onOpenDns: () -> Unit,
-    onOpenTcp: () -> Unit,
-    onOpenSubnet: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ToolCard(
-                icon = Icons.Outlined.WifiTethering,
-                title = "Ping",
-                description = "测试连通性",
-                onClick = onOpenPing,
-                modifier = Modifier.weight(1f),
-            )
-            ToolCard(
-                icon = Icons.Outlined.Dns,
-                title = "DNS",
-                description = "检查域名解析",
-                onClick = onOpenDns,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ToolCard(
-                icon = Icons.Outlined.Lan,
-                title = "TCP Port",
-                description = "检查服务端口",
-                onClick = onOpenTcp,
-                modifier = Modifier.weight(1f),
-            )
-            ToolCard(
-                icon = Icons.Outlined.AccountTree,
-                title = "Subnet",
-                description = "计算 IPv4 子网",
-                onClick = onOpenSubnet,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ToolCard(
+internal fun ToolCard(
     icon: ImageVector,
     title: String,
     description: String,
@@ -244,7 +236,7 @@ private fun ToolCard(
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier.heightIn(min = 140.dp),
+        modifier = modifier.heightIn(min = 132.dp),
         onClick = onClick,
     ) {
         Column(
@@ -267,49 +259,24 @@ private fun ToolCard(
 }
 
 @Composable
-private fun DiagnosticCard(onOpenReport: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Assessment,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+internal fun SectionHeader(
+    title: String,
+    subtitle: String? = null,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        subtitle?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    "Network Diagnostic",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    "一键检测网络状态",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-            Button(onClick = onOpenReport) {
-                Text("Run Check")
-            }
         }
     }
 }
 
 @Composable
-private fun RecentHistoryCard(
+private fun RecentDiagnosticCard(
     recentHistory: RecentHistoryPreview?,
     onOpenHistory: () -> Unit,
 ) {
@@ -332,7 +299,7 @@ private fun RecentHistoryCard(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
-                    Text("Recent History", style = MaterialTheme.typography.titleMedium)
+                    Text("Recent Diagnostic", style = MaterialTheme.typography.titleMedium)
                 }
                 TextButton(onClick = onOpenHistory) {
                     Text("View History >")
@@ -358,23 +325,6 @@ private fun RecentHistoryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(
-    title: String,
-    subtitle: String? = null,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        subtitle?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

@@ -2,6 +2,7 @@ package com.networktoolbox
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -10,7 +11,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,13 +27,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.networktoolbox.core.common.history.HistoryType
-import com.networktoolbox.feature.dashboard.DashboardScreen
 import com.networktoolbox.feature.dashboard.DashboardViewModel
+import com.networktoolbox.feature.dashboard.HomeScreen
 import com.networktoolbox.feature.dashboard.RecentHistoryPreview
+import com.networktoolbox.feature.dashboard.ToolsScreen
 import com.networktoolbox.feature.dns.presentation.DnsViewModel
 import com.networktoolbox.feature.dns.ui.DnsScreen
-import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.presentation.HistoryUiState
+import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.ui.HistoryScreen
 import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
@@ -51,17 +61,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val uiState by dashboardViewModel.uiState.collectAsState()
+            val dashboardUiState by dashboardViewModel.uiState.collectAsState()
             val dnsUiState by dnsViewModel.uiState.collectAsState()
             val historyUiState by historyViewModel.uiState.collectAsState()
             val pingUiState by pingViewModel.uiState.collectAsState()
             val tcpUiState by tcpViewModel.uiState.collectAsState()
             val reportUiState by reportViewModel.uiState.collectAsState()
             val subnetUiState by subnetViewModel.uiState.collectAsState()
-            var currentScreen by rememberSaveable { mutableStateOf(AppScreen.DASHBOARD) }
+            var topLevelDestination by rememberSaveable {
+                mutableStateOf(TopLevelDestination.HOME)
+            }
+            var toolScreen by rememberSaveable { mutableStateOf(ToolScreen.NONE) }
             val recentHistory = (historyUiState as? HistoryUiState.Success)
                 ?.records
-                ?.firstOrNull()
+                ?.firstOrNull { it.type == HistoryType.REPORT }
                 ?.let { record ->
                     RecentHistoryPreview(
                         type = record.type.displayName(),
@@ -71,74 +84,127 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+            fun openTool(screen: ToolScreen) {
+                topLevelDestination = TopLevelDestination.TOOLS
+                toolScreen = screen
+            }
+
+            fun openTopLevel(destination: TopLevelDestination) {
+                topLevelDestination = destination
+                toolScreen = ToolScreen.NONE
+            }
+
+            BackHandler(enabled = toolScreen != ToolScreen.NONE) {
+                toolScreen = ToolScreen.NONE
+                topLevelDestination = TopLevelDestination.TOOLS
+            }
+
             NetworkToolboxTheme {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     contentWindowInsets = WindowInsets.safeDrawing,
+                    bottomBar = {
+                        NavigationBar {
+                            TopLevelDestination.entries.forEach { destination ->
+                                NavigationBarItem(
+                                    selected = topLevelDestination == destination,
+                                    onClick = { openTopLevel(destination) },
+                                    icon = {
+                                        Icon(
+                                            imageVector = destination.icon,
+                                            contentDescription = destination.label,
+                                        )
+                                    },
+                                    label = { Text(destination.label) },
+                                )
+                            }
+                        }
+                    },
                 ) { contentPadding ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(contentPadding),
                     ) {
-                        when (currentScreen) {
-                            AppScreen.DASHBOARD -> DashboardScreen(
-                                uiState = uiState,
-                                recentHistory = recentHistory,
-                                onOpenSubnet = { currentScreen = AppScreen.SUBNET },
-                                onOpenPing = { currentScreen = AppScreen.PING },
-                                onOpenDns = { currentScreen = AppScreen.DNS },
-                                onOpenTcp = { currentScreen = AppScreen.TCP },
-                                onOpenReport = { currentScreen = AppScreen.REPORT },
-                                onOpenHistory = { currentScreen = AppScreen.HISTORY },
-                            )
-                            AppScreen.SUBNET -> SubnetScreen(
+                        when (toolScreen) {
+                            ToolScreen.NONE -> when (topLevelDestination) {
+                                TopLevelDestination.HOME -> HomeScreen(
+                                    uiState = dashboardUiState,
+                                    recentHistory = recentHistory,
+                                    onOpenPing = { openTool(ToolScreen.PING) },
+                                    onOpenDns = { openTool(ToolScreen.DNS) },
+                                    onOpenReport = { openTool(ToolScreen.REPORT) },
+                                    onOpenHistory = { openTool(ToolScreen.HISTORY) },
+                                )
+                                TopLevelDestination.TOOLS -> ToolsScreen(
+                                    onOpenPing = { openTool(ToolScreen.PING) },
+                                    onOpenDns = { openTool(ToolScreen.DNS) },
+                                    onOpenTcp = { openTool(ToolScreen.TCP) },
+                                    onOpenSubnet = { openTool(ToolScreen.SUBNET) },
+                                    onOpenReport = { openTool(ToolScreen.REPORT) },
+                                    onOpenHistory = { openTool(ToolScreen.HISTORY) },
+                                )
+                                TopLevelDestination.SETTINGS -> SettingsScreen(
+                                    historyUiState = historyUiState,
+                                    onClearHistory = historyViewModel::clear,
+                                )
+                            }
+                            ToolScreen.SUBNET -> SubnetScreen(
                                 uiState = subnetUiState,
                                 onInputChanged = subnetViewModel::onInputChanged,
                                 onCalculate = subnetViewModel::calculate,
-                                onBack = { currentScreen = AppScreen.DASHBOARD },
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
-                            AppScreen.PING -> PingScreen(
+                            ToolScreen.PING -> PingScreen(
                                 uiState = pingUiState,
                                 onTargetChanged = pingViewModel::onTargetChanged,
                                 onPing = pingViewModel::ping,
-                                onBack = { currentScreen = AppScreen.DASHBOARD },
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
-                            AppScreen.DNS -> DnsScreen(
+                            ToolScreen.DNS -> DnsScreen(
                                 uiState = dnsUiState,
                                 onDomainChanged = dnsViewModel::onDomainChanged,
                                 onLookup = dnsViewModel::lookup,
-                                onBack = { currentScreen = AppScreen.DASHBOARD },
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
-                            AppScreen.TCP -> TcpScreen(
+                            ToolScreen.TCP -> TcpScreen(
                                 uiState = tcpUiState,
                                 onHostChanged = tcpViewModel::onHostChanged,
                                 onPortChanged = tcpViewModel::onPortChanged,
                                 onCheck = tcpViewModel::check,
-                                onBack = { currentScreen = AppScreen.DASHBOARD },
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
-                            AppScreen.REPORT -> ReportScreen(
+                            ToolScreen.REPORT -> ReportScreen(
                                 uiState = reportUiState,
                                 onRunCheck = reportViewModel::runCheck,
-                                onBack = { currentScreen = AppScreen.DASHBOARD },
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
-                            AppScreen.HISTORY -> HistoryScreen(
+                            ToolScreen.HISTORY -> HistoryScreen(
                                 uiState = historyUiState,
                                 onLoad = historyViewModel::load,
                                 onDelete = historyViewModel::delete,
                                 onClear = historyViewModel::clear,
-                                onBack = { currentScreen = AppScreen.DASHBOARD },
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
                         }
                     }
                 }
             }
+        }
     }
 }
+
+private enum class TopLevelDestination(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    HOME("首页", Icons.Outlined.Home),
+    TOOLS("工具", Icons.Outlined.Build),
+    SETTINGS("设置", Icons.Outlined.Settings),
 }
 
-private enum class AppScreen {
-    DASHBOARD,
+private enum class ToolScreen {
+    NONE,
     SUBNET,
     PING,
     DNS,
