@@ -6,7 +6,7 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 
 ## Current version
 
-- Application version: `0.1.0-dev`
+- Application version: `0.1.0`
 - Minimum Android version: Android 12 (API 31)
 - Target Android SDK: API 36
 
@@ -50,7 +50,7 @@ Download the APK from GitHub Releases.
 
 Requires Android 12 or later.
 
-The current build is a debug development APK while final `0.1.0` versioning and release signing are being prepared.
+The final `0.1.0` version is configured. Release APK publishing still requires a maintainer-provided signing configuration.
 
 ## Privacy
 

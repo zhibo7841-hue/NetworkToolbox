@@ -31,7 +31,7 @@ The application also provides Network Information and Home / Tools / Settings na
 
 Download the signed APK from the GitHub Releases page after the release is published.
 
-The current project build reports `versionName = 0.1.0-dev`. The final `0.1.0` version and release signing must be configured before publishing.
+The current project build reports `versionName = 0.1.0`. Release signing must be configured before publishing.
 
 ## Known Limitations
 
