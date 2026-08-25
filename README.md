@@ -44,6 +44,18 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 
 截图目录已预留在 [`docs/screenshots/`](docs/screenshots/)。当前仓库不包含伪造或占位图片。
 
+![Home](docs/screenshots/home.png)
+
+![Tools](docs/screenshots/tools.png)
+
+![Ping](docs/screenshots/ping.png)
+
+![DNS Lookup](docs/screenshots/dnslookup.png)
+
+![IPv4 Subnet Calculator](docs/screenshots/ipv4cidr.png)
+
+![Diagnostic Report](docs/screenshots/diagnostic.png)
+
 ## Installation
 
 Download the APK from GitHub Releases.
