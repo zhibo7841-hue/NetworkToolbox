@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.dns.presentation
 
+import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.dns.DnsMethod
 import com.networktoolbox.core.network.dns.DnsRecord
 import com.networktoolbox.core.network.dns.DnsRecordType
@@ -85,7 +86,12 @@ class DnsViewModelTest {
     }
 
     private fun viewModelFor(result: DnsResult): DnsViewModel =
-        DnsViewModel(LookupDnsUseCase(FakeDnsEngine(result)))
+        DnsViewModel(
+            LookupDnsUseCase(
+                dnsEngine = FakeDnsEngine(result),
+                historyRecorder = HistoryRecorder { },
+            ),
+        )
 
     private fun successResult(): DnsResult = DnsResult(
         domain = "example.test",

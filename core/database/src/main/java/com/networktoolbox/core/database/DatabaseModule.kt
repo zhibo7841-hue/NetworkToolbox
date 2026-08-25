@@ -3,6 +3,7 @@ package com.networktoolbox.core.database
 import android.content.Context
 import androidx.room.Room
 import com.networktoolbox.core.common.history.HistoryRepository
+import com.networktoolbox.core.common.history.HistoryRecorder
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,6 +32,11 @@ object DatabaseModule {
     @Singleton
     fun provideHistoryRepository(historyDao: HistoryDao): HistoryRepository =
         RoomHistoryRepository(historyDao)
+
+    @Provides
+    @Singleton
+    fun provideHistoryRecorder(historyRepository: HistoryRepository): HistoryRecorder =
+        RoomHistoryRecorder(historyRepository)
 
     private const val DATABASE_NAME = "networktoolbox.db"
 }

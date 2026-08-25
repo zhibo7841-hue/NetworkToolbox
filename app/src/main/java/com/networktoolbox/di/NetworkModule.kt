@@ -60,17 +60,23 @@ object NetworkModule {
     @Singleton
     fun provideReportPingUseCase(
         executePing: ExecutePingUseCase,
-    ): ReportPingUseCase = ReportPingUseCase { target -> executePing(target) }
+    ): ReportPingUseCase = ReportPingUseCase { target ->
+        executePing(target, persistHistory = false)
+    }
 
     @Provides
     @Singleton
     fun provideReportDnsUseCase(
         lookupDns: LookupDnsUseCase,
-    ): ReportDnsUseCase = ReportDnsUseCase { domain -> lookupDns(domain) }
+    ): ReportDnsUseCase = ReportDnsUseCase { domain ->
+        lookupDns(domain, persistHistory = false)
+    }
 
     @Provides
     @Singleton
     fun provideReportTcpUseCase(
         checkTcpPort: CheckTcpPortUseCase,
-    ): ReportTcpUseCase = ReportTcpUseCase { host, port -> checkTcpPort(host, port) }
+    ): ReportTcpUseCase = ReportTcpUseCase { host, port ->
+        checkTcpPort(host, port, persistHistory = false)
+    }
 }

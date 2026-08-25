@@ -1,5 +1,8 @@
 package com.networktoolbox.feature.port.domain
 
+import com.networktoolbox.core.common.history.HistoryRecord
+import com.networktoolbox.core.common.history.HistoryRecorder
+import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.core.network.tcp.TcpProbeResult
 import com.networktoolbox.feature.port.FakeTcpPortChecker
 import kotlinx.coroutines.test.runTest
@@ -17,7 +20,11 @@ class CheckTcpPortUseCaseTest {
             errorMessage = null,
         )
         val checker = FakeTcpPortChecker(expected)
-        val useCase = CheckTcpPortUseCase(checker)
+        val savedRecords = mutableListOf<HistoryRecord>()
+        val useCase = CheckTcpPortUseCase(
+            tcpPortChecker = checker,
+            historyRecorder = HistoryRecorder { savedRecords += it },
+        )
 
         val result = useCase("192.0.2.10", "443", timeoutMs = 1_500)
 
@@ -26,6 +33,8 @@ class CheckTcpPortUseCaseTest {
         assertEquals("192.0.2.10", checker.receivedHost)
         assertEquals(443, checker.receivedPort)
         assertEquals(1_500, checker.receivedTimeoutMs)
+        assertEquals(HistoryType.TCP, savedRecords.single().type)
+        assertEquals("TCP · 192.0.2.10:443", savedRecords.single().title)
     }
 
     @Test
@@ -33,7 +42,10 @@ class CheckTcpPortUseCaseTest {
         val checker = FakeTcpPortChecker(
             TcpProbeResult("192.0.2.10", 443, true, 8, null),
         )
-        val useCase = CheckTcpPortUseCase(checker)
+        val useCase = CheckTcpPortUseCase(
+            tcpPortChecker = checker,
+            historyRecorder = HistoryRecorder { },
+        )
 
         val result = useCase("192.0.2.10", "")
 

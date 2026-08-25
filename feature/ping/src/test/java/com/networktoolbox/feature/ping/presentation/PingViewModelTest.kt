@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.ping.presentation
 
+import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.ping.PingMethod
 import com.networktoolbox.core.network.ping.PingResult
 import com.networktoolbox.feature.ping.FakePingEngine
@@ -95,5 +96,10 @@ class PingViewModelTest {
     }
 
     private fun viewModelFor(result: PingResult): PingViewModel =
-        PingViewModel(ExecutePingUseCase(FakePingEngine(result)))
+        PingViewModel(
+            ExecutePingUseCase(
+                pingEngine = FakePingEngine(result),
+                historyRecorder = HistoryRecorder { },
+            ),
+        )
 }

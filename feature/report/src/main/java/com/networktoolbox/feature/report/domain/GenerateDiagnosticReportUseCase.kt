@@ -1,5 +1,8 @@
 package com.networktoolbox.feature.report.domain
 
+import com.networktoolbox.core.common.history.HistoryFinding
+import com.networktoolbox.core.common.history.HistoryRecordFactory
+import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.dns.DnsMethod
 import com.networktoolbox.core.network.dns.DnsResult
 import com.networktoolbox.core.network.model.NetworkContext
@@ -19,6 +22,7 @@ class GenerateDiagnosticReportUseCase @Inject constructor(
     private val dns: DnsUseCase,
     private val tcp: TcpUseCase,
     private val analyzer: DiagnosticAnalyzer,
+    private val historyRecorder: HistoryRecorder,
 ) {
     suspend operator fun invoke(
         onStepChanged: (ReportStep) -> Unit = {},
@@ -66,12 +70,29 @@ class GenerateDiagnosticReportUseCase @Inject constructor(
             tcp(DEFAULT_TCP_HOST, DEFAULT_TCP_PORT)
         }
 
-        return analyzer.analyze(
+        val report = analyzer.analyze(
             context = context,
             ping = pingResult,
             dns = dnsResult,
             tcp = tcpResult,
         )
+
+        historyRecorder.record(
+            HistoryRecordFactory.report(
+                timestamp = System.currentTimeMillis(),
+                summary = report.summary,
+                findings = report.findings.map { finding ->
+                    HistoryFinding(
+                        level = finding.level.name,
+                        title = finding.title,
+                        description = finding.description,
+                    )
+                },
+                suggestions = report.suggestions,
+            ),
+        )
+
+        return report
     }
 
     private suspend fun readNetworkContext(): NetworkContext = try {

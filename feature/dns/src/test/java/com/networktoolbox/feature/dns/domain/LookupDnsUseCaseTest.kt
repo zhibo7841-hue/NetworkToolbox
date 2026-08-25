@@ -1,5 +1,8 @@
 package com.networktoolbox.feature.dns.domain
 
+import com.networktoolbox.core.common.history.HistoryRecord
+import com.networktoolbox.core.common.history.HistoryRecorder
+import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.core.network.dns.DnsMethod
 import com.networktoolbox.core.network.dns.DnsRecord
 import com.networktoolbox.core.network.dns.DnsRecordType
@@ -13,7 +16,7 @@ class LookupDnsUseCaseTest {
     @Test
     fun delegatesDomainAndReturnsEngineResult() = runTest {
         val expected = DnsResult(
-            domain = "example.test",
+            domain = "example.com",
             success = true,
             records = listOf(DnsRecord(DnsRecordType.A, "192.0.2.10")),
             durationMs = 12,
@@ -21,12 +24,18 @@ class LookupDnsUseCaseTest {
             errorMessage = null,
         )
         val engine = FakeDnsEngine(expected)
-        val useCase = LookupDnsUseCase(engine)
+        val savedRecords = mutableListOf<HistoryRecord>()
+        val useCase = LookupDnsUseCase(
+            dnsEngine = engine,
+            historyRecorder = HistoryRecorder { savedRecords += it },
+        )
 
-        val result = useCase("example.test")
+        val result = useCase("example.com")
 
         assertEquals(expected, result)
         assertEquals(1, engine.callCount)
-        assertEquals("example.test", engine.receivedDomain)
+        assertEquals("example.com", engine.receivedDomain)
+        assertEquals(HistoryType.DNS, savedRecords.single().type)
+        assertEquals("DNS · example.com", savedRecords.single().title)
     }
 }

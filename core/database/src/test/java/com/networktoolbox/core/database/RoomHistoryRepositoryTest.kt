@@ -9,6 +9,21 @@ import org.junit.Test
 
 class RoomHistoryRepositoryTest {
     @Test
+    fun recorderPersistsThroughTheSharedRepository() = runBlocking {
+        val repository = RoomHistoryRepository(FakeHistoryDao())
+        val recorder = RoomHistoryRecorder(repository)
+        val record = historyRecord(type = HistoryType.PING, title = "Ping · 8.8.8.8")
+
+        recorder.record(record)
+
+        val saved = repository.getHistory().single()
+        assertEquals(HistoryType.PING, saved.type)
+        assertEquals(record.title, saved.title)
+        assertEquals(record.summary, saved.summary)
+        assertEquals(record.detailJson, saved.detailJson)
+    }
+
+    @Test
     fun saveAndQueryReturnStoredHistory() = runBlocking {
         val repository = RoomHistoryRepository(FakeHistoryDao())
         val record = historyRecord(type = HistoryType.PING)

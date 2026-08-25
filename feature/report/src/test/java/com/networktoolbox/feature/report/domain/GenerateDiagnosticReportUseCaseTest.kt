@@ -1,5 +1,8 @@
 package com.networktoolbox.feature.report.domain
 
+import com.networktoolbox.core.common.history.HistoryRecord
+import com.networktoolbox.core.common.history.HistoryRecorder
+import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.feature.report.FakeDnsUseCase
 import com.networktoolbox.feature.report.FakeNetworkRepository
 import com.networktoolbox.feature.report.FakePingUseCase
@@ -30,6 +33,8 @@ class GenerateDiagnosticReportUseCaseTest {
         assertEquals(GenerateDiagnosticReportUseCase.DEFAULT_DNS_DOMAIN, dns.receivedDomain)
         assertEquals(GenerateDiagnosticReportUseCase.DEFAULT_TCP_HOST, tcp.receivedHost)
         assertEquals(GenerateDiagnosticReportUseCase.DEFAULT_TCP_PORT, tcp.receivedPort)
+        assertEquals(HistoryType.REPORT, historyRecords.single().type)
+        assertEquals(report.summary, historyRecords.single().summary)
     }
 
     @Test
@@ -114,6 +119,7 @@ class GenerateDiagnosticReportUseCaseTest {
                 ping = FakePingUseCase(pingResponse),
                 dns = FakeDnsUseCase(dnsResponse),
                 tcp = FakeTcpUseCase(tcpResponse),
+                historyRecords = mutableListOf(),
             )
             dependencies.block()
         }
@@ -124,6 +130,7 @@ class GenerateDiagnosticReportUseCaseTest {
         val ping: FakePingUseCase,
         val dns: FakeDnsUseCase,
         val tcp: FakeTcpUseCase,
+        val historyRecords: MutableList<HistoryRecord>,
     ) {
         val useCase: GenerateDiagnosticReportUseCase = GenerateDiagnosticReportUseCase(
             networkRepository = networkRepository,
@@ -131,6 +138,7 @@ class GenerateDiagnosticReportUseCaseTest {
             dns = dns,
             tcp = tcp,
             analyzer = BasicDiagnosticAnalyzer(),
+            historyRecorder = HistoryRecorder { historyRecords += it },
         )
         val steps = mutableListOf<ReportStep>()
     }

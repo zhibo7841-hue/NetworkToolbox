@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.report.presentation
 
+import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.dns.DnsMethod
 import com.networktoolbox.core.network.dns.DnsResult
 import com.networktoolbox.core.network.ping.PingMethod
@@ -155,6 +156,7 @@ class ReportViewModelTest {
             dns = dns,
             tcp = tcp,
             analyzer = analyzer,
+            historyRecorder = HistoryRecorder { },
         ),
     )
 }

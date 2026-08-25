@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.port.presentation
 
+import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.tcp.TcpProbeResult
 import com.networktoolbox.feature.port.FakeTcpPortChecker
 import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
@@ -88,7 +89,12 @@ class TcpViewModelTest {
     }
 
     private fun viewModelFor(result: TcpProbeResult): TcpViewModel =
-        TcpViewModel(CheckTcpPortUseCase(FakeTcpPortChecker(result)))
+        TcpViewModel(
+            CheckTcpPortUseCase(
+                tcpPortChecker = FakeTcpPortChecker(result),
+                historyRecorder = HistoryRecorder { },
+            ),
+        )
 
     private fun successResult(): TcpProbeResult = TcpProbeResult(
         host = "192.0.2.10",
