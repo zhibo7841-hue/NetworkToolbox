@@ -4,6 +4,12 @@ An open-source Android network analysis and troubleshooting toolkit.
 
 NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，帮助用户了解网络状态、执行针对性的本地检测，并获得排障参考。它不是自动修复工具，也不承诺自动准确诊断所有网络故障。
 
+## Current version
+
+- Application version: `0.1.0-dev`
+- Minimum Android version: Android 12 (API 31)
+- Target Android SDK: API 36
+
 ## Core principles
 
 - Open source
@@ -38,6 +44,14 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 
 截图目录已预留在 [`docs/screenshots/`](docs/screenshots/)。当前仓库不包含伪造或占位图片。
 
+## Installation
+
+Download the APK from GitHub Releases.
+
+Requires Android 12 or later.
+
+The current build is a debug development APK while final `0.1.0` versioning and release signing are being prepared.
+
 ## Privacy
 
 - All network test results are stored locally.
@@ -52,6 +66,7 @@ NetworkToolbox 不要求账号，检测结果和历史记录默认只保存在�
 - [Architecture](docs/ARCHITECTURE.md)
 - [Decision log](docs/DECISIONS.md)
 - [Release plan](docs/RELEASE_PLAN.md)
+- [Release notes draft](docs/RELEASE_v0.1.0.md)
 - [Development workflow](docs/DEVELOPMENT_WORKFLOW.md)
 - [OSS research](docs/OSS_RESEARCH.md)
 
