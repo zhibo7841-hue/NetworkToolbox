@@ -1,53 +1,68 @@
 # NetworkToolbox
 
-Open-source Android network analysis and troubleshooting toolkit.
+An open-source Android network analysis and troubleshooting toolkit.
 
-NetworkToolbox helps users understand network status, run focused network checks, and obtain troubleshooting references. It is a network analysis tool, not an automatic repair tool or an automatic system that can accurately diagnose every network failure.
-
-## Status
-
-Planning / Early Development
-
-The repository currently contains project documentation only. Android application development has not started.
+NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，帮助用户了解网络状态、执行针对性的本地检测，并获得排障参考。它不是自动修复工具，也不承诺自动准确诊断所有网络故障。
 
 ## Core principles
 
 - Open source
 - Privacy first
 - No ads
-- No account
+- No account required
 - Local first
+- Network test results stay on the device and are not uploaded
 
-## V0.1 roadmap
+## Features
 
-- Network overview
-- IPv4 subnet calculator
-- Ping
-- DNS
-- TCP port test
-- Reports
-- Local history
+当前 V0.1 功能包括：
 
-## Later roadmap
+- ✅ Network Information
+- ✅ Ping
+- ✅ DNS Lookup
+- ✅ TCP Port Check
+- ✅ IPv4 Subnet Calculator
+- ✅ Network Diagnostic Report
+- ✅ Local History
+
+## Roadmap
+
+以下内容仅为 Planned，不代表已承诺的发布范围：
 
 - LAN Scanner
 - Wi-Fi Analyzer
-- Traceroute
-- iPerf
-- TLS inspection
+- mDNS
+- Wake-on-LAN
 
-The later roadmap is directional. Features and release scope remain subject to the project decision records and future planning work.
+## Screenshots
 
-## Product boundaries
+截图目录已预留在 [`docs/screenshots/`](docs/screenshots/)。当前仓库不包含伪造或占位图片。
 
-NetworkToolbox focuses on network information and troubleshooting assistance, including IPv4/IPv6, subnet calculations, Ping, DNS, and TCP checks. LAN scanning, Wi-Fi analysis, SSL/TLS, iPerf, and WHOIS are future directions.
+## Privacy
 
-NetworkToolbox does not aim to be a full SSH terminal, Telnet terminal, SFTP client, or a collection of unrelated utilities.
+- All network test results are stored locally.
+- No account required.
+- No network data upload.
+
+NetworkToolbox 不要求账号，检测结果和历史记录默认只保存在设备本地。应用访问网络是为了执行用户主动选择的检测，不代表会上传检测数据。
 
 ## Documentation
 
-Project plans, architecture decisions, OSS research placeholders, release scope, and development workflow are available in [`docs/`](docs/).
+- [Product plan](docs/PRODUCT_PLAN.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Decision log](docs/DECISIONS.md)
+- [Release plan](docs/RELEASE_PLAN.md)
+- [Development workflow](docs/DEVELOPMENT_WORKFLOW.md)
+- [OSS research](docs/OSS_RESEARCH.md)
+
+## Contributing
+
+请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## Security
+
+安全问题请按照 [SECURITY.md](SECURITY.md) 中的说明私下报告，不要公开发布未修复的漏洞细节。
 
 ## License
 
-NetworkToolbox is released under the [Apache License 2.0](LICENSE).
+NetworkToolbox 使用 [Apache License 2.0](LICENSE) 发布。

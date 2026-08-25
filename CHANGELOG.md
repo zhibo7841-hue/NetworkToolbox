@@ -1,5 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
 
-- Initial project setup
+Initial public release.
+
+Features:
+
+- Ping
+- DNS
+- TCP Port
+- Subnet Calculator
+- Diagnostic Report
+- Local History

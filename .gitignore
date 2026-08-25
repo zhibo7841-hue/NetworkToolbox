@@ -12,6 +12,8 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+*.apk
+*.aab
 
 # Local machine files
 *.log
