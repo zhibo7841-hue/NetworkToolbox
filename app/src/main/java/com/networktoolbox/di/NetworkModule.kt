@@ -4,9 +4,13 @@ import android.content.Context
 import com.networktoolbox.core.network.data.AndroidDnsEngine
 import com.networktoolbox.core.network.data.AndroidNetworkRepository
 import com.networktoolbox.core.network.data.AndroidPingEngine
+import com.networktoolbox.core.network.data.AndroidPingSessionProbe
 import com.networktoolbox.core.network.data.AndroidTcpPortChecker
 import com.networktoolbox.core.network.dns.DnsEngine
 import com.networktoolbox.core.network.ping.PingEngine
+import com.networktoolbox.core.network.ping.DefaultPingSessionEngine
+import com.networktoolbox.core.network.ping.PingProbe
+import com.networktoolbox.core.network.ping.PingSessionEngine
 import com.networktoolbox.core.network.tcp.TcpPortChecker
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
@@ -37,6 +41,15 @@ object NetworkModule {
     @Provides
     @Singleton
     fun providePingEngine(): PingEngine = AndroidPingEngine()
+
+    @Provides
+    @Singleton
+    fun providePingProbe(): PingProbe = AndroidPingSessionProbe()
+
+    @Provides
+    @Singleton
+    fun providePingSessionEngine(probe: PingProbe): PingSessionEngine =
+        DefaultPingSessionEngine(probe)
 
     @Provides
     @Singleton

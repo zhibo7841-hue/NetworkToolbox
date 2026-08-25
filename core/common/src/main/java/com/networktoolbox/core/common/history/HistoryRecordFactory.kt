@@ -22,6 +22,53 @@ object HistoryRecordFactory {
         ),
     )
 
+    fun pingSession(
+        timestamp: Long,
+        target: String,
+        address: String?,
+        protocol: String,
+        mode: String,
+        startTime: Long,
+        endTime: Long,
+        sentPackets: Int,
+        receivedPackets: Int,
+        lostPackets: Int,
+        packetLoss: Double,
+        minLatencyMs: Long?,
+        avgLatencyMs: Double?,
+        maxLatencyMs: Long?,
+        jitterMs: Double?,
+        qualityLevel: String,
+        method: String,
+        summary: String,
+        errorMessage: String?,
+    ): HistoryRecord = HistoryRecord(
+        timestamp = timestamp,
+        type = HistoryType.PING,
+        title = "Ping · $target",
+        summary = summary,
+        detailJson = jsonObject(
+            "target" to jsonString(target),
+            "address" to jsonNullableString(address),
+            "protocol" to jsonString(protocol),
+            "mode" to jsonString(mode),
+            "startTime" to startTime.toString(),
+            "endTime" to endTime.toString(),
+            "sentPackets" to sentPackets.toString(),
+            "receivedPackets" to receivedPackets.toString(),
+            "lostPackets" to lostPackets.toString(),
+            "packetLoss" to packetLoss.toString(),
+            "minLatencyMs" to jsonNumber(minLatencyMs),
+            "avgLatencyMs" to jsonDouble(avgLatencyMs),
+            "maxLatencyMs" to jsonNumber(maxLatencyMs),
+            "jitterMs" to jsonDouble(jitterMs),
+            "qualityLevel" to jsonString(qualityLevel),
+            "method" to jsonString(method),
+            "summary" to jsonString(summary),
+            "errorMessage" to jsonNullableString(errorMessage),
+        ),
+    )
+
     fun dns(
         timestamp: Long,
         domain: String,
@@ -96,6 +143,8 @@ object HistoryRecordFactory {
         values.joinToString(prefix = "[", postfix = "]", transform = ::jsonString)
 
     private fun jsonNumber(value: Long?): String = value?.toString() ?: "null"
+
+    private fun jsonDouble(value: Double?): String = value?.toString() ?: "null"
 
     private fun jsonNullableString(value: String?): String = value?.let(::jsonString) ?: "null"
 

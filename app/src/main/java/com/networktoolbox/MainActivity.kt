@@ -87,6 +87,9 @@ class MainActivity : ComponentActivity() {
             fun openTool(screen: ToolScreen) {
                 topLevelDestination = TopLevelDestination.TOOLS
                 toolScreen = screen
+                if (screen == ToolScreen.HISTORY) {
+                    historyViewModel.load()
+                }
             }
 
             fun openTopLevel(destination: TopLevelDestination) {
@@ -158,7 +161,12 @@ class MainActivity : ComponentActivity() {
                             ToolScreen.PING -> PingScreen(
                                 uiState = pingUiState,
                                 onTargetChanged = pingViewModel::onTargetChanged,
-                                onPing = pingViewModel::ping,
+                                onModeChanged = pingViewModel::onModeChanged,
+                                onProtocolChanged = pingViewModel::onProtocolChanged,
+                                onCountChanged = pingViewModel::onCountChanged,
+                                onIntervalChanged = pingViewModel::onIntervalChanged,
+                                onPing = pingViewModel::startPing,
+                                onStop = pingViewModel::stopPing,
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
                             ToolScreen.DNS -> DnsScreen(
