@@ -8,9 +8,10 @@ NetworkToolbox is a network analysis tool, not an automatic troubleshooting or r
 
 ## Target users
 
-- Android users who want to understand the network state of their device.
-- Developers and testers who need focused, repeatable network checks.
-- Network learners and support personnel who need local diagnostic information and reports.
+- General users who want to understand the network state of their device.
+- HomeLab users who need focused, repeatable local network checks.
+- Network learners who want to inspect and understand network behavior.
+- Network operations personnel and support personnel who need local diagnostic information and reports.
 
 The product is intended to assist investigation, not to replace network administrators or other qualified support personnel.
 
@@ -23,6 +24,13 @@ The product is intended to assist investigation, not to replace network administ
 - Local first: diagnostic data and history remain on the device unless a future, explicitly approved capability says otherwise.
 - Evidence before conclusions: show measured results and relevant context without overstating certainty.
 - Focused scope: network analysis and troubleshooting assistance only.
+
+## User experience principle
+
+NetworkToolbox combines an understandable experience for general users with professional-level underlying capabilities:
+
+- By default, show network status, the result of the check, and a simple explanation.
+- Allow advanced information to be expanded when needed, including raw detection data, technical parameters, and detailed results.
 
 ## Functional scope
 
@@ -62,9 +70,69 @@ The initial scope is frozen around a focused local diagnostic workflow:
 - Reports.
 - Local history.
 
-### V0.2
+### V0.2.x planning baseline
 
-Release scope is not yet defined. Feature commitments will be recorded only after a separate planning decision.
+## V0.2 Network Diagnostic Enhancement
+
+The goal of V0.2 is to evolve NetworkToolbox from a basic network toolkit into a more capable network diagnostic tool, while keeping the local-first and evidence-based product principles.
+
+### First phase: diagnostic capability enhancements
+
+#### Ping enhancement
+
+Planned capabilities:
+
+- Continuous Ping.
+- Custom Ping count.
+- Stop an in-progress check.
+- Packet loss rate.
+- Minimum latency.
+- Maximum latency.
+- Average latency.
+- Jitter.
+- IPv4/IPv6 selection.
+- Network quality evaluation.
+
+#### DNS enhancement
+
+Planned capabilities:
+
+- A records.
+- AAAA records.
+- CNAME records.
+- MX records.
+- TXT records.
+- TTL information.
+- DNS server display.
+- Query duration.
+
+#### Diagnostic Report enhancement
+
+The report is planned to evolve from displaying detection results into a structured fault-analysis report. Planned improvements include:
+
+- Explanations of detection results.
+- Possible causes.
+- Troubleshooting suggestions.
+
+The report must continue to communicate uncertainty clearly. It is a troubleshooting aid, not a definitive automatic diagnosis system.
+
+### Second phase: LAN Scanner
+
+The LAN Scanner is planned as a later core module for local-network device discovery and analysis.
+
+Planned capabilities:
+
+- Subnet scanning.
+- Online device discovery.
+- IP/MAC information.
+- Vendor identification.
+- Basic service identification.
+
+Potential follow-up capabilities include:
+
+- Favorite devices.
+- Wake-on-LAN.
+- mDNS.
 
 ### V0.3
 
@@ -76,7 +144,7 @@ Release scope and readiness criteria are not yet defined. The future directions 
 
 ## SSH/Telnet boundary
 
-NetworkToolbox may inspect network reachability and TCP connectivity, but it is not an SSH or Telnet client. It will not provide a complete interactive SSH/Telnet terminal, terminal session management, SFTP, or related remote-shell workflows.
+SSH/Telnet-related scope is limited to service discovery, port detection, and basic identification. NetworkToolbox is not an SSH or Telnet client. It will not provide a complete interactive SSH terminal, SFTP, a Telnet client, terminal session management, or related remote-shell workflows.
 
 ## Privacy principles
 
