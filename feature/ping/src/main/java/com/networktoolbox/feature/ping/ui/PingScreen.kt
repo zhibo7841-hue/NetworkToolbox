@@ -38,11 +38,11 @@ fun PingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isRunning) {
-                Text("返回 Dashboard")
+                Text("返回工具")
             }
             Text(
                 text = "Ping",
@@ -58,12 +58,12 @@ fun PingScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Input", style = MaterialTheme.typography.titleMedium)
+                    Text("输入", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiState.targetInput,
                         onValueChange = onTargetChanged,
-                        label = { Text("Target") },
+                        label = { Text("目标地址") },
                         singleLine = true,
                         enabled = !isRunning,
                         isError = uiState.status.isInvalidInput(),
@@ -80,7 +80,7 @@ fun PingScreen(
                         onClick = onPing,
                         enabled = !isRunning,
                     ) {
-                        Text(if (isRunning) "Checking..." else "Start")
+                        Text(if (isRunning) "检测中..." else "开始检测")
                     }
                 }
             }
@@ -103,12 +103,12 @@ private fun PingResultCard(result: PingResult) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Result", style = MaterialTheme.typography.titleMedium)
-            ResultRow("Target", result.target.ifBlank { "未知" })
-            ResultRow("Status", if (success) "Completed" else "Failed")
-            ResultRow("Latency", result.latencyMs?.let { "$it ms" } ?: "未知")
-            ResultRow("Detection", result.method.displayName())
-            ResultRow("Method", result.method.name)
+            Text("结果", style = MaterialTheme.typography.titleMedium)
+            ResultRow("目标", result.target.ifBlank { "未知" })
+            ResultRow("状态", if (success) "已完成" else "失败")
+            ResultRow("延迟", result.latencyMs?.let { "$it ms" } ?: "未知")
+            ResultRow("检测方式", result.method.displayName())
+            ResultRow("技术方法", result.method.name)
             result.errorMessage
                 ?.takeIf { it.isNotBlank() }
                 ?.let { errorMessage ->
@@ -126,7 +126,7 @@ private fun LoadingMessage() {
     Card(modifier = Modifier.fillMaxWidth()) {
         Text(
             modifier = Modifier.padding(16.dp),
-            text = "Checking...",
+            text = "检测中...",
             style = MaterialTheme.typography.bodyLarge,
         )
     }

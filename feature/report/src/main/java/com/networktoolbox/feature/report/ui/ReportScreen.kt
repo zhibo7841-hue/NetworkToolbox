@@ -39,14 +39,14 @@ fun ReportScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isRunning) {
-                Text("返回 Dashboard")
+                Text("返回工具")
             }
             Text(
-                text = "Network Diagnostic",
+                text = "网络诊断",
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
@@ -66,13 +66,13 @@ fun ReportScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Action", style = MaterialTheme.typography.titleMedium)
+                    Text("操作", style = MaterialTheme.typography.titleMedium)
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onRunCheck,
                         enabled = !isRunning,
                     ) {
-                        Text(if (isRunning) "Checking..." else "Run Check")
+                        Text(if (isRunning) "检测中..." else "开始检测")
                     }
                 }
             }
@@ -89,7 +89,7 @@ fun ReportScreen(
 
 @Composable
 private fun RunningContent(progress: ReportProgress) {
-    Text("Checking...", style = MaterialTheme.typography.titleLarge)
+    Text("检测中...", style = MaterialTheme.typography.titleLarge)
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -117,19 +117,19 @@ private fun StepRow(
 
 @Composable
 private fun ReportContent(report: DiagnosticReport) {
-    Text("Result", style = MaterialTheme.typography.titleLarge)
-    ReportSectionCard(title = "Summary") {
-        Text("Status: Completed", style = MaterialTheme.typography.bodyMedium)
+    Text("结果", style = MaterialTheme.typography.titleLarge)
+    ReportSectionCard(title = "摘要") {
+        Text("状态：已完成", style = MaterialTheme.typography.bodyMedium)
         Text(report.summary)
     }
-    ReportSectionCard(title = "Findings") {
+    ReportSectionCard(title = "发现") {
         if (report.findings.isEmpty()) {
             Text("未发现需要关注的现象。")
         } else {
             report.findings.forEach { finding -> FindingItem(finding) }
         }
     }
-    ReportSectionCard(title = "Suggestions") {
+    ReportSectionCard(title = "建议") {
         if (report.suggestions.isEmpty()) {
             Text("暂无额外建议。")
         } else {
@@ -174,14 +174,14 @@ private fun ErrorContent(message: String) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Status: Failed", style = MaterialTheme.typography.titleMedium)
+            Text("状态：失败", style = MaterialTheme.typography.titleMedium)
             Text(message)
         }
     }
 }
 
 private fun ReportStep.displayName(): String = when (this) {
-    ReportStep.NETWORK_INFORMATION -> "Network information"
+    ReportStep.NETWORK_INFORMATION -> "网络信息"
     ReportStep.PING -> "Ping"
     ReportStep.DNS -> "DNS"
     ReportStep.TCP -> "TCP"

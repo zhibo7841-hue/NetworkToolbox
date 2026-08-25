@@ -41,7 +41,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Settings", style = MaterialTheme.typography.headlineLarge)
+                Text("设置", style = MaterialTheme.typography.headlineMedium)
                 Text(
                     "查看项目信息并管理本地数据。",
                     style = MaterialTheme.typography.bodyLarge,
@@ -49,31 +49,31 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsCard(title = "About") {
+            SettingsCard(title = "关于") {
                 Text("NetworkToolbox", style = MaterialTheme.typography.titleMedium)
-                Text("Version 0.1.0-dev")
-                Text("Open Source", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Open Source Network Analyzer")
+                Text("Version 0.1.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            SettingsCard(title = "Data") {
+            SettingsCard(title = "数据管理") {
                 Text("检测历史仅保存在本机。")
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { showClearDialog = true },
                     enabled = !isClearing,
                 ) {
-                    Text(if (isClearing) "Clearing..." else "Clear History")
+                    Text(if (isClearing) "清理中..." else "清空历史")
                 }
                 if (historyUiState is HistoryUiState.Error) {
                     Text(
-                        "Status: ${historyUiState.message}",
+                        "状态：${historyUiState.message}",
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
 
-            SettingsCard(title = "Privacy") {
-                Text("All network data stays locally on device.")
+            SettingsCard(title = "隐私保护") {
+                Text("所有网络数据都保留在本机。")
                 Text(
                     "网络检测结果和历史记录不会上传。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -85,8 +85,8 @@ fun SettingsScreen(
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Delete all history?") },
-            text = { Text("This removes all locally stored detection history.") },
+            title = { Text("清空全部历史？") },
+            text = { Text("这将删除本机保存的全部检测历史。") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -94,12 +94,12 @@ fun SettingsScreen(
                         onClearHistory()
                     },
                 ) {
-                    Text("Delete")
+                    Text("删除")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
-                    Text("Cancel")
+                    Text("取消")
                 }
             },
         )

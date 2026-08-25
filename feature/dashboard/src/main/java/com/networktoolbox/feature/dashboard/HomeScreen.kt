@@ -28,6 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import java.time.Instant
@@ -60,9 +64,9 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("NetworkToolbox", style = MaterialTheme.typography.headlineLarge)
+                Text("NetworkToolbox", style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    "了解网络状态，快速执行本地检测。",
+                    "快速了解当前网络状态",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -71,7 +75,7 @@ fun HomeScreen(
             NetworkStatusCard(uiState.networkContext)
 
             SectionHeader(
-                title = "Quick Actions",
+                title = "快速操作",
                 subtitle = "常用检测工具",
             )
             Row(
@@ -81,7 +85,7 @@ fun HomeScreen(
                 ToolCard(
                     icon = Icons.Outlined.WifiTethering,
                     title = "Ping",
-                    description = "测试连通性",
+                    description = "测试网络连通性",
                     onClick = onOpenPing,
                     modifier = Modifier.weight(1f),
                 )
@@ -102,7 +106,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -116,7 +120,7 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            "Network Diagnostic",
+                            "网络诊断",
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
@@ -127,12 +131,12 @@ fun HomeScreen(
                         )
                     }
                     Button(onClick = onOpenReport) {
-                        Text("Run Check")
+                        Text("开始检测")
                     }
                 }
             }
 
-            SectionHeader(title = "Recent Diagnostic")
+            SectionHeader(title = "最近诊断")
             RecentDiagnosticCard(
                 recentHistory = recentHistory,
                 onOpenHistory = onOpenHistory,
@@ -143,6 +147,7 @@ fun HomeScreen(
 
 @Composable
 internal fun NetworkStatusCard(context: NetworkContext) {
+    var showDetails by rememberSaveable { mutableStateOf(false) }
     val connectionType = context.connectionType.displayName()
     val connectionStatus = context.connectionStatus()
 
@@ -175,37 +180,48 @@ internal fun NetworkStatusCard(context: NetworkContext) {
                 )
             }
 
-            HorizontalDivider()
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.End,
             ) {
-                StatusMetric(
-                    label = "Gateway",
-                    value = context.gateway.orUnknown(),
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetric(
-                    label = "DNS",
-                    value = context.dnsServers.firstOrNull().orUnknown(),
-                    modifier = Modifier.weight(1f),
-                )
+                TextButton(onClick = { showDetails = !showDetails }) {
+                    Text(if (showDetails) "收起详情" else "网络详情 >")
+                }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                StatusMetric(
-                    label = "IPv6",
-                    value = context.ipv6Address.orUnknown(),
-                    modifier = Modifier.weight(1f),
-                )
-                StatusMetric(
-                    label = "Signal",
-                    value = context.wifiSignalLevel?.let { "$it/4" }.orUnknown(),
-                    modifier = Modifier.weight(1f),
-                )
+
+            if (showDetails) {
+                HorizontalDivider()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    StatusMetric(
+                        label = "网关",
+                        value = context.gateway.orUnknown(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatusMetric(
+                        label = "DNS",
+                        value = context.dnsServers.firstOrNull().orUnknown(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    StatusMetric(
+                        label = "IPv6",
+                        value = context.ipv6Address.orUnknown(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatusMetric(
+                        label = "信号",
+                        value = context.wifiSignalLevel?.let { "$it/4" }.orUnknown(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }
@@ -299,21 +315,21 @@ private fun RecentDiagnosticCard(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
-                    Text("Recent Diagnostic", style = MaterialTheme.typography.titleMedium)
+                    Text("最近诊断", style = MaterialTheme.typography.titleMedium)
                 }
                 TextButton(onClick = onOpenHistory) {
-                    Text("View History >")
+                    Text("查看历史 >")
                 }
             }
             if (recentHistory == null) {
                 Text(
-                    "No recent checks yet",
+                    "暂无诊断记录",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
-                    "Last check · ${recentHistory.timestamp.toRecentTime()}",
+                    "最近检查 · ${recentHistory.timestamp.toRecentTime()}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -330,28 +346,28 @@ private fun RecentDiagnosticCard(
 }
 
 private fun NetworkContext.connectionStatus(): String = when {
-    connectionType == ConnectionType.UNKNOWN -> "Unknown"
-    ipv4Address != null || ipv6Address != null -> "Connected"
-    else -> "Network available"
+    connectionType == ConnectionType.UNKNOWN -> "未知"
+    ipv4Address != null || ipv6Address != null -> "已连接"
+    else -> "网络可用"
 }
 
 private fun ConnectionType.displayName(): String = when (this) {
     ConnectionType.WIFI -> "Wi-Fi"
-    ConnectionType.CELLULAR -> "Mobile network"
-    ConnectionType.ETHERNET -> "Ethernet"
-    ConnectionType.BLUETOOTH -> "Bluetooth"
+    ConnectionType.CELLULAR -> "移动网络"
+    ConnectionType.ETHERNET -> "以太网"
+    ConnectionType.BLUETOOTH -> "蓝牙"
     ConnectionType.VPN -> "VPN"
-    ConnectionType.UNKNOWN -> "Unknown network"
+    ConnectionType.UNKNOWN -> "未知网络"
 }
 
-private fun String?.orUnknown(): String = this?.takeIf { it.isNotBlank() } ?: "Unknown"
+private fun String?.orUnknown(): String = this?.takeIf { it.isNotBlank() } ?: "未知"
 
 private fun Long.toRecentTime(): String {
     val elapsedMinutes = ((System.currentTimeMillis() - this).coerceAtLeast(0L)) / 60_000L
     return when {
-        elapsedMinutes < 1 -> "Just now"
-        elapsedMinutes < 60 -> "$elapsedMinutes min ago"
-        elapsedMinutes < 1_440 -> "${elapsedMinutes / 60} hr ago"
+        elapsedMinutes < 1 -> "刚刚"
+        elapsedMinutes < 60 -> "$elapsedMinutes 分钟前"
+        elapsedMinutes < 1_440 -> "${elapsedMinutes / 60} 小时前"
         else -> DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .format(Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()))
     }

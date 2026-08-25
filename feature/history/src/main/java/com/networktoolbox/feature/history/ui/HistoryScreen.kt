@@ -47,13 +47,13 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = uiState !is HistoryUiState.Loading) {
-                Text("返回 Dashboard")
+                Text("返回工具")
             }
-            Text("History", style = MaterialTheme.typography.headlineSmall)
+            Text("历史记录", style = MaterialTheme.typography.headlineSmall)
             Text(
                 "查看本机保存的网络检测记录。",
                 style = MaterialTheme.typography.bodyMedium,
@@ -61,7 +61,7 @@ fun HistoryScreen(
             )
 
             when (val state = uiState) {
-                HistoryUiState.Loading -> StatusCard("Loading...")
+                HistoryUiState.Loading -> StatusCard("加载中...")
                 HistoryUiState.Empty -> EmptyHistoryCard()
                 is HistoryUiState.Error -> ErrorCard(state.message, onLoad)
                 is HistoryUiState.Success -> {
@@ -69,7 +69,7 @@ fun HistoryScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { showClearDialog = true },
                     ) {
-                        Text("Clear History")
+                        Text("清空历史")
                     }
                     state.records.forEach { record ->
                         HistoryRecordCard(record = record, onDelete = onDelete)
@@ -82,8 +82,8 @@ fun HistoryScreen(
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Delete all history?") },
-            text = { Text("This removes all locally stored detection history.") },
+            title = { Text("清空全部历史？") },
+            text = { Text("这将删除本机保存的全部检测历史。") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -91,12 +91,12 @@ fun HistoryScreen(
                         onClear()
                     },
                 ) {
-                    Text("Delete")
+                    Text("删除")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
-                    Text("Cancel")
+                    Text("取消")
                 }
             },
         )
@@ -131,7 +131,7 @@ private fun HistoryRecordCard(
                 modifier = Modifier.align(Alignment.End),
                 onClick = { onDelete(record.id) },
             ) {
-                Text("Delete")
+                Text("删除")
             }
         }
     }
@@ -144,8 +144,8 @@ private fun EmptyHistoryCard() {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("No history yet", style = MaterialTheme.typography.titleMedium)
-            Text("Run a network check to create records.")
+            Text("暂无历史记录", style = MaterialTheme.typography.titleMedium)
+            Text("执行一次网络检测即可创建记录。")
         }
     }
 }
@@ -167,10 +167,10 @@ private fun ErrorCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Status: Failed", style = MaterialTheme.typography.titleMedium)
+            Text("状态：失败", style = MaterialTheme.typography.titleMedium)
             Text(message)
             TextButton(onClick = onRetry) {
-                Text("Retry")
+                Text("重试")
             }
         }
     }
@@ -178,10 +178,10 @@ private fun ErrorCard(
 
 private fun HistoryType.displayName(): String = when (this) {
     HistoryType.PING -> "Ping"
-    HistoryType.DNS -> "DNS Lookup"
-    HistoryType.TCP -> "TCP Port Check"
-    HistoryType.REPORT -> "Network Diagnostic"
-    HistoryType.UNKNOWN -> "Other"
+    HistoryType.DNS -> "DNS 查询"
+    HistoryType.TCP -> "TCP 端口检测"
+    HistoryType.REPORT -> "网络诊断"
+    HistoryType.UNKNOWN -> "其他"
 }
 
 private fun Long.toDisplayTime(): String {
@@ -191,8 +191,8 @@ private fun Long.toDisplayTime(): String {
     val time = DateTimeFormatter.ofPattern("HH:mm").format(dateTime)
 
     return when (dateTime.toLocalDate()) {
-        today -> "Today $time"
-        today.minusDays(1) -> "Yesterday $time"
+        today -> "今天 $time"
+        today.minusDays(1) -> "昨天 $time"
         else -> DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(dateTime)
     }
 }

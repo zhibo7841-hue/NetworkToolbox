@@ -37,12 +37,12 @@ fun SubnetScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.Start,
         ) {
             TextButton(onClick = onBack) {
-                Text("返回 Dashboard")
+                Text("返回工具")
             }
             Text(
                 text = "IPv4 子网计算器",
@@ -58,12 +58,12 @@ fun SubnetScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Input", style = MaterialTheme.typography.titleMedium)
+                    Text("输入", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiState.input,
                         onValueChange = onInputChanged,
-                        label = { Text("IPv4 Address/CIDR") },
+                        label = { Text("IPv4 地址/CIDR") },
                         singleLine = true,
                         isError = uiState.errorMessage != null,
                     )
@@ -71,7 +71,7 @@ fun SubnetScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onCalculate,
                     ) {
-                        Text("Calculate")
+                        Text("计算")
                     }
                 }
             }
@@ -83,7 +83,7 @@ fun SubnetScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            "Status: Failed",
+                            "状态：失败",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.titleMedium,
                         )
@@ -93,7 +93,7 @@ fun SubnetScreen(
             }
 
             uiState.result?.let { result ->
-                Text("Result", style = MaterialTheme.typography.titleLarge)
+                Text("结果", style = MaterialTheme.typography.titleLarge)
                 SubnetResultCard(result)
             }
         }
@@ -108,17 +108,17 @@ private fun SubnetResultCard(result: SubnetResult) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.Start,
         ) {
-            Text("Status: Completed", style = MaterialTheme.typography.titleMedium)
+            Text("状态：已完成", style = MaterialTheme.typography.titleMedium)
             ResultRow("IP", result.ipAddress)
             ResultRow("CIDR", "/${result.prefixLength}")
-            ResultRow("Subnet Mask", result.subnetMask)
-            ResultRow("Network Address", result.networkAddress)
-            ResultRow("Broadcast Address", result.broadcastAddress)
+            ResultRow("子网掩码", result.subnetMask)
+            ResultRow("网络地址", result.networkAddress)
+            ResultRow("广播地址", result.broadcastAddress)
             ResultRow(
-                "Usable Range",
+                "可用范围",
                 "${result.usableRangeStart} - ${result.usableRangeEnd}",
             )
-            ResultRow("Host Count", result.hostCount.toString())
+            ResultRow("主机数量", result.hostCount.toString())
             Spacer(modifier = Modifier.height(2.dp))
         }
     }

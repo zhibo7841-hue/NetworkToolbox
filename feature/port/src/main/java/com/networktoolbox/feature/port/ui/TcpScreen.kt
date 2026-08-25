@@ -40,11 +40,11 @@ fun TcpScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isLoading) {
-                Text("返回 Dashboard")
+                Text("返回工具")
             }
             Text(
                 text = "TCP Port Check",
@@ -60,12 +60,12 @@ fun TcpScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Input", style = MaterialTheme.typography.titleMedium)
+                    Text("输入", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiState.hostInput,
                         onValueChange = onHostChanged,
-                        label = { Text("Host") },
+                        label = { Text("主机") },
                         singleLine = true,
                         enabled = !isLoading,
                         isError = uiState.status.isInvalidHost(),
@@ -74,7 +74,7 @@ fun TcpScreen(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiState.portInput,
                         onValueChange = onPortChanged,
-                        label = { Text("Port") },
+                        label = { Text("端口") },
                         singleLine = true,
                         enabled = !isLoading,
                         isError = uiState.status.isInvalidPort(),
@@ -92,7 +92,7 @@ fun TcpScreen(
                         onClick = onCheck,
                         enabled = !isLoading,
                     ) {
-                        Text(if (isLoading) "Checking..." else "Check")
+                        Text(if (isLoading) "检测中..." else "开始检测")
                     }
                 }
             }
@@ -114,11 +114,11 @@ private fun TcpResultCard(result: TcpProbeResult) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Result", style = MaterialTheme.typography.titleMedium)
-            ResultRow("Host", result.host.ifBlank { "未知" })
-            ResultRow("Port", result.port.takeIf { it in 1..65_535 }?.toString() ?: "未知")
-            ResultRow("Status", if (result.success) "Completed" else "Failed")
-            ResultRow("Latency", result.latencyMs?.let { "$it ms" } ?: "未知")
+            Text("结果", style = MaterialTheme.typography.titleMedium)
+            ResultRow("主机", result.host.ifBlank { "未知" })
+            ResultRow("端口", result.port.takeIf { it in 1..65_535 }?.toString() ?: "未知")
+            ResultRow("状态", if (result.success) "已完成" else "失败")
+            ResultRow("延迟", result.latencyMs?.let { "$it ms" } ?: "未知")
             result.errorMessage
                 ?.takeIf { it.isNotBlank() }
                 ?.let { errorMessage ->
@@ -136,7 +136,7 @@ private fun LoadingMessage() {
     Card(modifier = Modifier.fillMaxWidth()) {
         Text(
             modifier = Modifier.padding(16.dp),
-            text = "Checking...",
+            text = "检测中...",
             style = MaterialTheme.typography.bodyLarge,
         )
     }

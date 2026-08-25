@@ -40,11 +40,11 @@ fun DnsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextButton(onClick = onBack, enabled = !isLoading) {
-                Text("返回 Dashboard")
+                Text("返回工具")
             }
             Text(
                 text = "DNS Lookup",
@@ -60,12 +60,12 @@ fun DnsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Input", style = MaterialTheme.typography.titleMedium)
+                    Text("输入", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiState.domainInput,
                         onValueChange = onDomainChanged,
-                        label = { Text("Domain") },
+                        label = { Text("域名") },
                         singleLine = true,
                         enabled = !isLoading,
                         isError = uiState.status.isInvalidInput(),
@@ -82,7 +82,7 @@ fun DnsScreen(
                         onClick = onLookup,
                         enabled = !isLoading,
                     ) {
-                        Text(if (isLoading) "Checking..." else "Lookup")
+                        Text(if (isLoading) "检测中..." else "查询")
                     }
                 }
             }
@@ -104,14 +104,14 @@ private fun DnsResultCard(result: DnsResult) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Result", style = MaterialTheme.typography.titleMedium)
-            ResultRow("Domain", result.domain.ifBlank { "未知" })
-            ResultRow("Status", if (result.success) "Completed" else "Failed")
-            ResultRow("Detection", result.method.displayName())
-            ResultRow("Method", result.method.name)
-            ResultRow("Time", result.durationMs?.let { "$it ms" } ?: "未知")
-            RecordSection("A Records", DnsRecordType.A, result.records)
-            RecordSection("AAAA Records", DnsRecordType.AAAA, result.records)
+            Text("结果", style = MaterialTheme.typography.titleMedium)
+            ResultRow("域名", result.domain.ifBlank { "未知" })
+            ResultRow("状态", if (result.success) "已完成" else "失败")
+            ResultRow("检测方式", result.method.displayName())
+            ResultRow("技术方法", result.method.name)
+            ResultRow("耗时", result.durationMs?.let { "$it ms" } ?: "未知")
+            RecordSection("A 记录", DnsRecordType.A, result.records)
+            RecordSection("AAAA 记录", DnsRecordType.AAAA, result.records)
             result.errorMessage
                 ?.takeIf { it.isNotBlank() }
                 ?.let { errorMessage ->
@@ -129,7 +129,7 @@ private fun LoadingMessage() {
     Card(modifier = Modifier.fillMaxWidth()) {
         Text(
             modifier = Modifier.padding(16.dp),
-            text = "Checking...",
+            text = "检测中...",
             style = MaterialTheme.typography.bodyLarge,
         )
     }
@@ -169,7 +169,7 @@ private fun ResultRow(label: String, value: String) {
 }
 
 private fun DnsMethod.displayName(): String = when (this) {
-    DnsMethod.SYSTEM_RESOLVER -> "System Resolver"
+    DnsMethod.SYSTEM_RESOLVER -> "系统解析器"
     DnsMethod.UNAVAILABLE -> "不可用"
 }
 

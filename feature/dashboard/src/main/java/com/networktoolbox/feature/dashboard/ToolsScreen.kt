@@ -43,7 +43,7 @@ fun ToolsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Tools", style = MaterialTheme.typography.headlineLarge)
+                Text("工具", style = MaterialTheme.typography.headlineMedium)
                 Text(
                     "选择一个工具执行本地网络检测。",
                     style = MaterialTheme.typography.bodyLarge,
@@ -52,8 +52,8 @@ fun ToolsScreen(
             }
 
             ToolSection(
-                title = "Connectivity",
-                subtitle = "连通性检测",
+                title = "连通性检测",
+                subtitle = "测试网络连接和服务响应",
                 items = listOf(
                     ToolItem(Icons.Outlined.WifiTethering, "Ping", "测试目标是否可达", onOpenPing),
                     ToolItem(Icons.Outlined.Dns, "DNS Lookup", "检查域名解析", onOpenDns),
@@ -61,18 +61,18 @@ fun ToolsScreen(
                 ),
             )
             ToolSection(
-                title = "Network Utilities",
-                subtitle = "网络计算工具",
+                title = "网络工具",
+                subtitle = "计算和分析网络地址",
                 items = listOf(
-                    ToolItem(Icons.Outlined.AccountTree, "IPv4 Subnet Calculator", "计算 IPv4 子网", onOpenSubnet),
+                    ToolItem(Icons.Outlined.AccountTree, "IPv4子网计算", "计算网络地址", onOpenSubnet),
                 ),
             )
             ToolSection(
-                title = "Diagnostics",
-                subtitle = "检测结果与本地记录",
+                title = "诊断与记录",
+                subtitle = "生成参考报告并查看本地记录",
                 items = listOf(
-                    ToolItem(Icons.Outlined.Assessment, "Network Diagnostic Report", "生成检测参考报告", onOpenReport),
-                    ToolItem(Icons.Outlined.History, "History", "查看本机历史记录", onOpenHistory),
+                    ToolItem(Icons.Outlined.Assessment, "网络诊断报告", "生成检测参考报告", onOpenReport),
+                    ToolItem(Icons.Outlined.History, "历史记录", "查看本机历史记录", onOpenHistory),
                 ),
             )
         }
