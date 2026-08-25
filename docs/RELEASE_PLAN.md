@@ -30,4 +30,19 @@ SSH/Telnet terminal functionality, SFTP, automatic network repair, automatic def
 
 Detailed implementation acceptance criteria will be defined when Android development begins. They must remain traceable to the included V0.1 scope, the privacy principles, and the architecture direction.
 
-No V0.2, V0.3, or V1.0 feature commitments are made by this document.
+## V0.2.0
+
+- Status: Planning
+- Goal: Network Diagnostic Enhancement
+
+Planned areas:
+
+- History persistence fix.
+- Ping enhancement.
+- DNS enhancement.
+- Diagnostic Report upgrade.
+- LAN Scanner research.
+
+V0.2.0 remains a planning baseline. The LAN Scanner item is limited to technical research in this phase and does not authorize direct implementation.
+
+V0.3 and V1.0 feature commitments are not defined by this document.
