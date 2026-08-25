@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -22,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.network.ping.PingMethod
 import com.networktoolbox.core.network.ping.PingProtocol
@@ -46,6 +48,8 @@ fun PingScreen(
     modifier: Modifier = Modifier,
 ) {
     val isRunning = uiState.status is PingStatus.Running
+    val inputErrorMessage = uiState.status.inputErrorMessage()
+    var advancedSettingsExpanded by rememberSaveable { mutableStateOf(false) }
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
@@ -73,7 +77,7 @@ fun PingScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("检测设置", style = MaterialTheme.typography.titleMedium)
+                    Text("目标", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiState.targetInput,
@@ -81,53 +85,13 @@ fun PingScreen(
                         label = { Text("目标地址或域名") },
                         singleLine = true,
                         enabled = !isRunning,
-                        isError = uiState.status.isInputError(),
+                        isError = uiState.status.isTargetInputError(),
                     )
-                    if (uiState.status.isInputError()) {
+                    if (inputErrorMessage != null) {
                         Text(
-                            "请输入有效的 IPv4 地址或域名。",
+                            inputErrorMessage,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-
-                    Text("检测模式", style = MaterialTheme.typography.labelLarge)
-                    ChoiceButton(
-                        label = "快速检测",
-                        selected = uiState.mode == PingDetectionMode.QUICK,
-                        enabled = !isRunning,
-                        onClick = { onModeChanged(PingDetectionMode.QUICK) },
-                    )
-                    ChoiceButton(
-                        label = "连续检测",
-                        selected = uiState.mode == PingDetectionMode.CONTINUOUS,
-                        enabled = !isRunning,
-                        onClick = { onModeChanged(PingDetectionMode.CONTINUOUS) },
-                    )
-
-                    Text("协议偏好", style = MaterialTheme.typography.labelLarge)
-                    ProtocolChoice(
-                        selected = uiState.protocol,
-                        enabled = !isRunning,
-                        onSelected = onProtocolChanged,
-                    )
-
-                    if (uiState.mode == PingDetectionMode.CONTINUOUS) {
-                        OutlinedTextField(
-                            modifier = Modifier.fillMaxWidth(),
-                            value = uiState.countInput,
-                            onValueChange = onCountChanged,
-                            label = { Text("检测次数（1-100）") },
-                            singleLine = true,
-                            enabled = !isRunning,
-                        )
-                        OutlinedTextField(
-                            modifier = Modifier.fillMaxWidth(),
-                            value = uiState.intervalInput,
-                            onValueChange = onIntervalChanged,
-                            label = { Text("间隔（毫秒）") },
-                            singleLine = true,
-                            enabled = !isRunning,
                         )
                     }
 
@@ -136,6 +100,31 @@ fun PingScreen(
                         onClick = if (isRunning) onStop else onPing,
                     ) {
                         Text(if (isRunning) "停止检测" else "开始检测")
+                    }
+
+                    TextButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { advancedSettingsExpanded = !advancedSettingsExpanded },
+                        enabled = !isRunning,
+                    ) {
+                        Text(
+                            if (advancedSettingsExpanded) {
+                                "收起高级设置"
+                            } else {
+                                "高级设置 >"
+                            },
+                        )
+                    }
+
+                    if (advancedSettingsExpanded) {
+                        AdvancedSettings(
+                            uiState = uiState,
+                            enabled = !isRunning,
+                            onModeChanged = onModeChanged,
+                            onProtocolChanged = onProtocolChanged,
+                            onCountChanged = onCountChanged,
+                            onIntervalChanged = onIntervalChanged,
+                        )
                     }
                 }
             }
@@ -158,21 +147,77 @@ private fun ChoiceButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    if (selected) {
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onClick,
+    OutlinedButton(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                Color.Transparent
+            },
+            contentColor = if (selected) {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+        ),
+    ) {
+        Text(label)
+    }
+}
+
+@Composable
+private fun AdvancedSettings(
+    uiState: PingUiState,
+    enabled: Boolean,
+    onModeChanged: (PingDetectionMode) -> Unit,
+    onProtocolChanged: (PingProtocol) -> Unit,
+    onCountChanged: (String) -> Unit,
+    onIntervalChanged: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("检测模式", style = MaterialTheme.typography.labelLarge)
+        ChoiceButton(
+            label = "快速检测",
+            selected = uiState.mode == PingDetectionMode.QUICK,
             enabled = enabled,
-        ) {
-            Text(label)
-        }
-    } else {
-        OutlinedButton(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onClick,
+            onClick = { onModeChanged(PingDetectionMode.QUICK) },
+        )
+        ChoiceButton(
+            label = "连续检测",
+            selected = uiState.mode == PingDetectionMode.CONTINUOUS,
             enabled = enabled,
-        ) {
-            Text(label)
+            onClick = { onModeChanged(PingDetectionMode.CONTINUOUS) },
+        )
+
+        Text("协议偏好", style = MaterialTheme.typography.labelLarge)
+        ProtocolChoice(
+            selected = uiState.protocol,
+            enabled = enabled,
+            onSelected = onProtocolChanged,
+        )
+
+        if (uiState.mode == PingDetectionMode.CONTINUOUS) {
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = uiState.countInput,
+                onValueChange = onCountChanged,
+                label = { Text("检测次数（1-100）") },
+                singleLine = true,
+                enabled = enabled,
+                isError = uiState.status.isCountInputError(),
+            )
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = uiState.intervalInput,
+                onValueChange = onIntervalChanged,
+                label = { Text("间隔（毫秒）") },
+                singleLine = true,
+                enabled = enabled,
+                isError = uiState.status.isIntervalInputError(),
+            )
         }
     }
 }
@@ -204,7 +249,11 @@ private fun RunningCard(status: PingStatus.Running) {
         ) {
             Text("正在检测", style = MaterialTheme.typography.titleMedium)
             Text("目标：${status.target}")
-            status.expectedCount?.let { Text("计划检测：$it 次") }
+            status.expectedCount?.let { Text("计划检测：$it 次，完成后显示统计结果") }
+            Text(
+                "检测过程中可随时停止。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -241,10 +290,11 @@ private fun PingResultCard(result: PingSessionResult) {
             Text("Ping 结果", style = MaterialTheme.typography.titleMedium)
             ResultRow("目标", result.target.ifBlank { "未知" })
             ResultRow("状态", if (completed) "已完成" else "失败")
+            QualityBadge(result.qualityLevel)
             ResultRow("网络质量", result.qualityLevel.displayName())
             ResultRow("平均延迟", result.avgLatencyMs.latencyText())
             ResultRow("丢包率", result.packetLoss.percentText())
-            ResultRow("摘要", result.summary)
+            ResultRow("摘要", result.localizedSummary())
 
             TextButton(onClick = { advancedExpanded = !advancedExpanded }) {
                 Text(if (advancedExpanded) "收起详细信息" else "查看详细信息")
@@ -269,6 +319,38 @@ private fun PingResultCard(result: PingSessionResult) {
                     }
             }
         }
+    }
+}
+
+@Composable
+private fun QualityBadge(level: PingQualityLevel) {
+    val containerColor = when (level) {
+        PingQualityLevel.EXCELLENT,
+        PingQualityLevel.GOOD,
+        -> MaterialTheme.colorScheme.primaryContainer
+        PingQualityLevel.FAIR -> MaterialTheme.colorScheme.secondaryContainer
+        PingQualityLevel.POOR -> MaterialTheme.colorScheme.errorContainer
+        PingQualityLevel.UNKNOWN -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = when (level) {
+        PingQualityLevel.EXCELLENT,
+        PingQualityLevel.GOOD,
+        -> MaterialTheme.colorScheme.onPrimaryContainer
+        PingQualityLevel.FAIR -> MaterialTheme.colorScheme.onSecondaryContainer
+        PingQualityLevel.POOR -> MaterialTheme.colorScheme.onErrorContainer
+        PingQualityLevel.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            text = "${level.emoji()} ${level.displayName()}",
+            style = MaterialTheme.typography.titleMedium,
+        )
     }
 }
 
@@ -302,13 +384,49 @@ private fun PingQualityLevel.displayName(): String = when (this) {
     PingQualityLevel.UNKNOWN -> "暂无评价"
 }
 
+private fun PingQualityLevel.emoji(): String = when (this) {
+    PingQualityLevel.EXCELLENT, PingQualityLevel.GOOD -> "🟢"
+    PingQualityLevel.FAIR -> "🟡"
+    PingQualityLevel.POOR -> "🔴"
+    PingQualityLevel.UNKNOWN -> "⚪"
+}
+
+private fun PingSessionResult.localizedSummary(): String = when (qualityLevel) {
+    PingQualityLevel.EXCELLENT ->
+        "网络连接稳定，未检测到明显丢包。"
+    PingQualityLevel.GOOD ->
+        "网络连接较好，当前检测到的延迟和丢包处于较低水平。"
+    PingQualityLevel.FAIR ->
+        "网络可达，但存在一定延迟波动。"
+    PingQualityLevel.POOR ->
+        "网络质量较差，存在明显延迟或丢包。"
+    PingQualityLevel.UNKNOWN ->
+        "本次未能获得有效响应，暂时无法评价网络质量。"
+}
+
 private fun PingMethod.displayName(): String = when (this) {
     PingMethod.SYSTEM_REACHABILITY -> "系统可达性检测"
     PingMethod.UNAVAILABLE -> "不可用"
 }
 
-private fun PingStatus.isInputError(): Boolean = this is PingStatus.Failed &&
-    result.errorMessage in setOf("Invalid target.", "Invalid count.", "Invalid interval.")
+private fun PingStatus.inputErrorMessage(): String? =
+    (this as? PingStatus.Failed)?.result?.errorMessage?.let { errorMessage ->
+        when (errorMessage) {
+            "Invalid target." -> "请输入有效的 IPv4 地址或域名。"
+            "Invalid count." -> "检测次数需要在 1 到 100 之间。"
+            "Invalid interval." -> "检测间隔需要在 100 到 60000 毫秒之间。"
+            else -> null
+        }
+    }
+
+private fun PingStatus.isTargetInputError(): Boolean =
+    (this as? PingStatus.Failed)?.result?.errorMessage == "Invalid target."
+
+private fun PingStatus.isCountInputError(): Boolean =
+    (this as? PingStatus.Failed)?.result?.errorMessage == "Invalid count."
+
+private fun PingStatus.isIntervalInputError(): Boolean =
+    (this as? PingStatus.Failed)?.result?.errorMessage == "Invalid interval."
 
 private fun String.toExplanation(): String? = when (this) {
     "Invalid target." -> "请输入有效的 IPv4 地址或域名。"
