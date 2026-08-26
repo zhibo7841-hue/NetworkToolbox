@@ -14,6 +14,11 @@ internal data class NetworkContextSnapshot(
     val wifiSignalLevel: Int? = null,
     val activeNetworkAvailable: Boolean? = null,
     val validated: Boolean? = null,
+    val ipv6Addresses: List<String> = emptyList(),
+    val ipv4PrefixLength: Int? = null,
+    val interfaceName: String? = null,
+    val privateDnsActive: Boolean? = null,
+    val privateDnsServerName: String? = null,
 )
 
 internal object NetworkContextMapper {
@@ -28,5 +33,10 @@ internal object NetworkContextMapper {
         wifiSignalLevel = snapshot.wifiSignalLevel,
         activeNetworkAvailable = snapshot.activeNetworkAvailable,
         validated = snapshot.validated,
+        ipv6Addresses = snapshot.ipv6Addresses,
+        ipv4PrefixLength = snapshot.ipv4PrefixLength,
+        interfaceName = snapshot.interfaceName,
+        privateDnsActive = snapshot.privateDnsActive,
+        privateDnsServerName = snapshot.privateDnsServerName,
     )
 }

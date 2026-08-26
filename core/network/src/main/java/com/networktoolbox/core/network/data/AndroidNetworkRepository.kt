@@ -90,6 +90,8 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
                     connectionType = connectionType(capabilities),
                     ipv4Address = properties?.findAddress(isIpv4 = true),
                     ipv6Address = properties?.findAddress(isIpv4 = false),
+                    ipv6Addresses = properties?.findAddresses(isIpv4 = false).orEmpty(),
+                    ipv4PrefixLength = properties?.findPrefixLength(isIpv4 = true),
                     gateway = properties?.findDefaultGateway(),
                     dnsServers = properties?.dnsServers.orEmpty().mapNotNull(::hostAddress),
                     vpnActive = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
@@ -97,6 +99,9 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
                     validated = capabilities?.hasCapability(
                         NetworkCapabilities.NET_CAPABILITY_VALIDATED,
                     ),
+                    interfaceName = properties?.interfaceName,
+                    privateDnsActive = properties?.isPrivateDnsActive,
+                    privateDnsServerName = properties?.privateDnsServerName,
                     wifiName = wifiInfo?.ssid
                         ?.takeUnless { it.isBlank() || it == WifiManager.UNKNOWN_SSID }
                         ?.trim('"'),
@@ -147,12 +152,25 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
         )
 
     private fun LinkProperties.findAddress(isIpv4: Boolean): String? =
+        findAddresses(isIpv4).firstOrNull()
+
+    private fun LinkProperties.findAddresses(isIpv4: Boolean): List<String> =
         linkAddresses
+            .asSequence()
             .map { it.address }
-            .firstOrNull { address ->
+            .filter { address ->
                 if (isIpv4) address is java.net.Inet4Address else address is java.net.Inet6Address
             }
-            ?.let(::hostAddress)
+            .mapNotNull(::hostAddress)
+            .toList()
+
+    private fun LinkProperties.findPrefixLength(isIpv4: Boolean): Int? =
+        linkAddresses
+            .firstOrNull { linkAddress ->
+                val address = linkAddress.address
+                if (isIpv4) address is java.net.Inet4Address else address is java.net.Inet6Address
+            }
+            ?.prefixLength
 
     private fun hostAddress(address: java.net.InetAddress): String? =
         address.hostAddress?.substringBefore('%')

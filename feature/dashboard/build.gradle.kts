@@ -39,4 +39,5 @@ dependencies {
     implementation(libs.com.google.dagger.hilt.android)
     implementation(libs.kotlinx.coroutines.core)
     kapt(libs.com.google.dagger.hilt.compiler)
+    testImplementation(libs.junit)
 }

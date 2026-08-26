@@ -21,6 +21,11 @@ class NetworkContextTest {
         assertNull(context.wifiSignalLevel)
         assertNull(context.activeNetworkAvailable)
         assertNull(context.validated)
+        assertEquals(emptyList<String>(), context.ipv6Addresses)
+        assertNull(context.ipv4PrefixLength)
+        assertNull(context.interfaceName)
+        assertNull(context.privateDnsActive)
+        assertNull(context.privateDnsServerName)
     }
 
     @Test

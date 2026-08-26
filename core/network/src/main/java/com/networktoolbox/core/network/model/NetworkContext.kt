@@ -13,6 +13,16 @@ data class NetworkContext(
     val activeNetworkAvailable: Boolean? = null,
     /** Whether Android reported that the active network was validated for Internet access. */
     val validated: Boolean? = null,
+    /** All IPv6 addresses observed on the active link, when available. */
+    val ipv6Addresses: List<String> = emptyList(),
+    /** IPv4 prefix length for the selected IPv4 address, when available. */
+    val ipv4PrefixLength: Int? = null,
+    /** The interface name reported by LinkProperties, when available. */
+    val interfaceName: String? = null,
+    /** Whether Android reports Private DNS is active on this link. */
+    val privateDnsActive: Boolean? = null,
+    /** The Private DNS hostname in strict mode, when reported by Android. */
+    val privateDnsServerName: String? = null,
 ) {
     companion object {
         fun unknown(): NetworkContext = NetworkContext(
@@ -26,6 +36,11 @@ data class NetworkContext(
             wifiSignalLevel = null,
             activeNetworkAvailable = null,
             validated = null,
+            ipv6Addresses = emptyList(),
+            ipv4PrefixLength = null,
+            interfaceName = null,
+            privateDnsActive = null,
+            privateDnsServerName = null,
         )
 
         fun noActiveNetwork(): NetworkContext = NetworkContext(
@@ -39,6 +54,11 @@ data class NetworkContext(
             wifiSignalLevel = null,
             activeNetworkAvailable = false,
             validated = false,
+            ipv6Addresses = emptyList(),
+            ipv4PrefixLength = null,
+            interfaceName = null,
+            privateDnsActive = null,
+            privateDnsServerName = null,
         )
     }
 }
