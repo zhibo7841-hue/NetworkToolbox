@@ -16,6 +16,8 @@ import com.networktoolbox.core.network.ping.PingSessionResult
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.core.network.tcp.TcpPortChecker
 import com.networktoolbox.core.network.tcp.TcpProbeResult
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -86,6 +88,9 @@ class DefaultDiagnosticPipeline(
                 context = initialContext,
                 gateway = gatewayAddress,
             )
+        } else if (gatewayAddress.isUnscopedIpv6LinkLocal()) {
+            gatewayResult = null
+            gatewayCheck = gatewayNotConfirmedCheck(gatewayAddress)
         } else {
             gatewayResult = runGatewayCheck(gatewayAddress)
             gatewayCheck = gatewayCheck(gatewayResult, gatewayAddress)
@@ -401,6 +406,18 @@ class DefaultDiagnosticPipeline(
         )
     }
 
+    private fun gatewayNotConfirmedCheck(gateway: String): DiagnosticCheck = DiagnosticCheck(
+        id = CHECK_GATEWAY,
+        stage = DiagnosticStage.GATEWAY,
+        name = "网关可达性",
+        status = DiagnosticCheckStatus.UNKNOWN,
+        severity = DiagnosticSeverity.NOTICE,
+        summary = "当前网络使用 IPv6 链路本地网关，暂未执行可靠的网关可达性探测。",
+        target = gateway,
+        observedAt = now(),
+        rawData = mapOf("reason" to "ipv6_link_local_scope_unavailable"),
+    )
+
     private fun publicCheck(
         result: DiagnosticPublicConnectivityResult,
     ): DiagnosticCheck {
@@ -512,6 +529,14 @@ class DefaultDiagnosticPipeline(
         } else {
             checks += replacement
         }
+    }
+
+    private fun String.isUnscopedIpv6LinkLocal(): Boolean {
+        if (contains('%') || !contains(':')) return false
+        return runCatching { InetAddress.getByName(this) }
+            .getOrNull()
+            ?.let { it is Inet6Address && it.isLinkLocalAddress }
+            ?: false
     }
 
     private fun dnsCheck(

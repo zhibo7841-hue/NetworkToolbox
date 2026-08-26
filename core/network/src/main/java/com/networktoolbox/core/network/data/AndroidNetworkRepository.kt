@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import java.net.Inet4Address
 
 class AndroidNetworkRepository(context: Context) : NetworkRepository {
     private val connectivityManager =
@@ -128,7 +129,22 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
     }
 
     private fun LinkProperties.findDefaultGateway(): String? =
-        routes.firstOrNull(RouteInfo::isDefaultRoute)?.gateway?.let(::hostAddress)
+        DefaultGatewaySelector.select(
+            routes
+                .asSequence()
+                .filter(RouteInfo::isDefaultRoute)
+                .mapNotNull { route ->
+                    route.gateway?.let { gateway ->
+                        hostAddress(gateway)?.let { address ->
+                            DefaultGatewayCandidate(
+                                address = address,
+                                isIpv4 = gateway is Inet4Address,
+                            )
+                        }
+                    }
+                }
+                .toList(),
+        )
 
     private fun LinkProperties.findAddress(isIpv4: Boolean): String? =
         linkAddresses

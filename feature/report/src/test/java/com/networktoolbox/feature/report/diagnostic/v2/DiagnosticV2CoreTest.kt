@@ -95,6 +95,24 @@ class DiagnosticV2CoreTest {
     }
 
     @Test
+    fun ipv6OnlyWifiWithUnscopedLinkLocalGateway_isNotProbedOrClassifiedAsFailure() = runTest {
+        val ping = FakePingSessionEngine(pingResult(success = false))
+        val context = networkContext().copy(
+            ipv4Address = null,
+            ipv6Address = "2001:db8::20",
+            gateway = "fe80::1",
+        )
+
+        val result = pipeline(context = context, pingEngine = ping).run {}
+        val gateway = result.checks.first { it.id == "GATEWAY_REACHABILITY" }
+
+        assertEquals(DiagnosticCheckStatus.UNKNOWN, gateway.status)
+        assertEquals(DiagnosticSeverity.NOTICE, gateway.severity)
+        assertEquals("ipv6_link_local_scope_unavailable", gateway.rawData["reason"])
+        assertEquals(0, ping.callCount)
+    }
+
+    @Test
     fun wifiGatewayFailureWithDomainAccess_downgradesGatewayToUnknown() = runTest {
         val result = pipeline(
             gatewayResult = pingResult(success = false),
