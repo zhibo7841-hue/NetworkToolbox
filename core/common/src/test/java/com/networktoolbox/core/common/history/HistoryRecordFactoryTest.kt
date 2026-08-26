@@ -40,6 +40,41 @@ class HistoryRecordFactoryTest {
     }
 
     @Test
+    fun dnsV2CountsAllFinalRecordsIncludingTypesReturnedWithAnotherQuery() {
+        val record = HistoryRecordFactory.dnsV2(
+            timestamp = 1L,
+            domain = "example.com",
+            status = "SUCCESS",
+            queryTypes = listOf("A", "AAAA"),
+            records = listOf(
+                DnsHistoryRecord(
+                    type = "A",
+                    name = "example.com",
+                    value = "192.0.2.1",
+                    ttlSeconds = 300L,
+                    priority = null,
+                ),
+                DnsHistoryRecord(
+                    type = "CNAME",
+                    name = "example.com",
+                    value = "alias.example.com",
+                    ttlSeconds = 1064L,
+                    priority = null,
+                ),
+            ),
+            durationMs = 12L,
+            summary = "解析成功",
+            method = "ANDROID_DNS_RESOLVER",
+            errorMessage = null,
+            configuredDnsServers = emptyList(),
+            privateDnsActive = null,
+            privateDnsServerName = null,
+        )
+
+        assertTrue(record.detailJson.contains("\"recordCounts\":{\"A\":1, \"AAAA\":0, \"CNAME\":1}"))
+    }
+
+    @Test
     fun pingSessionUsesChineseQualitySummaryForHistory() {
         val record = HistoryRecordFactory.pingSession(
             timestamp = 1L,

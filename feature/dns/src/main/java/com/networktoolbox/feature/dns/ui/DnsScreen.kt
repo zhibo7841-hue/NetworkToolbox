@@ -186,7 +186,7 @@ private fun DnsResultCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("DNS Result", style = MaterialTheme.typography.titleMedium)
+            Text("DNS 结果", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = result.status.headline(),
                 style = MaterialTheme.typography.titleLarge,
@@ -306,10 +306,20 @@ private fun DnsDetails(result: DnsLookupResult) {
 
         Text("DNS 环境", style = MaterialTheme.typography.titleSmall)
         val server = result.server
-        ResultRow(
-            "网络配置 DNS",
-            server?.configuredAddresses?.joinToString().orEmpty().ifBlank { "未知" },
-        )
+        Text("网络配置 DNS", style = MaterialTheme.typography.bodyMedium)
+        if (server?.configuredAddresses.isNullOrEmpty()) {
+            Text(
+                "未知",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                server?.configuredAddresses.orEmpty().forEach { address ->
+                    Text(address, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
         server?.privateDnsActive?.let { active ->
             ResultRow("Private DNS", if (active) "已启用" else "未启用")
         }

@@ -107,7 +107,11 @@ object HistoryRecordFactory {
         privateDnsActive: Boolean?,
         privateDnsServerName: String?,
     ): HistoryRecord {
-        val recordCounts = queryTypes.associateWith { type ->
+        val recordCountTypes = buildList {
+            addAll(queryTypes)
+            records.mapTo(this) { record -> record.type }
+        }.distinct()
+        val recordCounts = recordCountTypes.associateWith { type ->
             records.count { record -> record.type == type }
         }
         return HistoryRecord(

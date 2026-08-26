@@ -1,5 +1,6 @@
 package com.networktoolbox.core.network.dns
 
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 
 class DefaultDnsQueryEngine(
@@ -70,7 +71,7 @@ class DefaultDnsQueryEngine(
             throw error
         }
 
-        val records = outcomes.flatMap { it.records }
+        val records = deduplicateRecords(outcomes.flatMap { it.records })
         val status = aggregateStatus(outcomes, records)
         val errorMessage = if (status == DnsLookupStatus.SUCCESS) {
             null
@@ -98,11 +99,18 @@ class DefaultDnsQueryEngine(
         records: List<DnsRecord>,
     ): DnsLookupStatus {
         if (records.isNotEmpty()) {
-            return if (outcomes.all { it.status == DnsLookupStatus.SUCCESS }) {
-                DnsLookupStatus.SUCCESS
-            } else {
-                DnsLookupStatus.PARTIAL
+            val hasActualFailure = outcomes.any { outcome ->
+                outcome.status != DnsLookupStatus.SUCCESS &&
+                    outcome.status != DnsLookupStatus.NO_RECORDS
             }
+            return if (hasActualFailure) {
+                DnsLookupStatus.PARTIAL
+            } else {
+                DnsLookupStatus.SUCCESS
+            }
+        }
+        if (outcomes.all { it.status == DnsLookupStatus.NO_RECORDS }) {
+            return DnsLookupStatus.NO_RECORDS
         }
         return listOf(
             DnsLookupStatus.INVALID_RESPONSE,
@@ -113,6 +121,41 @@ class DefaultDnsQueryEngine(
             DnsLookupStatus.FAILED,
         ).firstOrNull { status -> outcomes.any { it.status == status } }
             ?: DnsLookupStatus.FAILED
+    }
+
+    private fun deduplicateRecords(records: List<DnsRecord>): List<DnsRecord> {
+        val uniqueRecords = linkedMapOf<RecordIdentity, DnsRecord>()
+        records.forEach { record ->
+            val identity = RecordIdentity(
+                type = record.type,
+                name = record.name.dnsIdentityValue(),
+                value = record.value.identityValue(record.type),
+                priority = record.priority,
+            )
+            val existing = uniqueRecords[identity]
+            uniqueRecords[identity] = if (existing == null) {
+                record
+            } else {
+                existing.copy(ttl = mergeTtl(existing.ttl, record.ttl))
+            }
+        }
+        return uniqueRecords.values.toList()
+    }
+
+    private fun mergeTtl(first: Long?, second: Long?): Long? = when {
+        first == null -> second
+        second == null -> first
+        else -> minOf(first, second)
+    }
+
+    private fun String.dnsIdentityValue(): String = trimEnd('.').lowercase(Locale.ROOT)
+
+    private fun String.identityValue(type: DnsRecordType): String = when (type) {
+        DnsRecordType.CNAME,
+        DnsRecordType.MX,
+        -> dnsIdentityValue()
+
+        else -> this
     }
 
     private fun defaultErrorMessage(status: DnsLookupStatus): String = when (status) {
@@ -155,6 +198,13 @@ class DefaultDnsQueryEngine(
         val status: DnsLookupStatus,
         val records: List<DnsRecord>,
         val errorMessage: String?,
+    )
+
+    private data class RecordIdentity(
+        val type: DnsRecordType,
+        val name: String,
+        val value: String,
+        val priority: Int?,
     )
 
     private companion object {

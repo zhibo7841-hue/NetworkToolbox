@@ -89,6 +89,115 @@ class DefaultDnsQueryEngineTest {
     }
 
     @Test
+    fun treatsNoRecordsForAnotherTypeAsSuccessfulOverall() = runBlocking {
+        val engine = DefaultDnsQueryEngine(
+            transport = FakeDnsRawQueryTransport(
+                responses = mapOf(
+                    DnsRecordType.A to DnsResponseFixtures.aResponse(),
+                    DnsRecordType.AAAA to DnsResponseFixtures.response(
+                        recordType = DnsRecordType.AAAA,
+                        records = emptyList(),
+                    ),
+                ),
+            ),
+        )
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A, DnsRecordType.AAAA),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.SUCCESS, result.status)
+        assertEquals(1, result.records.size)
+        assertEquals(DnsRecordType.A, result.records.single().type)
+    }
+
+    @Test
+    fun reportsNoRecordsWhenAllTypesCompleteWithoutRecords() = runBlocking {
+        val engine = DefaultDnsQueryEngine(
+            transport = FakeDnsRawQueryTransport(
+                responses = mapOf(
+                    DnsRecordType.A to DnsResponseFixtures.response(
+                        recordType = DnsRecordType.A,
+                        records = emptyList(),
+                    ),
+                    DnsRecordType.AAAA to DnsResponseFixtures.response(
+                        recordType = DnsRecordType.AAAA,
+                        records = emptyList(),
+                    ),
+                ),
+            ),
+        )
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A, DnsRecordType.AAAA),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.NO_RECORDS, result.status)
+        assertTrue(result.records.isEmpty())
+    }
+
+    @Test
+    fun deduplicatesRecordsAcrossResponsesAndKeepsSmallestTtl() = runBlocking {
+        val duplicateCname = DnsResponseFixtures.encodedNameWithExamplePointer("alias")
+        val transport = FakeDnsRawQueryTransport(
+            responses = mapOf(
+                DnsRecordType.A to DnsResponseFixtures.response(
+                    recordType = DnsRecordType.A,
+                    records = listOf(
+                        DnsResponseFixtures.resourceRecord(
+                            type = DnsRecordType.A,
+                            ttl = 300,
+                            data = byteArrayOf(93, 184.toByte(), 216.toByte(), 34),
+                        ),
+                        DnsResponseFixtures.resourceRecord(
+                            type = DnsRecordType.CNAME,
+                            ttl = 1_065,
+                            data = duplicateCname,
+                        ),
+                    ),
+                ),
+                DnsRecordType.AAAA to DnsResponseFixtures.response(
+                    recordType = DnsRecordType.AAAA,
+                    records = listOf(
+                        DnsResponseFixtures.resourceRecord(
+                            type = DnsRecordType.AAAA,
+                            ttl = 600,
+                            data = byteArrayOf(
+                                0x20, 0x01, 0x0d, 0xb8.toByte(), 0, 0, 0, 0,
+                                0, 0, 0, 0, 0, 0, 0, 1,
+                            ),
+                        ),
+                        DnsResponseFixtures.resourceRecord(
+                            type = DnsRecordType.CNAME,
+                            ttl = 1_064,
+                            data = duplicateCname,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val result = DefaultDnsQueryEngine(transport).lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A, DnsRecordType.AAAA),
+            ),
+        )
+
+        val cnameRecords = result.records.filter { it.type == DnsRecordType.CNAME }
+        assertEquals(DnsLookupStatus.SUCCESS, result.status)
+        assertEquals(3, result.records.size)
+        assertEquals(1, cnameRecords.size)
+        assertEquals(1_064L, cnameRecords.single().ttl)
+    }
+
+    @Test
     fun mapsNxdomainResponse() = runBlocking {
         val engine = DefaultDnsQueryEngine(
             transport = FakeDnsRawQueryTransport(
