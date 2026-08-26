@@ -12,6 +12,8 @@ internal data class NetworkContextSnapshot(
     val vpnActive: Boolean? = null,
     val wifiName: String? = null,
     val wifiSignalLevel: Int? = null,
+    val activeNetworkAvailable: Boolean? = null,
+    val validated: Boolean? = null,
 )
 
 internal object NetworkContextMapper {
@@ -24,5 +26,7 @@ internal object NetworkContextMapper {
         vpnActive = snapshot.vpnActive,
         wifiName = snapshot.wifiName,
         wifiSignalLevel = snapshot.wifiSignalLevel,
+        activeNetworkAvailable = snapshot.activeNetworkAvailable,
+        validated = snapshot.validated,
     )
 }

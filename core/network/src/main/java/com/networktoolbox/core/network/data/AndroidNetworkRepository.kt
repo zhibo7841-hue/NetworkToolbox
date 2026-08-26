@@ -77,7 +77,7 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
         networkCapabilities: NetworkCapabilities? = null,
         linkProperties: LinkProperties? = null,
     ): NetworkContext {
-        if (network == null) return NetworkContext.unknown()
+        if (network == null) return NetworkContext.noActiveNetwork()
 
         return try {
             val capabilities = networkCapabilities ?: manager.getNetworkCapabilities(network)
@@ -92,6 +92,10 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
                     gateway = properties?.findDefaultGateway(),
                     dnsServers = properties?.dnsServers.orEmpty().mapNotNull(::hostAddress),
                     vpnActive = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
+                    activeNetworkAvailable = true,
+                    validated = capabilities?.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_VALIDATED,
+                    ),
                     wifiName = wifiInfo?.ssid
                         ?.takeUnless { it.isBlank() || it == WifiManager.UNKNOWN_SSID }
                         ?.trim('"'),

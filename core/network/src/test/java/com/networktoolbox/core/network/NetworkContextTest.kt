@@ -19,5 +19,15 @@ class NetworkContextTest {
         assertNull(context.vpnActive)
         assertNull(context.wifiName)
         assertNull(context.wifiSignalLevel)
+        assertNull(context.activeNetworkAvailable)
+        assertNull(context.validated)
+    }
+
+    @Test
+    fun noActiveNetworkIsExplicitlyRepresented() {
+        val context = NetworkContext.noActiveNetwork()
+
+        assertEquals(false, context.activeNetworkAvailable)
+        assertEquals(false, context.validated)
     }
 }

@@ -19,6 +19,8 @@ class NetworkContextMapperTest {
                 vpnActive = true,
                 wifiName = "HomeWiFi",
                 wifiSignalLevel = 4,
+                activeNetworkAvailable = true,
+                validated = true,
             ),
         )
 
@@ -30,5 +32,7 @@ class NetworkContextMapperTest {
         assertEquals(true, result.vpnActive)
         assertEquals("HomeWiFi", result.wifiName)
         assertEquals(4, result.wifiSignalLevel)
+        assertEquals(true, result.activeNetworkAvailable)
+        assertEquals(true, result.validated)
     }
 }

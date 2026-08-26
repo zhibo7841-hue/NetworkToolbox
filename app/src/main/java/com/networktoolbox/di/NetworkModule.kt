@@ -21,6 +21,11 @@ import com.networktoolbox.feature.ping.domain.ExecutePingUseCase
 import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
 import com.networktoolbox.feature.report.diagnostic.BasicDiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.DiagnosticAnalyzer
+import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticAnalyzerV2
+import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticPipeline
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticAnalyzerV2
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticPipeline
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticProbeTargets
 import com.networktoolbox.feature.report.domain.DnsUseCase as ReportDnsUseCase
 import com.networktoolbox.feature.report.domain.PingUseCase as ReportPingUseCase
 import com.networktoolbox.feature.report.domain.TcpUseCase as ReportTcpUseCase
@@ -76,6 +81,31 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideDiagnosticAnalyzer(): DiagnosticAnalyzer = BasicDiagnosticAnalyzer()
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticAnalyzerV2(): DiagnosticAnalyzerV2 = DefaultDiagnosticAnalyzerV2()
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticProbeTargets(): DiagnosticProbeTargets =
+        DiagnosticProbeTargets.default()
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticPipeline(
+        networkRepository: NetworkRepository,
+        pingSessionEngine: PingSessionEngine,
+        dnsQueryEngine: DnsQueryEngine,
+        tcpPortChecker: TcpPortChecker,
+        probeTargets: DiagnosticProbeTargets,
+    ): DiagnosticPipeline = DefaultDiagnosticPipeline(
+        networkRepository = networkRepository,
+        pingSessionEngine = pingSessionEngine,
+        dnsQueryEngine = dnsQueryEngine,
+        tcpPortChecker = tcpPortChecker,
+        probeTargets = probeTargets,
+    )
 
     @Provides
     @Singleton
