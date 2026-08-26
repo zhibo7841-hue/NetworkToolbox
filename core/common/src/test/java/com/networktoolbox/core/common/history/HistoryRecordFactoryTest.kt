@@ -40,6 +40,33 @@ class HistoryRecordFactoryTest {
     }
 
     @Test
+    fun pingSessionUsesChineseQualitySummaryForHistory() {
+        val record = HistoryRecordFactory.pingSession(
+            timestamp = 1L,
+            target = "example.com",
+            address = "192.0.2.1",
+            protocol = "IPV4",
+            mode = "CONTINUOUS",
+            startTime = 1L,
+            endTime = 2L,
+            sentPackets = 5,
+            receivedPackets = 5,
+            lostPackets = 0,
+            packetLoss = 0.0,
+            minLatencyMs = 10L,
+            avgLatencyMs = 20.6,
+            maxLatencyMs = 31L,
+            jitterMs = 8.2,
+            qualityLevel = "EXCELLENT",
+            method = "SYSTEM_REACHABILITY",
+            summary = "Excellent observed network quality.",
+            errorMessage = null,
+        )
+
+        assertTrue(record.summary == "网络连接稳定，未检测到明显丢包。")
+    }
+
+    @Test
     fun tcpAndReportRecordsPreserveDetails() {
         val tcp = HistoryRecordFactory.tcp(
             timestamp = 1L,

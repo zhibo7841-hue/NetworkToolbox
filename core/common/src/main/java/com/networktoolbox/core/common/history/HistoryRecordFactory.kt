@@ -46,7 +46,10 @@ object HistoryRecordFactory {
         timestamp = timestamp,
         type = HistoryType.PING,
         title = "Ping · $target",
-        summary = summary,
+        summary = PingHistorySummary.fromQualityLevel(
+            qualityLevel = qualityLevel,
+            fallback = summary,
+        ),
         detailJson = jsonObject(
             "target" to jsonString(target),
             "address" to jsonNullableString(address),

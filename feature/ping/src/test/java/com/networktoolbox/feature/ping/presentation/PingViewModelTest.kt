@@ -65,6 +65,30 @@ class PingViewModelTest {
     }
 
     @Test
+    fun firstContinuousModeSelectionUsesOneHundredProbesAtOneSecondIntervals() {
+        val viewModel = viewModelFor(successfulResult())
+
+        viewModel.onModeChanged(PingDetectionMode.CONTINUOUS)
+
+        assertEquals("100", viewModel.uiState.value.countInput)
+        assertEquals("1000", viewModel.uiState.value.intervalInput)
+    }
+
+    @Test
+    fun continuousParametersRemainAfterSwitchingModes() {
+        val viewModel = viewModelFor(successfulResult())
+
+        viewModel.onModeChanged(PingDetectionMode.CONTINUOUS)
+        viewModel.onCountChanged("7")
+        viewModel.onIntervalChanged("750")
+        viewModel.onModeChanged(PingDetectionMode.QUICK)
+        viewModel.onModeChanged(PingDetectionMode.CONTINUOUS)
+
+        assertEquals("7", viewModel.uiState.value.countInput)
+        assertEquals("750", viewModel.uiState.value.intervalInput)
+    }
+
+    @Test
     fun successfulSessionMovesFromRunningToSuccessAndSavesOneRecord() = runTest {
         val savedRecords = mutableListOf<HistoryRecord>()
         val engine = FakePingSessionEngine(successfulResult(sentPackets = 3))

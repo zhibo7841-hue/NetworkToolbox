@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -83,32 +82,34 @@ fun PingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("目标", style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        value = uiState.targetInput,
-                        onValueChange = onTargetChanged,
-                        label = { Text("目标地址或域名") },
-                        singleLine = true,
-                        enabled = !isRunning,
-                        isError = uiState.status.isTargetInputError(),
-                    )
-                    if (inputErrorMessage != null) {
-                        Text(
-                            inputErrorMessage,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
+            if (isRunning) {
+                RunningCard(
+                    status = uiState.status as PingStatus.Running,
+                    onStop = onStop,
+                )
+            } else {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("目标", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(
+                            modifier = Modifier.fillMaxWidth(),
+                            value = uiState.targetInput,
+                            onValueChange = onTargetChanged,
+                            label = { Text("目标地址或域名") },
+                            singleLine = true,
+                            isError = uiState.status.isTargetInputError(),
                         )
-                    }
+                        if (inputErrorMessage != null) {
+                            Text(
+                                inputErrorMessage,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
 
-                    if (!isRunning) {
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = onPing,
@@ -140,14 +141,14 @@ fun PingScreen(
                         }
                     }
                 }
-            }
 
-            when (val status = uiState.status) {
-                PingStatus.Idle -> Unit
-                is PingStatus.Running -> RunningCard(status, onStop)
-                is PingStatus.Success -> PingResultCard(status.result)
-                is PingStatus.Failed -> PingResultCard(status.result)
-                is PingStatus.Cancelled -> CancelledCard(status.target)
+                when (val status = uiState.status) {
+                    PingStatus.Idle -> Unit
+                    is PingStatus.Success -> PingResultCard(status.result)
+                    is PingStatus.Failed -> PingResultCard(status.result)
+                    is PingStatus.Cancelled -> CancelledCard(status.target)
+                    is PingStatus.Running -> Unit
+                }
             }
         }
     }
@@ -199,9 +200,7 @@ private fun AdvancedSettings(
         if (uiState.mode == PingDetectionMode.CONTINUOUS) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
+                    modifier = Modifier.weight(1f),
                     value = uiState.countInput,
                     onValueChange = onCountChanged,
                     label = { Text("次数（1-100）") },
@@ -210,9 +209,7 @@ private fun AdvancedSettings(
                     isError = uiState.status.isCountInputError(),
                 )
                 OutlinedTextField(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
+                    modifier = Modifier.weight(1f),
                     value = uiState.intervalInput,
                     onValueChange = onIntervalChanged,
                     label = { Text("间隔（毫秒）") },

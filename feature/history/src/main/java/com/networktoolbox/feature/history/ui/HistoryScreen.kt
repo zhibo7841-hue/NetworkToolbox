@@ -3,13 +3,14 @@ package com.networktoolbox.feature.history.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.common.history.HistoryRecord
+import com.networktoolbox.core.common.history.PingHistorySummary
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 import java.time.Instant
@@ -65,11 +67,20 @@ fun HistoryScreen(
                 HistoryUiState.Empty -> EmptyHistoryCard()
                 is HistoryUiState.Error -> ErrorCard(state.message, onLoad)
                 is HistoryUiState.Success -> {
-                    Button(
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = { showClearDialog = true },
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("清空历史")
+                        Text("历史记录", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.weight(1f))
+                        TextButton(
+                            onClick = { showClearDialog = true },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Text("清空")
+                        }
                     }
                     state.records.forEach { record ->
                         HistoryRecordCard(record = record, onDelete = onDelete)
@@ -82,16 +93,19 @@ fun HistoryScreen(
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("清空全部历史？") },
-            text = { Text("这将删除本机保存的全部检测历史。") },
+            title = { Text("清空全部历史记录？") },
+            text = { Text("所有本地检测历史都会被删除，此操作无法撤销。") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showClearDialog = false
                         onClear()
                     },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
                 ) {
-                    Text("删除")
+                    Text("清空")
                 }
             },
             dismissButton = {
@@ -108,6 +122,21 @@ private fun HistoryRecordCard(
     record: HistoryRecord,
     onDelete: (Long) -> Unit,
 ) {
+    val pingDetails = if (record.type == HistoryType.PING) {
+        record.pingDetails()
+    } else {
+        null
+    }
+    val displayTitle = pingDetails?.target ?: record.title
+    val displaySummary = if (record.type == HistoryType.PING) {
+        PingHistorySummary.fromQualityLevel(
+            qualityLevel = pingDetails?.qualityLevel.orEmpty(),
+            fallback = record.summary,
+        )
+    } else {
+        record.summary
+    }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -125,8 +154,15 @@ private fun HistoryRecordCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(record.title, style = MaterialTheme.typography.bodyLarge)
-            Text(record.summary, style = MaterialTheme.typography.bodyMedium)
+            Text(displayTitle, style = MaterialTheme.typography.bodyLarge)
+            Text(displaySummary, style = MaterialTheme.typography.bodyMedium)
+            pingDetails?.metricsText()?.let { metrics ->
+                Text(
+                    metrics,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             TextButton(
                 modifier = Modifier.align(Alignment.End),
                 onClick = { onDelete(record.id) },
@@ -175,6 +211,90 @@ private fun ErrorCard(
         }
     }
 }
+
+private data class PingHistoryDetails(
+    val target: String?,
+    val qualityLevel: String?,
+    val avgLatencyMs: Double?,
+    val packetLoss: Double?,
+)
+
+private fun HistoryRecord.pingDetails(): PingHistoryDetails? {
+    val details = PingHistoryDetails(
+        target = detailJson.readJsonString("target")
+            ?: title.substringAfter(" · ", "").takeIf(String::isNotBlank),
+        qualityLevel = detailJson.readJsonString("qualityLevel"),
+        avgLatencyMs = detailJson.readJsonNumber("avgLatencyMs")?.toDoubleOrNull(),
+        packetLoss = detailJson.readJsonNumber("packetLoss")?.toDoubleOrNull(),
+    )
+    return details.takeIf {
+        it.target != null ||
+            it.qualityLevel != null ||
+            it.avgLatencyMs != null ||
+            it.packetLoss != null
+    }
+}
+
+private fun PingHistoryDetails.metricsText(): String? = buildList {
+    avgLatencyMs?.let { add("平均 ${it.toCompactNumber()} ms") }
+    packetLoss?.let { add("丢包 ${it.toCompactPercentage()}%") }
+}.joinToString(" · ").takeIf(String::isNotBlank)
+
+private fun String.readJsonString(key: String): String? {
+    val marker = "\"$key\":\""
+    val valueStart = indexOf(marker)
+        .takeIf { it >= 0 }
+        ?.plus(marker.length)
+        ?: return null
+    val value = StringBuilder()
+    var index = valueStart
+    while (index < length) {
+        when (val character = this[index]) {
+            '\"' -> return value.toString()
+            '\\' -> {
+                if (index + 1 >= length) return null
+                val escaped = this[index + 1]
+                value.append(
+                    when (escaped) {
+                        'b' -> '\b'
+                        'f' -> '\u000C'
+                        'n' -> '\n'
+                        'r' -> '\r'
+                        't' -> '\t'
+                        else -> escaped
+                    },
+                )
+                index += 2
+            }
+
+            else -> {
+                value.append(character)
+                index += 1
+            }
+        }
+    }
+    return null
+}
+
+private fun String.readJsonNumber(key: String): String? {
+    val marker = "\"$key\":"
+    val valueStart = indexOf(marker)
+        .takeIf { it >= 0 }
+        ?.plus(marker.length)
+        ?: return null
+    val valueEnd = indexOfAny(charArrayOf(',', '}'), valueStart)
+    val value = substring(valueStart, if (valueEnd >= 0) valueEnd else length).trim()
+    return value.takeUnless { it == "null" || it.isBlank() }
+}
+
+private fun Double.toCompactNumber(): String =
+    if (this == toLong().toDouble()) {
+        toLong().toString()
+    } else {
+        "%.1f".format(java.util.Locale.US, this)
+    }
+
+private fun Double.toCompactPercentage(): String = toCompactNumber()
 
 private fun HistoryType.displayName(): String = when (this) {
     HistoryType.PING -> "Ping"

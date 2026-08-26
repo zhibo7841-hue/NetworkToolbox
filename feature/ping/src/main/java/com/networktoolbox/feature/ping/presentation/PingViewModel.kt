@@ -25,15 +25,17 @@ enum class PingDetectionMode {
     CONTINUOUS,
 }
 
-private const val DEFAULT_CONTINUOUS_COUNT = 5
-private const val DEFAULT_INTERVAL_MS = 500
+private const val DEFAULT_QUICK_COUNT = 5
+private const val DEFAULT_QUICK_INTERVAL_MS = 500
+private const val DEFAULT_CONTINUOUS_COUNT = 100
+private const val DEFAULT_CONTINUOUS_INTERVAL_MS = 1_000
 
 data class PingUiState(
     val targetInput: String = "",
     val mode: PingDetectionMode = PingDetectionMode.QUICK,
     val protocol: PingProtocol = PingProtocol.AUTO,
-    val countInput: String = DEFAULT_CONTINUOUS_COUNT.toString(),
-    val intervalInput: String = DEFAULT_INTERVAL_MS.toString(),
+    val countInput: String = DEFAULT_QUICK_COUNT.toString(),
+    val intervalInput: String = DEFAULT_QUICK_INTERVAL_MS.toString(),
     val status: PingStatus = PingStatus.Idle,
 )
 
@@ -66,6 +68,7 @@ class PingViewModel @Inject constructor(
     val uiState: StateFlow<PingUiState> = _uiState.asStateFlow()
 
     private var sessionJob: Job? = null
+    private var continuousParametersEdited = false
 
     fun onTargetChanged(target: String) {
         if (_uiState.value.status is PingStatus.Running) return
@@ -74,7 +77,25 @@ class PingViewModel @Inject constructor(
 
     fun onModeChanged(mode: PingDetectionMode) {
         if (_uiState.value.status is PingStatus.Running) return
-        _uiState.update { it.copy(mode = mode, status = PingStatus.Idle) }
+        _uiState.update { state ->
+            val firstContinuousSelection = mode == PingDetectionMode.CONTINUOUS &&
+                state.mode != PingDetectionMode.CONTINUOUS &&
+                !continuousParametersEdited
+            state.copy(
+                mode = mode,
+                countInput = if (firstContinuousSelection) {
+                    DEFAULT_CONTINUOUS_COUNT.toString()
+                } else {
+                    state.countInput
+                },
+                intervalInput = if (firstContinuousSelection) {
+                    DEFAULT_CONTINUOUS_INTERVAL_MS.toString()
+                } else {
+                    state.intervalInput
+                },
+                status = PingStatus.Idle,
+            )
+        }
     }
 
     fun onProtocolChanged(protocol: PingProtocol) {
@@ -84,11 +105,17 @@ class PingViewModel @Inject constructor(
 
     fun onCountChanged(count: String) {
         if (_uiState.value.status is PingStatus.Running) return
+        if (_uiState.value.mode == PingDetectionMode.CONTINUOUS) {
+            continuousParametersEdited = true
+        }
         _uiState.update { it.copy(countInput = count, status = PingStatus.Idle) }
     }
 
     fun onIntervalChanged(interval: String) {
         if (_uiState.value.status is PingStatus.Running) return
+        if (_uiState.value.mode == PingDetectionMode.CONTINUOUS) {
+            continuousParametersEdited = true
+        }
         _uiState.update { it.copy(intervalInput = interval, status = PingStatus.Idle) }
     }
 
@@ -174,8 +201,8 @@ class PingViewModel @Inject constructor(
                 target = target,
                 protocol = state.protocol,
                 mode = PingMode.CONTINUOUS,
-                count = DEFAULT_CONTINUOUS_COUNT,
-                intervalMs = DEFAULT_INTERVAL_MS,
+                count = DEFAULT_QUICK_COUNT,
+                intervalMs = DEFAULT_QUICK_INTERVAL_MS,
             )
 
             PingDetectionMode.CONTINUOUS -> {
@@ -226,7 +253,11 @@ class PingViewModel @Inject constructor(
                             } else {
                                 DEFAULT_CONTINUOUS_COUNT
                             },
-                            intervalMs = if (mode == PingMode.SINGLE) 0 else DEFAULT_INTERVAL_MS,
+                            intervalMs = if (mode == PingMode.SINGLE) {
+                                0
+                            } else {
+                                DEFAULT_CONTINUOUS_INTERVAL_MS
+                            },
                         ),
                         errorMessage = errorMessage,
                     ),
