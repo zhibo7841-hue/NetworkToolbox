@@ -17,7 +17,10 @@ fun interface PingClock {
 }
 
 interface PingSessionEngine {
-    suspend fun run(request: PingRequest): PingSessionResult
+    suspend fun run(
+        request: PingRequest,
+        onProgress: (PingSessionProgress) -> Unit = {},
+    ): PingSessionResult
 }
 
 class DefaultPingSessionEngine(
@@ -26,7 +29,10 @@ class DefaultPingSessionEngine(
     private val clock: PingClock = PingClock { System.currentTimeMillis() },
     private val waitBetweenAttempts: suspend (Long) -> Unit = { delay(it) },
 ) : PingSessionEngine {
-    override suspend fun run(request: PingRequest): PingSessionResult {
+    override suspend fun run(
+        request: PingRequest,
+        onProgress: (PingSessionProgress) -> Unit,
+    ): PingSessionResult {
         validate(request)
 
         val startTime = clock.now()
@@ -38,6 +44,7 @@ class DefaultPingSessionEngine(
                 protocol = request.protocol,
                 timeoutMs = request.timeoutMs,
             )
+            onProgress(statisticsCalculator.calculateProgress(request, attempts))
 
             if (!shouldRunAnotherAttempt(request, attempts.size)) break
             if (request.intervalMs > 0) {

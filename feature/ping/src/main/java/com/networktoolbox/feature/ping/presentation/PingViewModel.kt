@@ -7,6 +7,7 @@ import com.networktoolbox.core.network.ping.PingMode
 import com.networktoolbox.core.network.ping.PingProtocol
 import com.networktoolbox.core.network.ping.PingQualityLevel
 import com.networktoolbox.core.network.ping.PingRequest
+import com.networktoolbox.core.network.ping.PingSessionProgress
 import com.networktoolbox.core.network.ping.PingSessionResult
 import com.networktoolbox.feature.ping.domain.ExecutePingSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,8 +25,8 @@ enum class PingDetectionMode {
     CONTINUOUS,
 }
 
-private const val DEFAULT_CONTINUOUS_COUNT = 10
-private const val DEFAULT_INTERVAL_MS = 1_000
+private const val DEFAULT_CONTINUOUS_COUNT = 5
+private const val DEFAULT_INTERVAL_MS = 500
 
 data class PingUiState(
     val targetInput: String = "",
@@ -42,6 +43,12 @@ sealed interface PingStatus {
     data class Running(
         val target: String,
         val expectedCount: Int?,
+        val completedCount: Int = 0,
+        val latestLatencyMs: Long? = null,
+        val minLatencyMs: Long? = null,
+        val avgLatencyMs: Double? = null,
+        val maxLatencyMs: Long? = null,
+        val packetLoss: Double = 0.0,
     ) : PingStatus
 
     data class Success(val result: PingSessionResult) : PingStatus
@@ -107,7 +114,10 @@ class PingViewModel @Inject constructor(
 
         sessionJob = viewModelScope.launch {
             try {
-                val result = executePingSession(request)
+                val result = executePingSession(
+                    request = request,
+                    onProgress = ::updateProgress,
+                )
                 _uiState.update {
                     it.copy(
                         status = if (result.receivedPackets > 0) {
@@ -130,6 +140,22 @@ class PingViewModel @Inject constructor(
         }
     }
 
+    private fun updateProgress(progress: PingSessionProgress) {
+        _uiState.update { state ->
+            val running = state.status as? PingStatus.Running ?: return@update state
+            state.copy(
+                status = running.copy(
+                    completedCount = progress.sentPackets,
+                    latestLatencyMs = progress.latestLatencyMs,
+                    minLatencyMs = progress.minLatencyMs,
+                    avgLatencyMs = progress.avgLatencyMs,
+                    maxLatencyMs = progress.maxLatencyMs,
+                    packetLoss = progress.packetLoss,
+                ),
+            )
+        }
+    }
+
     fun stopPing() {
         val running = _uiState.value.status as? PingStatus.Running ?: return
         sessionJob?.cancel()
@@ -147,9 +173,9 @@ class PingViewModel @Inject constructor(
             PingDetectionMode.QUICK -> PingRequest(
                 target = target,
                 protocol = state.protocol,
-                mode = PingMode.SINGLE,
-                count = 1,
-                intervalMs = 0,
+                mode = PingMode.CONTINUOUS,
+                count = DEFAULT_CONTINUOUS_COUNT,
+                intervalMs = DEFAULT_INTERVAL_MS,
             )
 
             PingDetectionMode.CONTINUOUS -> {
@@ -184,7 +210,7 @@ class PingViewModel @Inject constructor(
         errorMessage: String,
     ) {
         val mode = when (state.mode) {
-            PingDetectionMode.QUICK -> PingMode.SINGLE
+            PingDetectionMode.QUICK -> PingMode.CONTINUOUS
             PingDetectionMode.CONTINUOUS -> PingMode.CONTINUOUS
         }
         _uiState.update {
@@ -195,7 +221,12 @@ class PingViewModel @Inject constructor(
                             target = target,
                             protocol = state.protocol,
                             mode = mode,
-                            count = if (mode == PingMode.SINGLE) 1 else null,
+                            count = if (mode == PingMode.SINGLE) {
+                                1
+                            } else {
+                                DEFAULT_CONTINUOUS_COUNT
+                            },
+                            intervalMs = if (mode == PingMode.SINGLE) 0 else DEFAULT_INTERVAL_MS,
                         ),
                         errorMessage = errorMessage,
                     ),

@@ -67,6 +67,44 @@ class PingSessionEngineTest {
     }
 
     @Test
+    fun continuousModeReportsStatisticsAfterEachProbe() = runBlocking {
+        val progressUpdates = mutableListOf<PingSessionProgress>()
+        val attempts = listOf(
+            successfulAttempt(target = "example.com", protocol = PingProtocol.IPV4)
+                .copy(latencyMs = 10L),
+            successfulAttempt(target = "example.com", protocol = PingProtocol.IPV4)
+                .copy(success = false, latencyMs = null, errorMessage = "Timeout"),
+            successfulAttempt(target = "example.com", protocol = PingProtocol.IPV4)
+                .copy(latencyMs = 30L),
+        )
+        var nextAttempt = 0
+        val engine = DefaultPingSessionEngine(
+            probe = PingProbe { _, _, _ -> attempts[nextAttempt++] },
+            clock = incrementingClock(),
+            waitBetweenAttempts = { },
+        )
+
+        val result = engine.run(
+            PingRequest(
+                target = "example.com",
+                protocol = PingProtocol.IPV4,
+                mode = PingMode.CONTINUOUS,
+                count = 3,
+                intervalMs = 1,
+            ),
+            onProgress = progressUpdates::add,
+        )
+
+        assertEquals(listOf(1, 2, 3), progressUpdates.map { it.sentPackets })
+        assertEquals(3, progressUpdates.last().sentPackets)
+        assertEquals(2, progressUpdates.last().receivedPackets)
+        assertEquals(33.333333333333336, progressUpdates.last().packetLoss, 0.0)
+        assertEquals(30L, progressUpdates.last().latestLatencyMs)
+        assertEquals(20.0, progressUpdates.last().avgLatencyMs!!, 0.0)
+        assertEquals(2, result.receivedPackets)
+    }
+
+    @Test
     fun continuousModeCanBeCancelledSafely() = runBlocking {
         val firstProbeCompleted = CompletableDeferred<Unit>()
         val calls = AtomicInteger(0)

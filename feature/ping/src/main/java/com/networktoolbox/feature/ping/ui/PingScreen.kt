@@ -247,9 +247,17 @@ private fun RunningCard(status: PingStatus.Running) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("正在检测", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (status.expectedCount == null) "正在连续检测" else "正在检测",
+                style = MaterialTheme.typography.titleMedium,
+            )
             Text("目标：${status.target}")
-            status.expectedCount?.let { Text("计划检测：$it 次，完成后显示统计结果") }
+            status.expectedCount?.let { Text("已完成：${status.completedCount} / $it") }
+            ResultRow("当前延迟", status.latestLatencyMs?.let { "$it ms" } ?: "未收到")
+            ResultRow("平均延迟", status.avgLatencyMs.latencyText())
+            ResultRow("最低延迟", status.minLatencyMs?.let { "$it ms" } ?: "未收到")
+            ResultRow("最高延迟", status.maxLatencyMs?.let { "$it ms" } ?: "未收到")
+            ResultRow("丢包", status.packetLoss.percentText())
             Text(
                 "检测过程中可随时停止。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

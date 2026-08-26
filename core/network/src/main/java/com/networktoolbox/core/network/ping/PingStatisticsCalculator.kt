@@ -3,6 +3,30 @@ package com.networktoolbox.core.network.ping
 import kotlin.math.abs
 
 class PingStatisticsCalculator {
+    fun calculateProgress(
+        request: PingRequest,
+        attempts: List<PingAttemptResult>,
+    ): PingSessionProgress {
+        val successfulLatencies = attempts
+            .filter { it.success }
+            .mapNotNull { it.latencyMs }
+        val sentPackets = attempts.size
+        val receivedPackets = attempts.count { it.success }
+        val lostPackets = (sentPackets - receivedPackets).coerceAtLeast(0)
+
+        return PingSessionProgress(
+            target = request.target,
+            sentPackets = sentPackets,
+            receivedPackets = receivedPackets,
+            lostPackets = lostPackets,
+            packetLoss = packetLossPercentage(sentPackets, lostPackets),
+            latestLatencyMs = attempts.lastOrNull()?.latencyMs,
+            minLatencyMs = successfulLatencies.minOrNull(),
+            avgLatencyMs = successfulLatencies.takeIf { it.isNotEmpty() }?.average(),
+            maxLatencyMs = successfulLatencies.maxOrNull(),
+        )
+    }
+
     fun calculate(
         request: PingRequest,
         attempts: List<PingAttemptResult>,
@@ -12,11 +36,7 @@ class PingStatisticsCalculator {
         val sentPackets = attempts.size
         val receivedPackets = attempts.count { it.success }
         val lostPackets = (sentPackets - receivedPackets).coerceAtLeast(0)
-        val packetLoss = if (sentPackets == 0) {
-            0.0
-        } else {
-            lostPackets * 100.0 / sentPackets
-        }
+        val packetLoss = packetLossPercentage(sentPackets, lostPackets)
         val latencies = attempts
             .asSequence()
             .filter { it.success }
@@ -90,6 +110,9 @@ class PingStatisticsCalculator {
             summary = "${level.name.lowercase().replaceFirstChar(Char::uppercase)} observed network quality.",
         )
     }
+
+    private fun packetLossPercentage(sentPackets: Int, lostPackets: Int): Double =
+        if (sentPackets == 0) 0.0 else lostPackets * 100.0 / sentPackets
 
     private data class QualityEvaluation(
         val level: PingQualityLevel,

@@ -4,6 +4,7 @@ import com.networktoolbox.core.common.history.HistoryRecordFactory
 import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.ping.PingRequest
 import com.networktoolbox.core.network.ping.PingSessionEngine
+import com.networktoolbox.core.network.ping.PingSessionProgress
 import com.networktoolbox.core.network.ping.PingSessionResult
 import javax.inject.Inject
 
@@ -14,7 +15,8 @@ class ExecutePingSessionUseCase @Inject constructor(
     suspend operator fun invoke(
         request: PingRequest,
         persistHistory: Boolean = true,
-    ): PingSessionResult = pingSessionEngine.run(request).also { result ->
+        onProgress: (PingSessionProgress) -> Unit = {},
+    ): PingSessionResult = pingSessionEngine.run(request, onProgress).also { result ->
         if (persistHistory) {
             historyRecorder.record(
                 HistoryRecordFactory.pingSession(

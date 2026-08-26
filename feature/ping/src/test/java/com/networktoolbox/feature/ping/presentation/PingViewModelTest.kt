@@ -7,6 +7,7 @@ import com.networktoolbox.core.network.ping.PingMethod
 import com.networktoolbox.core.network.ping.PingMode
 import com.networktoolbox.core.network.ping.PingProtocol
 import com.networktoolbox.core.network.ping.PingQualityLevel
+import com.networktoolbox.core.network.ping.PingSessionProgress
 import com.networktoolbox.core.network.ping.PingSessionResult
 import com.networktoolbox.feature.ping.FakePingSessionEngine
 import com.networktoolbox.feature.ping.domain.ExecutePingSessionUseCase
@@ -44,7 +45,23 @@ class PingViewModelTest {
 
         assertEquals("", viewModel.uiState.value.targetInput)
         assertEquals(PingDetectionMode.QUICK, viewModel.uiState.value.mode)
+        assertEquals("5", viewModel.uiState.value.countInput)
+        assertEquals("500", viewModel.uiState.value.intervalInput)
         assertEquals(PingStatus.Idle, viewModel.uiState.value.status)
+    }
+
+    @Test
+    fun quickModeUsesFiveProbesAtFiveHundredMillisecondIntervals() = runTest {
+        val engine = FakePingSessionEngine(successfulResult(sentPackets = 5))
+        val viewModel = viewModelFor(engine)
+        viewModel.onTargetChanged("10.0.1.1")
+
+        viewModel.startPing()
+        advanceUntilIdle()
+
+        assertEquals(PingMode.CONTINUOUS, engine.receivedRequest?.mode)
+        assertEquals(5, engine.receivedRequest?.count)
+        assertEquals(500, engine.receivedRequest?.intervalMs)
     }
 
     @Test
@@ -94,6 +111,43 @@ class PingViewModelTest {
         assertEquals(PingMode.CONTINUOUS, engine.receivedRequest?.mode)
         assertEquals(3, engine.receivedRequest?.count)
         assertEquals(500, engine.receivedRequest?.intervalMs)
+    }
+
+    @Test
+    fun runningStateShowsLatestProgressStatistics() = runTest {
+        val engine = FakePingSessionEngine(
+            response = successfulResult(sentPackets = 5),
+            waitForCancellation = true,
+            progressBeforeWaiting = PingSessionProgress(
+                target = "example.com",
+                sentPackets = 3,
+                receivedPackets = 3,
+                lostPackets = 0,
+                packetLoss = 0.0,
+                latestLatencyMs = 18L,
+                minLatencyMs = 16L,
+                avgLatencyMs = 20.0,
+                maxLatencyMs = 22L,
+            ),
+        )
+        val viewModel = viewModelFor(engine)
+        viewModel.onTargetChanged("example.com")
+
+        viewModel.startPing()
+        runCurrent()
+
+        val status = viewModel.uiState.value.status
+        assertTrue(status is PingStatus.Running)
+        val running = status as PingStatus.Running
+        assertEquals(3, running.completedCount)
+        assertEquals(18L, running.latestLatencyMs)
+        assertEquals(20.0, running.avgLatencyMs!!, 0.0)
+        assertEquals(16L, running.minLatencyMs)
+        assertEquals(22L, running.maxLatencyMs)
+        assertEquals(0.0, running.packetLoss, 0.0)
+
+        viewModel.stopPing()
+        advanceUntilIdle()
     }
 
     @Test
