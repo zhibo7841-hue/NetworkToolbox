@@ -33,6 +33,7 @@ import com.networktoolbox.feature.dashboard.RecentHistoryPreview
 import com.networktoolbox.feature.dashboard.ToolsScreen
 import com.networktoolbox.feature.dns.presentation.DnsViewModel
 import com.networktoolbox.feature.dns.ui.DnsScreen
+import com.networktoolbox.core.network.dns.DnsRecordType
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.ui.HistoryScreen
@@ -173,6 +174,8 @@ class MainActivity : ComponentActivity() {
                                 uiState = dnsUiState,
                                 onDomainChanged = dnsViewModel::onDomainChanged,
                                 onLookup = dnsViewModel::lookup,
+                                onAdvancedSettingsToggle = dnsViewModel::toggleAdvancedSettings,
+                                onRecordTypeToggle = dnsViewModel::toggleRecordType,
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
                             ToolScreen.TCP -> TcpScreen(

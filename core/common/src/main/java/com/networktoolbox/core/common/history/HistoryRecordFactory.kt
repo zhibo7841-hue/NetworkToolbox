@@ -83,7 +83,7 @@ object HistoryRecordFactory {
         timestamp = timestamp,
         type = HistoryType.DNS,
         title = "DNS · $domain",
-        summary = if (success) "DNS lookup completed" else "DNS lookup failed",
+        summary = if (success) "解析成功" else "域名无法解析",
         detailJson = jsonObject(
             "domain" to jsonString(domain),
             "success" to success.toString(),
@@ -92,6 +92,58 @@ object HistoryRecordFactory {
             "durationMs" to jsonNumber(durationMs),
         ),
     )
+
+    fun dnsV2(
+        timestamp: Long,
+        domain: String,
+        status: String,
+        queryTypes: List<String>,
+        records: List<DnsHistoryRecord>,
+        durationMs: Long?,
+        summary: String,
+        method: String,
+        errorMessage: String?,
+        configuredDnsServers: List<String>,
+        privateDnsActive: Boolean?,
+        privateDnsServerName: String?,
+    ): HistoryRecord {
+        val recordCounts = queryTypes.associateWith { type ->
+            records.count { record -> record.type == type }
+        }
+        return HistoryRecord(
+            timestamp = timestamp,
+            type = HistoryType.DNS,
+            title = "DNS 查询 · $domain",
+            summary = summary,
+            detailJson = jsonObject(
+                "domain" to jsonString(domain),
+                "status" to jsonString(status),
+                "queryTypes" to jsonStringArray(queryTypes),
+                "recordCounts" to jsonObject(
+                    recordCounts.map { (type, count) ->
+                        type to count.toString()
+                    },
+                ),
+                "records" to records.joinToString(prefix = "[", postfix = "]") { record ->
+                    jsonObject(
+                        "type" to jsonString(record.type),
+                        "name" to jsonString(record.name),
+                        "value" to jsonString(record.value),
+                        "ttlSeconds" to jsonNumber(record.ttlSeconds),
+                        "priority" to jsonInt(record.priority),
+                        "txtSegments" to jsonStringArray(record.txtSegments),
+                    )
+                },
+                "durationMs" to jsonNumber(durationMs),
+                "summary" to jsonString(summary),
+                "method" to jsonString(method),
+                "errorMessage" to jsonNullableString(errorMessage),
+                "configuredDnsServers" to jsonStringArray(configuredDnsServers),
+                "privateDnsActive" to jsonNullableBoolean(privateDnsActive),
+                "privateDnsServerName" to jsonNullableString(privateDnsServerName),
+            ),
+        )
+    }
 
     fun tcp(
         timestamp: Long,
@@ -138,6 +190,9 @@ object HistoryRecordFactory {
     )
 
     private fun jsonObject(vararg fields: Pair<String, String>): String =
+        jsonObject(fields.toList())
+
+    private fun jsonObject(fields: List<Pair<String, String>>): String =
         fields.joinToString(prefix = "{", postfix = "}") { (key, value) ->
             "${jsonString(key)}:$value"
         }
@@ -147,7 +202,11 @@ object HistoryRecordFactory {
 
     private fun jsonNumber(value: Long?): String = value?.toString() ?: "null"
 
+    private fun jsonInt(value: Int?): String = value?.toString() ?: "null"
+
     private fun jsonDouble(value: Double?): String = value?.toString() ?: "null"
+
+    private fun jsonNullableBoolean(value: Boolean?): String = value?.toString() ?: "null"
 
     private fun jsonNullableString(value: String?): String = value?.let(::jsonString) ?: "null"
 
@@ -174,3 +233,12 @@ object HistoryRecordFactory {
         append('"')
     }
 }
+
+data class DnsHistoryRecord(
+    val type: String,
+    val name: String,
+    val value: String,
+    val ttlSeconds: Long?,
+    val priority: Int?,
+    val txtSegments: List<String> = emptyList(),
+)

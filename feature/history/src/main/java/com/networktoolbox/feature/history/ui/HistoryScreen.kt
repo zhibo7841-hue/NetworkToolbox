@@ -127,14 +127,19 @@ private fun HistoryRecordCard(
     } else {
         null
     }
-    val displayTitle = pingDetails?.target ?: record.title
+    val dnsDetails = if (record.type == HistoryType.DNS) {
+        record.dnsDetails()
+    } else {
+        null
+    }
+    val displayTitle = pingDetails?.target ?: dnsDetails?.domain ?: record.title
     val displaySummary = if (record.type == HistoryType.PING) {
         PingHistorySummary.fromQualityLevel(
             qualityLevel = pingDetails?.qualityLevel.orEmpty(),
             fallback = record.summary,
         )
     } else {
-        record.summary
+        dnsDetails?.summary ?: record.summary
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -157,6 +162,13 @@ private fun HistoryRecordCard(
             Text(displayTitle, style = MaterialTheme.typography.bodyLarge)
             Text(displaySummary, style = MaterialTheme.typography.bodyMedium)
             pingDetails?.metricsText()?.let { metrics ->
+                Text(
+                    metrics,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            dnsDetails?.metricsText()?.let { metrics ->
                 Text(
                     metrics,
                     style = MaterialTheme.typography.bodySmall,
@@ -219,6 +231,13 @@ private data class PingHistoryDetails(
     val packetLoss: Double?,
 )
 
+private data class DnsHistoryDetails(
+    val domain: String?,
+    val summary: String?,
+    val recordCounts: Map<String, Int>,
+    val durationMs: Long?,
+)
+
 private fun HistoryRecord.pingDetails(): PingHistoryDetails? {
     val details = PingHistoryDetails(
         target = detailJson.readJsonString("target")
@@ -235,9 +254,35 @@ private fun HistoryRecord.pingDetails(): PingHistoryDetails? {
     }
 }
 
+private fun HistoryRecord.dnsDetails(): DnsHistoryDetails? {
+    val details = DnsHistoryDetails(
+        domain = detailJson.readJsonString("domain")
+            ?: title.substringAfter(" · ", "").takeIf(String::isNotBlank),
+        summary = detailJson.readJsonString("summary"),
+        recordCounts = DNS_RECORD_TYPES.mapNotNull { type ->
+            detailJson.readJsonObjectNumber("recordCounts", type)?.let { count ->
+                type to count
+            }
+        }.toMap(),
+        durationMs = detailJson.readJsonNumber("durationMs")?.toLongOrNull(),
+    )
+    return details.takeIf {
+        it.domain != null || it.summary != null || it.recordCounts.isNotEmpty() || it.durationMs != null
+    }
+}
+
 private fun PingHistoryDetails.metricsText(): String? = buildList {
     avgLatencyMs?.let { add("平均 ${it.toCompactNumber()} ms") }
     packetLoss?.let { add("丢包 ${it.toCompactPercentage()}%") }
+}.joinToString(" · ").takeIf(String::isNotBlank)
+
+private fun DnsHistoryDetails.metricsText(): String? = buildList {
+    DNS_RECORD_TYPES.forEach { type ->
+        recordCounts[type]?.takeIf { it > 0 }?.let { count -> add("$type $count 条") }
+    }
+    if (recordCounts.values.any { it > 0 }) {
+        durationMs?.let { add("$it ms") }
+    }
 }.joinToString(" · ").takeIf(String::isNotBlank)
 
 private fun String.readJsonString(key: String): String? {
@@ -287,6 +332,19 @@ private fun String.readJsonNumber(key: String): String? {
     return value.takeUnless { it == "null" || it.isBlank() }
 }
 
+private fun String.readJsonObjectNumber(objectKey: String, key: String): Int? {
+    val objectMarker = "\"$objectKey\":{"
+    val objectStart = indexOf(objectMarker)
+    if (objectStart < 0) return null
+    val marker = "\"$key\":"
+    val valueStart = indexOf(marker, objectStart + objectMarker.length)
+    if (valueStart < 0) return null
+    val numberStart = valueStart + marker.length
+    val valueEnd = indexOfAny(charArrayOf(',', '}'), numberStart)
+    val value = substring(numberStart, if (valueEnd >= 0) valueEnd else length).trim()
+    return value.toIntOrNull()
+}
+
 private fun Double.toCompactNumber(): String =
     if (this == toLong().toDouble()) {
         toLong().toString()
@@ -295,6 +353,8 @@ private fun Double.toCompactNumber(): String =
     }
 
 private fun Double.toCompactPercentage(): String = toCompactNumber()
+
+private val DNS_RECORD_TYPES = listOf("A", "AAAA", "CNAME", "MX", "TXT")
 
 private fun HistoryType.displayName(): String = when (this) {
     HistoryType.PING -> "Ping"
