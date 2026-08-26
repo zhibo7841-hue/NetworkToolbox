@@ -2,11 +2,13 @@ package com.networktoolbox.di
 
 import android.content.Context
 import com.networktoolbox.core.network.data.AndroidDnsEngine
+import com.networktoolbox.core.network.data.dns.AndroidDnsQueryEngine
 import com.networktoolbox.core.network.data.AndroidNetworkRepository
 import com.networktoolbox.core.network.data.AndroidPingEngine
 import com.networktoolbox.core.network.data.AndroidPingSessionProbe
 import com.networktoolbox.core.network.data.AndroidTcpPortChecker
 import com.networktoolbox.core.network.dns.DnsEngine
+import com.networktoolbox.core.network.dns.DnsQueryEngine
 import com.networktoolbox.core.network.ping.PingEngine
 import com.networktoolbox.core.network.ping.DefaultPingSessionEngine
 import com.networktoolbox.core.network.ping.PingProbe
@@ -54,6 +56,12 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideDnsEngine(): DnsEngine = AndroidDnsEngine()
+
+    @Provides
+    @Singleton
+    fun provideDnsQueryEngine(
+        @ApplicationContext context: Context,
+    ): DnsQueryEngine = AndroidDnsQueryEngine(context)
 
     @Provides
     @Singleton

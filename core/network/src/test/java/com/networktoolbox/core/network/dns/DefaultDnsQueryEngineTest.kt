@@ -1,0 +1,167 @@
+package com.networktoolbox.core.network.dns
+
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DefaultDnsQueryEngineTest {
+    @Test
+    fun aggregatesAAndAaaaResultsAndKeepsServerContext() = runBlocking {
+        val transport = FakeDnsRawQueryTransport(
+            responses = mapOf(
+                DnsRecordType.A to DnsResponseFixtures.aResponse(),
+                DnsRecordType.AAAA to DnsResponseFixtures.aaaaResponse(),
+            ),
+        )
+        val engine = DefaultDnsQueryEngine(
+            transport = transport,
+            serverInfoProvider = DnsServerInfoProvider {
+                DnsServerInfo(configuredAddresses = listOf("192.0.2.53"))
+            },
+        )
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A, DnsRecordType.AAAA),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.SUCCESS, result.status)
+        assertEquals(DnsQueryMethod.ANDROID_DNS_RESOLVER, result.method)
+        assertEquals(listOf("192.0.2.53"), result.server?.configuredAddresses)
+        assertEquals(setOf(DnsRecordType.A, DnsRecordType.AAAA), result.records.map { it.type }.toSet())
+        assertEquals(2, transport.calls.size)
+        assertTrue(result.durationMs != null)
+    }
+
+    @Test
+    fun mapsTransportTimeoutWithoutThrowing() = runBlocking {
+        val engine = DefaultDnsQueryEngine(
+            transport = FakeDnsRawQueryTransport(
+                failures = mapOf(
+                    DnsRecordType.A to DnsTransportException(
+                        DnsLookupStatus.TIMEOUT,
+                        "DNS query timed out.",
+                    ),
+                ),
+            ),
+        )
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.TIMEOUT, result.status)
+        assertFalse(result.errorMessage.isNullOrBlank())
+    }
+
+    @Test
+    fun returnsPartialWhenOneRequestedTypeSucceedsAndAnotherFails() = runBlocking {
+        val engine = DefaultDnsQueryEngine(
+            transport = FakeDnsRawQueryTransport(
+                responses = mapOf(DnsRecordType.A to DnsResponseFixtures.aResponse()),
+                failures = mapOf(
+                    DnsRecordType.AAAA to DnsTransportException(
+                        DnsLookupStatus.TIMEOUT,
+                        "DNS query timed out.",
+                    ),
+                ),
+            ),
+        )
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A, DnsRecordType.AAAA),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.PARTIAL, result.status)
+        assertEquals(1, result.records.size)
+        assertEquals(DnsRecordType.A, result.records.single().type)
+    }
+
+    @Test
+    fun mapsNxdomainResponse() = runBlocking {
+        val engine = DefaultDnsQueryEngine(
+            transport = FakeDnsRawQueryTransport(
+                responses = mapOf(DnsRecordType.A to DnsResponseFixtures.nxdomainResponse()),
+            ),
+        )
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = setOf(DnsRecordType.A),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.NXDOMAIN, result.status)
+        assertTrue(result.records.isEmpty())
+    }
+
+    @Test
+    fun invalidQueryDoesNotCallTransport() = runBlocking {
+        val transport = FakeDnsRawQueryTransport()
+        val engine = DefaultDnsQueryEngine(transport)
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = "abc..123",
+                recordTypes = setOf(DnsRecordType.A),
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.INVALID_QUERY, result.status)
+        assertEquals(0, transport.calls.size)
+        assertNull(result.server)
+    }
+
+    @Test
+    fun supportsEachCoreRecordTypeAsAnIndependentQuery() = runBlocking {
+        val responses = mapOf(
+            DnsRecordType.A to DnsResponseFixtures.aResponse(),
+            DnsRecordType.AAAA to DnsResponseFixtures.aaaaResponse(),
+            DnsRecordType.CNAME to DnsResponseFixtures.cnameResponse(),
+            DnsRecordType.MX to DnsResponseFixtures.mxResponse(),
+            DnsRecordType.TXT to DnsResponseFixtures.txtResponse(),
+        )
+        val transport = FakeDnsRawQueryTransport(responses = responses)
+        val engine = DefaultDnsQueryEngine(transport)
+
+        val result = engine.lookup(
+            DnsLookupRequest(
+                queryName = DnsResponseFixtures.EXAMPLE_COM,
+                recordTypes = responses.keys,
+            ),
+        )
+
+        assertEquals(DnsLookupStatus.SUCCESS, result.status)
+        assertEquals(5, result.records.size)
+        assertEquals(responses.keys, transport.calls.toSet())
+    }
+
+    private class FakeDnsRawQueryTransport(
+        private val responses: Map<DnsRecordType, ByteArray> = emptyMap(),
+        private val failures: Map<DnsRecordType, DnsTransportException> = emptyMap(),
+    ) : DnsRawQueryTransport {
+        val calls = mutableListOf<DnsRecordType>()
+
+        override suspend fun query(
+            queryName: String,
+            recordType: DnsRecordType,
+            timeoutMs: Int,
+        ): ByteArray {
+            calls += recordType
+            failures[recordType]?.let { throw it }
+            return responses.getValue(recordType)
+        }
+    }
+}
