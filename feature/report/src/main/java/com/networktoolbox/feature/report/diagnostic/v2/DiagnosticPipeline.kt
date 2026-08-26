@@ -6,6 +6,7 @@ import com.networktoolbox.core.network.dns.DnsLookupStatus
 import com.networktoolbox.core.network.dns.DnsQueryEngine
 import com.networktoolbox.core.network.dns.DnsQueryMethod
 import com.networktoolbox.core.network.dns.DnsRecordType
+import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.core.network.ping.PingMode
 import com.networktoolbox.core.network.ping.PingProtocol
@@ -75,19 +76,15 @@ class DefaultDiagnosticPipeline(
         notifyStage(onStageChanged, DiagnosticStage.GATEWAY, DiagnosticStageState.RUNNING)
         networkChanged = detectNetworkChange(initialContext) || networkChanged
         val gatewayResult: PingSessionResult?
-        val gatewayCheck: DiagnosticCheck
+        var gatewayCheck: DiagnosticCheck
         val gatewayAddress = initialContext.gateway
-        if (gatewayAddress.isNullOrBlank()) {
+        if (initialContext.connectionType == ConnectionType.CELLULAR ||
+            gatewayAddress.isNullOrBlank()
+        ) {
             gatewayResult = null
-            gatewayCheck = DiagnosticCheck(
-                id = CHECK_GATEWAY,
-                stage = DiagnosticStage.GATEWAY,
-                name = "网关可达性",
-                status = DiagnosticCheckStatus.NOT_APPLICABLE,
-                severity = DiagnosticSeverity.NOTICE,
-                summary = "当前网络未提供可直接检测的默认网关。",
-                observedAt = now(),
-                rawData = mapOf("reason" to "gateway_unavailable"),
+            gatewayCheck = gatewayNotApplicableCheck(
+                context = initialContext,
+                gateway = gatewayAddress,
             )
         } else {
             gatewayResult = runGatewayCheck(gatewayAddress)
@@ -127,6 +124,32 @@ class DefaultDiagnosticPipeline(
         val domainCheck = domainCheck(dnsResult, domainResults)
         checks += domainCheck
         notifyStage(onStageChanged, domainCheck)
+
+        val effectivePublicCheck = reconcilePublicCheck(
+            rawCheck = publicCheck,
+            publicConnectivity = publicConnectivity,
+            dnsResult = dnsResult,
+            domainCheck = domainCheck,
+        )
+        replaceCheck(checks, effectivePublicCheck)
+
+        if (gatewayCheck.status == DiagnosticCheckStatus.FAIL &&
+            effectivePublicCheck.status == DiagnosticCheckStatus.PASS
+        ) {
+            gatewayCheck = gatewayCheck.copy(
+                status = DiagnosticCheckStatus.UNKNOWN,
+                severity = DiagnosticSeverity.NOTICE,
+                summary = "网关未响应可达性探测，但设备仍可正常访问公网。部分路由器可能不响应此类探测，这不一定表示网关异常。",
+                rawData = gatewayCheck.rawData + ("reconciledWithPublicConnectivity" to "true"),
+            )
+            replaceCheck(checks, gatewayCheck)
+        }
+        notifyStage(onStageChanged, effectivePublicCheck)
+        if (gatewayCheck.status == DiagnosticCheckStatus.UNKNOWN &&
+            gatewayCheck.rawData["reconciledWithPublicConnectivity"] == "true"
+        ) {
+            notifyStage(onStageChanged, gatewayCheck)
+        }
 
         networkChanged = detectNetworkChange(initialContext) || networkChanged
         if (networkChanged) {
@@ -353,11 +376,38 @@ class DefaultDiagnosticPipeline(
         )
     }
 
+    private fun gatewayNotApplicableCheck(
+        context: NetworkContext,
+        gateway: String?,
+    ): DiagnosticCheck {
+        val cellular = context.connectionType == ConnectionType.CELLULAR
+        return DiagnosticCheck(
+            id = CHECK_GATEWAY,
+            stage = DiagnosticStage.GATEWAY,
+            name = "网关可达性",
+            status = DiagnosticCheckStatus.NOT_APPLICABLE,
+            severity = DiagnosticSeverity.NOTICE,
+            summary = if (cellular) {
+                "移动网络不执行传统局域网网关可达性判断。"
+            } else {
+                "当前网络未提供可直接检测的默认网关。"
+            },
+            target = gateway,
+            observedAt = now(),
+            rawData = buildMap {
+                put("reason", if (cellular) "cellular_gateway_not_applicable" else "gateway_unavailable")
+                gateway?.let { put("systemGateway", it) }
+            },
+        )
+    }
+
     private fun publicCheck(
         result: DiagnosticPublicConnectivityResult,
     ): DiagnosticCheck {
         val completedTargets = result.targetResults.count { it.probeCompleted }
-        val successfulTargets = result.targetResults.count { it.result.success }
+        val successfulTargets = result.targetResults.count {
+            it.probeCompleted && it.result.success
+        }
         val passed = result.hasSuccessfulTarget
         return DiagnosticCheck(
             id = CHECK_PUBLIC,
@@ -378,22 +428,90 @@ class DefaultDiagnosticPipeline(
                 completedTargets > 0 -> "所有已完成的公网 TCP 443 探测均未建立连接。"
                 else -> "没有足够的公网连通性证据。"
             },
-            method = "TCP_CONNECT_AND_ANDROID_VALIDATED_CONTEXT",
+            method = "TCP_443_PROBES_WITH_VALIDATED_CONTEXT",
             observedAt = now(),
             rawData = mapOf(
                 "validated" to (result.validated?.toString() ?: "unknown"),
                 "targetCount" to result.targetResults.size.toString(),
                 "completedTargetCount" to completedTargets.toString(),
                 "successfulTargetCount" to successfulTargets.toString(),
-                "targets" to result.targetResults.joinToString(",") { it.target.host },
+                "targets" to result.targetResults.joinToString(",") {
+                    "${it.target.host}:${it.target.port}"
+                },
                 "targetOutcomes" to result.targetResults.joinToString(";") { targetResult ->
-                    "${targetResult.target.host}=${if (targetResult.result.success) "PASS" else "FAIL"}" +
+                    "${targetResult.target.host}:${targetResult.target.port}=" +
+                        "${if (targetResult.result.success) "PASS" else "FAIL"}" +
                         ":completed=${targetResult.probeCompleted}" +
                         ":latencyMs=${targetResult.result.latencyMs ?: "unknown"}" +
                         ":error=${targetResult.result.errorMessage ?: ""}"
                 },
             ),
         )
+    }
+
+    private fun reconcilePublicCheck(
+        rawCheck: DiagnosticCheck,
+        publicConnectivity: DiagnosticPublicConnectivityResult,
+        dnsResult: DnsLookupResult,
+        domainCheck: DiagnosticCheck,
+    ): DiagnosticCheck {
+        val completedTargets = publicConnectivity.targetResults.count { it.probeCompleted }
+        val fixedTargetSuccess = publicConnectivity.hasSuccessfulTarget
+        val domainAccessSuccess = domainCheck.status == DiagnosticCheckStatus.PASS &&
+            dnsResult.status in setOf(DnsLookupStatus.SUCCESS, DnsLookupStatus.PARTIAL)
+        val effectivePass = fixedTargetSuccess || domainAccessSuccess
+        val effectiveStatus = when {
+            effectivePass -> DiagnosticCheckStatus.PASS
+            publicConnectivity.validated == true -> DiagnosticCheckStatus.UNKNOWN
+            publicConnectivity.validated == false && completedTargets > 0 ->
+                DiagnosticCheckStatus.FAIL
+
+            else -> DiagnosticCheckStatus.UNKNOWN
+        }
+        val evidence = when {
+            fixedTargetSuccess -> "fixed_tcp_probe"
+            domainAccessSuccess -> "resolved_domain_tcp"
+            publicConnectivity.validated == true -> "validated_conflict"
+            effectiveStatus == DiagnosticCheckStatus.FAIL -> "corroborated_failure"
+            else -> "insufficient_evidence"
+        }
+        return rawCheck.copy(
+            status = effectiveStatus,
+            severity = when (effectiveStatus) {
+                DiagnosticCheckStatus.PASS -> DiagnosticSeverity.HEALTHY
+                DiagnosticCheckStatus.FAIL -> DiagnosticSeverity.WARNING
+                else -> DiagnosticSeverity.NOTICE
+            },
+            summary = when {
+                fixedTargetSuccess -> "至少一个公网 TCP 443 目标可达。"
+                domainAccessSuccess -> "固定公网探测未全部成功，但实际域名访问可达。"
+                publicConnectivity.validated == true ->
+                    "固定公网探测与实际域名访问均未成功，但 Android 系统仍报告网络已验证，证据存在冲突。"
+
+                effectiveStatus == DiagnosticCheckStatus.FAIL ->
+                    "固定公网探测与实际域名访问均未建立连接。"
+
+                else -> "没有足够的公网连通性证据。"
+            },
+            rawData = rawCheck.rawData + mapOf(
+                "fixedTargetSuccess" to fixedTargetSuccess.toString(),
+                "domainAccess" to domainCheck.status.name,
+                "domainAccessSuccess" to domainAccessSuccess.toString(),
+                "effectiveEvidence" to evidence,
+            ),
+        )
+    }
+
+    private fun replaceCheck(
+        checks: MutableList<DiagnosticCheck>,
+        replacement: DiagnosticCheck,
+    ) {
+        val index = checks.indexOfFirst { it.id == replacement.id }
+        if (index >= 0) {
+            checks[index] = replacement
+        } else {
+            checks += replacement
+        }
     }
 
     private fun dnsCheck(

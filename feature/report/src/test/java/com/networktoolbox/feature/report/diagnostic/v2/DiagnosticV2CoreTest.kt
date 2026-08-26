@@ -68,12 +68,84 @@ class DiagnosticV2CoreTest {
     @Test
     fun gatewayOkAndPublicFail_reportsUpstreamPossibility() = runTest {
         val result = pipeline(
+            context = networkContext(validated = false),
             tcpResponse = { host, _, _ -> tcpResult(host, success = false) },
         ).run {}
         val report = DefaultDiagnosticAnalyzerV2().analyze(result)
 
         assertTrue(report.findings.any { it.id == "PUBLIC_CONNECTIVITY_FAILED" })
         assertEquals(DiagnosticSeverity.WARNING, report.overallSeverity)
+    }
+
+    @Test
+    fun cellularGateway_isNotApplicable_evenWhenSystemReportsGateway() = runTest {
+        val ping = FakePingSessionEngine(pingResult(success = false))
+        val context = networkContext(
+            connectionType = ConnectionType.CELLULAR,
+            gateway = "10.150.195.68",
+        )
+
+        val result = pipeline(context = context, pingEngine = ping).run {}
+        val gateway = result.checks.first { it.id == "GATEWAY_REACHABILITY" }
+
+        assertEquals(DiagnosticCheckStatus.NOT_APPLICABLE, gateway.status)
+        assertEquals(DiagnosticSeverity.NOTICE, gateway.severity)
+        assertEquals("10.150.195.68", gateway.target)
+        assertEquals(0, ping.callCount)
+    }
+
+    @Test
+    fun wifiGatewayFailureWithDomainAccess_downgradesGatewayToUnknown() = runTest {
+        val result = pipeline(
+            gatewayResult = pingResult(success = false),
+        ).run {}
+        val report = DefaultDiagnosticAnalyzerV2().analyze(result)
+        val gateway = result.checks.first { it.id == "GATEWAY_REACHABILITY" }
+
+        assertEquals(DiagnosticCheckStatus.UNKNOWN, gateway.status)
+        assertEquals(DiagnosticSeverity.NOTICE, gateway.severity)
+        assertTrue(report.overallSeverity != DiagnosticSeverity.WARNING)
+        assertTrue(report.findings.any { it.id == "PING_TCP_DIFFERENCE" })
+    }
+
+    @Test
+    fun fixedTargetsFailButDomainAccessSucceeds_marksPublicAsPassWithNotice() = runTest {
+        val result = pipeline(
+            tcpResponse = { host, port, _ ->
+                tcpResult(host, port, success = host == "93.184.216.34")
+            },
+        ).run {}
+        val report = DefaultDiagnosticAnalyzerV2().analyze(result)
+        val public = result.checks.first { it.id == "PUBLIC_CONNECTIVITY" }
+
+        assertEquals(DiagnosticCheckStatus.PASS, public.status)
+        assertEquals("resolved_domain_tcp", public.rawData["effectiveEvidence"])
+        assertTrue(report.findings.any { it.id == "FIXED_PUBLIC_TARGETS_INCONCLUSIVE" })
+        assertTrue(report.recommendations.isEmpty())
+        assertEquals(DiagnosticOverallStatus.HEALTHY, report.overallStatus)
+    }
+
+    @Test
+    fun defaultPublicTargets_useReviewedDomesticAndGlobalEndpoints() {
+        assertEquals(
+            listOf("223.5.5.5", "1.1.1.1"),
+            DiagnosticProbeTargets.default().publicTargets.map { it.host },
+        )
+    }
+
+    @Test
+    fun validatedConflict_keepsPublicUnknownInsteadOfFailure() = runTest {
+        val result = pipeline(
+            tcpResponse = { host, port, _ -> tcpResult(host, port, success = false) },
+        ).run {}
+        val report = DefaultDiagnosticAnalyzerV2().analyze(result)
+        val public = result.checks.first { it.id == "PUBLIC_CONNECTIVITY" }
+
+        assertEquals(DiagnosticCheckStatus.UNKNOWN, public.status)
+        assertEquals(DiagnosticSeverity.NOTICE, public.severity)
+        assertEquals(DiagnosticOverallStatus.UNKNOWN, report.overallStatus)
+        assertTrue(report.findings.any { it.id == "PUBLIC_CONNECTIVITY_UNCERTAIN" })
+        assertFalse(report.findings.any { it.id == "PUBLIC_CONNECTIVITY_FAILED" })
     }
 
     @Test
@@ -240,6 +312,7 @@ class DiagnosticV2CoreTest {
         context: NetworkContext = networkContext(),
         networkRepository: NetworkRepository = SequenceNetworkRepository(listOf(context)),
         gatewayResult: PingSessionResult = pingResult(success = true),
+        pingEngine: PingSessionEngine = FakePingSessionEngine(gatewayResult),
         dnsResult: DnsLookupResult = dnsResult(),
         dnsEngine: DnsQueryEngine = RecordingDnsQueryEngine(dnsResult),
         tcpResponse: (String, Int, Int) -> TcpProbeResult = { host, port, _ ->
@@ -247,7 +320,7 @@ class DiagnosticV2CoreTest {
         },
     ): DiagnosticPipeline = DefaultDiagnosticPipeline(
         networkRepository = networkRepository,
-        pingSessionEngine = FakePingSessionEngine(gatewayResult),
+        pingSessionEngine = pingEngine,
         dnsQueryEngine = dnsEngine,
         tcpPortChecker = FakeTcpPortChecker(tcpResponse),
         probeTargets = DiagnosticProbeTargets(
@@ -260,17 +333,22 @@ class DiagnosticV2CoreTest {
         now = { 1_000L },
     )
 
-    private fun networkContext(vpnActive: Boolean = false) = NetworkContext(
-        connectionType = ConnectionType.WIFI,
+    private fun networkContext(
+        vpnActive: Boolean = false,
+        connectionType: ConnectionType = ConnectionType.WIFI,
+        gateway: String? = "192.0.2.1",
+        validated: Boolean? = true,
+    ) = NetworkContext(
+        connectionType = connectionType,
         ipv4Address = "192.0.2.20",
         ipv6Address = null,
-        gateway = "192.0.2.1",
+        gateway = gateway,
         dnsServers = listOf("192.0.2.1"),
         vpnActive = vpnActive,
         wifiName = "Test Wi-Fi",
         wifiSignalLevel = 3,
         activeNetworkAvailable = true,
-        validated = true,
+        validated = validated,
     )
 
     private fun pingResult(success: Boolean) = PingSessionResult(
@@ -338,10 +416,15 @@ class DiagnosticV2CoreTest {
     private class FakePingSessionEngine(
         private val response: PingSessionResult,
     ) : PingSessionEngine {
+        var callCount: Int = 0
+
         override suspend fun run(
             request: PingRequest,
             onProgress: (PingSessionProgress) -> Unit,
-        ): PingSessionResult = response.copy(target = request.target)
+        ): PingSessionResult {
+            callCount += 1
+            return response.copy(target = request.target)
+        }
     }
 
     private class FakeTcpPortChecker(

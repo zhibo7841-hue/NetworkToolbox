@@ -30,6 +30,8 @@ import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticFindingV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticOverallStatus
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticSeverity
+import java.util.Locale
+import kotlin.math.round
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage
 import com.networktoolbox.feature.report.presentation.ReportProgress
 import com.networktoolbox.feature.report.presentation.ReportStageStatus
@@ -204,10 +206,8 @@ private fun ReportContent(
             }
         }
 
-        ReportSectionCard(title = "建议") {
-            if (report.recommendations.isEmpty()) {
-                Text("暂无额外建议。")
-            } else {
+        if (report.shouldShowRecommendations()) {
+            ReportSectionCard(title = "建议") {
                 report.recommendations
                     .sortedBy { it.priority }
                     .take(3)
@@ -308,7 +308,7 @@ private fun DiagnosticDetails(report: DiagnosticReportV2) {
                 ResultRow("IPv4", context.ipv4Address ?: "未检测到")
                 ResultRow("IPv6", context.ipv6Address ?: "未检测到")
                 ResultRow("VPN", context.vpnActive.toEnabledText())
-                ResultRow("VALIDATED", context.validated.toYesNoText())
+                ResultRow("系统联网验证", context.validated.toValidatedText())
                 Text("网络配置 DNS", style = MaterialTheme.typography.labelLarge)
                 if (context.dnsServers.isEmpty()) {
                     Text("未检测到", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -320,22 +320,32 @@ private fun DiagnosticDetails(report: DiagnosticReportV2) {
 
         report.checks.firstOrNull { it.stage == DiagnosticStage.GATEWAY }?.let { check ->
             ReportSectionCard(title = "网关") {
-                ResultRow("目标", check.target ?: "未提供")
+                if (check.rawData["reason"] == "cellular_gateway_not_applicable") {
+                    ResultRow("系统报告网关", check.target ?: "未提供")
+                } else {
+                    ResultRow("目标", check.target ?: "未提供")
+                }
                 ResultRow("结果", check.status.displayName())
                 check.method?.let { ResultRow("检测方式", it.methodDisplayName()) }
-                check.rawData["avgLatencyMs"]?.let { ResultRow("平均延迟", "$it ms") }
+                check.rawData["avgLatencyMs"]?.let {
+                    ResultRow("平均延迟", formatMilliseconds(it))
+                }
                 Text(check.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
         report.checks.firstOrNull { it.stage == DiagnosticStage.PUBLIC_CONNECTIVITY }?.let { check ->
             ReportSectionCard(title = "公网") {
+                Text("公网探测", style = MaterialTheme.typography.labelLarge)
                 check.rawData["targetOutcomes"]
                     ?.split(';')
                     ?.filter(String::isNotBlank)
                     ?.forEach { outcome ->
                         Text(formatTargetOutcome(outcome))
                     }
+                check.rawData["domainAccess"]?.let {
+                    ResultRow("实际域名访问", it.toStatusDisplayName())
+                }
                 ResultRow("综合判断", check.status.displayName())
                 Text(check.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -355,8 +365,7 @@ private fun DiagnosticDetails(report: DiagnosticReportV2) {
                         ResultRow("$type 记录", "$value 条")
                     }
                 check.rawData["durationMs"]
-                    ?.takeUnless { it == "unknown" }
-                    ?.let { ResultRow("查询耗时", "$it ms") }
+                    ?.let { ResultRow("查询耗时", formatMilliseconds(it)) }
                 check.rawData["recordCount"]?.let { ResultRow("记录数量", it) }
                 check.method?.let { ResultRow("查询方式", it.methodDisplayName()) }
                 check.rawData["fakeIpObserved"]?.toBooleanStrictOrNull()
@@ -539,9 +548,9 @@ private fun Boolean?.toEnabledText(): String = when (this) {
     null -> "未确定"
 }
 
-private fun Boolean?.toYesNoText(): String = when (this) {
-    true -> "是"
-    false -> "否"
+private fun Boolean?.toValidatedText(): String = when (this) {
+    true -> "已通过"
+    false -> "未通过"
     null -> "未确定"
 }
 
@@ -549,7 +558,7 @@ private fun String.methodDisplayName(): String = when (this) {
     "SYSTEM_REACHABILITY" -> "系统可达性检测"
     "ANDROID_DNS_RESOLVER" -> "Android 系统 DNS 解析器"
     "SYSTEM_RESOLVER" -> "系统解析器"
-    "TCP_CONNECT_AND_ANDROID_VALIDATED_CONTEXT" -> "TCP 443 与 Android 网络验证"
+    "TCP_443_PROBES_WITH_VALIDATED_CONTEXT" -> "TCP 443 辅助探测与系统联网状态"
     "TCP_CONNECT_TO_RESOLVED_ADDRESS" -> "向解析地址建立 TCP 连接"
     else -> this.replace('_', ' ')
 }
@@ -557,8 +566,41 @@ private fun String.methodDisplayName(): String = when (this) {
 private fun formatTargetOutcome(outcome: String): String {
     val target = outcome.substringBefore('=').ifBlank { "公网目标" }
     val passed = outcome.substringAfter('=', "").startsWith("PASS")
-    return "TCP 目标 $target：${if (passed) "成功" else "未连接"}"
+    return "$target    ${if (passed) "成功" else "未连接"}"
 }
+
+private fun String.toStatusDisplayName(): String = when (this) {
+    "PASS" -> "成功"
+    "FAIL" -> "未连接"
+    "NO_RECORDS" -> "无记录"
+    "NOT_APPLICABLE" -> "不适用"
+    "SKIPPED" -> "未执行"
+    "UNKNOWN" -> "未确定"
+    else -> this
+}
+
+private fun formatMilliseconds(rawValue: String?): String {
+    val value = rawValue
+        ?.takeUnless { it.isBlank() || it.equals("unknown", ignoreCase = true) }
+        ?.toDoubleOrNull()
+        ?: return "—"
+    val rounded = round(value * 10.0) / 10.0
+    return if (rounded % 1.0 == 0.0) {
+        "${rounded.toLong()} ms"
+    } else {
+        "${String.format(Locale.US, "%.1f", rounded)} ms"
+    }
+}
+
+private fun DiagnosticReportV2.shouldShowRecommendations(): Boolean =
+    recommendations.isNotEmpty() && (
+            overallSeverity == DiagnosticSeverity.WARNING ||
+            overallSeverity == DiagnosticSeverity.ERROR ||
+            findings.any {
+                it.id == "NETWORK_CHANGED_DURING_RUN" ||
+                    it.id == "PUBLIC_CONNECTIVITY_UNCERTAIN"
+            }
+        )
 
 private val DISPLAY_STAGES = setOf(
     DiagnosticStage.NETWORK_CONTEXT,

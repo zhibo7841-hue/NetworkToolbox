@@ -23,6 +23,7 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
         val domainCheck = input.checks.byId(CHECK_DOMAIN)
         val publicPassed = publicCheck?.status == DiagnosticCheckStatus.PASS
         val publicFailed = publicCheck?.status == DiagnosticCheckStatus.FAIL
+        val publicUncertain = publicCheck?.status == DiagnosticCheckStatus.UNKNOWN
         val gatewayFailed = gatewayCheck?.status == DiagnosticCheckStatus.FAIL
         val dnsResult = input.dnsResult
         val dnsHasA = dnsResult?.records.orEmpty().any { it.type == DnsRecordType.A }
@@ -56,6 +57,15 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
                 evidence = listOf(CHECK_GATEWAY, CHECK_PUBLIC),
             )
 
+            gatewayCheck?.status == DiagnosticCheckStatus.UNKNOWN && publicPassed ->
+                findings += finding(
+                    id = FINDING_PING_TCP_DIFFERENCE,
+                    severity = DiagnosticSeverity.NOTICE,
+                    title = "本地网关未确认",
+                    description = "网关未响应可达性探测，但设备仍可正常访问公网。部分路由器可能不响应此类探测，这不一定表示网关异常。",
+                    evidence = listOf(CHECK_GATEWAY, CHECK_PUBLIC),
+                )
+
             gatewayFailed -> findings += finding(
                 id = FINDING_GATEWAY,
                 severity = DiagnosticSeverity.WARNING,
@@ -72,6 +82,30 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
                 title = "公网连通性检测未通过",
                 description = "本地网络信息不足以确认公网路径正常；多个公网 TCP 目标均未建立连接，问题可能与路由器 WAN、上游网络或目标策略有关。",
                 evidence = listOf(CHECK_PUBLIC),
+            )
+        }
+
+        if (publicUncertain) {
+            findings += finding(
+                id = FINDING_PUBLIC_UNCERTAIN,
+                severity = DiagnosticSeverity.NOTICE,
+                title = "公网连通性尚未确认",
+                description = "固定公网探测和实际域名访问未能提供一致的成功证据，但当前结果不足以证明互联网不可用。",
+                evidence = listOf(CHECK_PUBLIC, CHECK_DOMAIN).filter { id ->
+                    input.checks.any { it.id == id }
+                },
+            )
+        }
+
+        if (publicPassed && input.publicConnectivity?.hasSuccessfulTarget != true &&
+            domainCheck?.status == DiagnosticCheckStatus.PASS
+        ) {
+            findings += finding(
+                id = FINDING_FIXED_TARGETS_INCONCLUSIVE,
+                severity = DiagnosticSeverity.NOTICE,
+                title = "部分公网探测目标未响应",
+                description = "固定公网探测目标未响应，但实际域名访问正常；这可能与网络策略、路由或目标服务限制有关，不表示互联网连接异常。",
+                evidence = listOf(CHECK_PUBLIC, CHECK_DNS, CHECK_DOMAIN),
             )
         }
 
@@ -164,7 +198,7 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
         }
 
         val overallSeverity = findings.maxByOrNull { it.severity.rank }?.severity
-            ?: if (networkCheck?.status == DiagnosticCheckStatus.UNKNOWN) {
+            ?: if (publicUncertain || networkCheck?.status == DiagnosticCheckStatus.UNKNOWN) {
                 DiagnosticSeverity.NOTICE
             } else {
                 DiagnosticSeverity.HEALTHY
@@ -173,6 +207,7 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
             input.checks.isEmpty() -> DiagnosticOverallStatus.UNKNOWN
             overallSeverity == DiagnosticSeverity.ERROR -> DiagnosticOverallStatus.LIMITED
             overallSeverity == DiagnosticSeverity.WARNING -> DiagnosticOverallStatus.ATTENTION
+            publicUncertain -> DiagnosticOverallStatus.UNKNOWN
             networkCheck?.status == DiagnosticCheckStatus.UNKNOWN &&
                 input.checks.none { it.status == DiagnosticCheckStatus.PASS } ->
                 DiagnosticOverallStatus.UNKNOWN
@@ -190,9 +225,13 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
                 gatewayFailed = gatewayFailed,
                 publicFailed = publicFailed,
                 publicPassed = publicPassed,
+                publicUncertain = publicUncertain,
                 dnsActualFailure = dnsActualFailure,
                 domainFailed = domainCheck?.status == DiagnosticCheckStatus.FAIL,
                 networkChanged = input.networkChanged,
+                fixedTargetsInconclusive = publicPassed &&
+                    input.publicConnectivity?.hasSuccessfulTarget != true &&
+                    domainCheck?.status == DiagnosticCheckStatus.PASS,
                 findings = findings,
             ),
             networkSnapshot = context,
@@ -207,9 +246,11 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
         gatewayFailed: Boolean,
         publicFailed: Boolean,
         publicPassed: Boolean,
+        publicUncertain: Boolean,
         dnsActualFailure: Boolean,
         domainFailed: Boolean,
         networkChanged: Boolean,
+        fixedTargetsInconclusive: Boolean,
         findings: List<DiagnosticFindingV2>,
     ): String = when {
         context?.activeNetworkAvailable == false -> "设备当前未连接可用网络。"
@@ -217,6 +258,8 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
         publicPassed && dnsActualFailure -> "公网连接正常，但 DNS 查询失败。"
         publicPassed && domainFailed -> "公网连接和 DNS 正常，但域名访问路径未建立。"
         networkChanged -> "检测期间网络发生切换，请谨慎解读当前结果并重新运行诊断。"
+        publicUncertain -> "公网探测证据存在冲突，暂时无法确认公网连接状态。"
+        fixedTargetsInconclusive -> "实际域名访问正常，但部分固定公网探测目标未响应。"
         findings.any { it.severity == DiagnosticSeverity.WARNING } -> "检测完成，发现需要关注的网络现象。"
         else -> "基础网络连接正常。"
     }
@@ -259,8 +302,8 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
             if (FINDING_NETWORK_CHANGED in ids) {
                 add(recommendation(1, "重新运行诊断", "在网络连接稳定后重新运行，避免混合不同网络状态的结果。"))
             }
-            if (isEmpty()) {
-                add(recommendation(1, "继续观察", "如果应用仍无法访问，请检查应用自身配置或目标服务要求。"))
+            if (FINDING_PUBLIC_UNCERTAIN in ids) {
+                add(recommendation(1, "重新运行诊断", "重新检测或切换网络进行对比，确认公网连通性是否稳定。"))
             }
         }
         return recommendations.distinctBy { it.action }.take(MAX_RECOMMENDATIONS)
@@ -320,6 +363,8 @@ class DefaultDiagnosticAnalyzerV2 : DiagnosticAnalyzerV2 {
         const val FINDING_LOCAL_AND_PUBLIC = "LOCAL_AND_PUBLIC_PATH"
         const val FINDING_GATEWAY = "GATEWAY_UNREACHABLE"
         const val FINDING_PUBLIC = "PUBLIC_CONNECTIVITY_FAILED"
+        const val FINDING_PUBLIC_UNCERTAIN = "PUBLIC_CONNECTIVITY_UNCERTAIN"
+        const val FINDING_FIXED_TARGETS_INCONCLUSIVE = "FIXED_PUBLIC_TARGETS_INCONCLUSIVE"
         const val FINDING_DNS = "DNS_FAILURE"
         const val FINDING_NO_DNS_RECORDS = "DNS_NO_RECORDS"
         const val FINDING_NO_IPV6_RECORD = "NO_IPV6_RECORD"

@@ -113,8 +113,8 @@ data class DiagnosticProbeTargets(
          */
         fun default(): DiagnosticProbeTargets = DiagnosticProbeTargets(
             publicTargets = listOf(
+                DiagnosticProbeTarget(host = "223.5.5.5"),
                 DiagnosticProbeTarget(host = "1.1.1.1"),
-                DiagnosticProbeTarget(host = "8.8.8.8"),
             ),
         )
     }
@@ -132,7 +132,7 @@ data class DiagnosticPublicConnectivityResult(
     val targetResults: List<DiagnosticPublicTargetResult>,
 ) {
     val hasSuccessfulTarget: Boolean
-        get() = targetResults.any { it.result.success }
+        get() = targetResults.any { it.probeCompleted && it.result.success }
 }
 
 data class DiagnosticPipelineResult(
