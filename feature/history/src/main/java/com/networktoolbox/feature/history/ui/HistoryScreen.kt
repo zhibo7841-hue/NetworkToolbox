@@ -40,6 +40,7 @@ fun HistoryScreen(
     onDelete: (Long) -> Unit,
     onClear: () -> Unit,
     onBack: () -> Unit,
+    onOpenReport: (HistoryRecord) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showClearDialog by rememberSaveable { mutableStateOf(false) }
@@ -83,7 +84,11 @@ fun HistoryScreen(
                         }
                     }
                     state.records.forEach { record ->
-                        HistoryRecordCard(record = record, onDelete = onDelete)
+                        HistoryRecordCard(
+                            record = record,
+                            onDelete = onDelete,
+                            onOpenReport = onOpenReport,
+                        )
                     }
                 }
             }
@@ -121,6 +126,7 @@ fun HistoryScreen(
 private fun HistoryRecordCard(
     record: HistoryRecord,
     onDelete: (Long) -> Unit,
+    onOpenReport: (HistoryRecord) -> Unit,
 ) {
     val pingDetails = if (record.type == HistoryType.PING) {
         record.pingDetails()
@@ -132,7 +138,17 @@ private fun HistoryRecordCard(
     } else {
         null
     }
-    val displayTitle = pingDetails?.target ?: dnsDetails?.domain ?: record.title
+    val isDiagnosticV2 = record.type == HistoryType.REPORT &&
+        record.detailJson.readJsonNumber("schemaVersion") == "2"
+    val diagnosticHistorySummary = if (isDiagnosticV2) {
+        record.detailJson.readJsonString("historySummary")
+    } else {
+        null
+    }
+    val displayTitle = when {
+        isDiagnosticV2 -> "网络诊断"
+        else -> pingDetails?.target ?: dnsDetails?.domain ?: record.title
+    }
     val displaySummary = if (record.type == HistoryType.PING) {
         PingHistorySummary.fromQualityLevel(
             qualityLevel = pingDetails?.qualityLevel.orEmpty(),
@@ -161,6 +177,13 @@ private fun HistoryRecordCard(
             }
             Text(displayTitle, style = MaterialTheme.typography.bodyLarge)
             Text(displaySummary, style = MaterialTheme.typography.bodyMedium)
+            diagnosticHistorySummary?.let { summary ->
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             pingDetails?.metricsText()?.let { metrics ->
                 Text(
                     metrics,
@@ -175,11 +198,16 @@ private fun HistoryRecordCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(
-                modifier = Modifier.align(Alignment.End),
-                onClick = { onDelete(record.id) },
-            ) {
-                Text("删除")
+            Row(modifier = Modifier.fillMaxWidth()) {
+                if (isDiagnosticV2) {
+                    TextButton(onClick = { onOpenReport(record) }) {
+                        Text("查看报告")
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = { onDelete(record.id) }) {
+                    Text("删除")
+                }
             }
         }
     }

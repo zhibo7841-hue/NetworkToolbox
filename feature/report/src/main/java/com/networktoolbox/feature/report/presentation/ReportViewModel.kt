@@ -2,9 +2,11 @@ package com.networktoolbox.feature.report.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.networktoolbox.feature.report.diagnostic.DiagnosticReport
-import com.networktoolbox.feature.report.domain.GenerateDiagnosticReportUseCase
-import com.networktoolbox.feature.report.domain.ReportStep
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageProgress
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageState
+import com.networktoolbox.feature.report.domain.RunDiagnosticV2UseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.concurrent.CancellationException
 import javax.inject.Inject
@@ -26,8 +28,10 @@ sealed interface ReportStatus {
     ) : ReportStatus
 
     data class Success(
-        val report: DiagnosticReport,
+        val report: DiagnosticReportV2,
     ) : ReportStatus
+
+    data object Cancelled : ReportStatus
 
     data class Error(
         val message: String,
@@ -35,50 +39,61 @@ sealed interface ReportStatus {
 }
 
 data class ReportProgress(
-    val activeStep: ReportStep? = null,
-    val completedSteps: Set<ReportStep> = emptySet(),
+    val stageStates: Map<DiagnosticStage, ReportStageStatus> = diagnosticStages.associateWith {
+        ReportStageStatus.PENDING
+    },
+    val activeStage: DiagnosticStage? = null,
 ) {
-    fun moveTo(step: ReportStep): ReportProgress {
-        val completed = activeStep?.let { completedSteps + it } ?: completedSteps
+    fun apply(progress: DiagnosticStageProgress): ReportProgress {
+        val nextStates = stageStates.toMutableMap()
+        nextStates[progress.stage] = progress.state.toUiStatus()
         return copy(
-            activeStep = step,
-            completedSteps = completed,
+            stageStates = nextStates,
+            activeStage = progress.stage.takeIf { progress.state == DiagnosticStageState.RUNNING },
         )
     }
 }
 
+enum class ReportStageStatus {
+    PENDING,
+    RUNNING,
+    COMPLETED,
+    FAILED,
+    SKIPPED,
+}
+
 @HiltViewModel
 class ReportViewModel @Inject constructor(
-    private val generateReport: GenerateDiagnosticReportUseCase,
+    private val runDiagnostic: RunDiagnosticV2UseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
 
+    private var activeJob: kotlinx.coroutines.Job? = null
+    private var cancellationRequested = false
+
     fun runCheck() {
         if (_uiState.value.status is ReportStatus.Running) return
 
-        _uiState.value = ReportUiState(
-            status = ReportStatus.Running(
-                progress = ReportProgress(activeStep = ReportStep.NETWORK_INFORMATION),
-            ),
-        )
+        cancellationRequested = false
+        _uiState.value = ReportUiState(status = ReportStatus.Running())
 
-        viewModelScope.launch {
+        activeJob = viewModelScope.launch {
             try {
-                val report = generateReport { step ->
+                val report = runDiagnostic { stageProgress ->
                     _uiState.update { state ->
                         val running = state.status as? ReportStatus.Running
                             ?: return@update state
                         state.copy(
                             status = running.copy(
-                                progress = running.progress.moveTo(step),
+                                progress = running.progress.apply(stageProgress),
                             ),
                         )
                     }
                 }
                 _uiState.value = ReportUiState(ReportStatus.Success(report))
             } catch (error: CancellationException) {
-                throw error
+                if (!cancellationRequested) throw error
             } catch (error: Exception) {
                 _uiState.value = ReportUiState(
                     ReportStatus.Error(
@@ -88,4 +103,29 @@ class ReportViewModel @Inject constructor(
             }
         }
     }
+
+    fun stopCheck() {
+        if (_uiState.value.status !is ReportStatus.Running) return
+
+        cancellationRequested = true
+        activeJob?.cancel()
+        activeJob = null
+        _uiState.value = ReportUiState(ReportStatus.Cancelled)
+    }
+}
+
+val diagnosticStages: List<DiagnosticStage> = listOf(
+    DiagnosticStage.NETWORK_CONTEXT,
+    DiagnosticStage.GATEWAY,
+    DiagnosticStage.PUBLIC_CONNECTIVITY,
+    DiagnosticStage.DNS,
+    DiagnosticStage.DOMAIN_CONNECTIVITY,
+    DiagnosticStage.ANALYSIS,
+)
+
+private fun DiagnosticStageState.toUiStatus(): ReportStageStatus = when (this) {
+    DiagnosticStageState.RUNNING -> ReportStageStatus.RUNNING
+    DiagnosticStageState.COMPLETED -> ReportStageStatus.COMPLETED
+    DiagnosticStageState.FAILED -> ReportStageStatus.FAILED
+    DiagnosticStageState.SKIPPED -> ReportStageStatus.SKIPPED
 }

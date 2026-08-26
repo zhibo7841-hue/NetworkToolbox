@@ -5,7 +5,9 @@ import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticAnalyzerV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticPipeline
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2HistorySerializer
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageProgress
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageState
 import javax.inject.Inject
 
 class RunDiagnosticV2UseCase @Inject constructor(
@@ -22,8 +24,20 @@ class RunDiagnosticV2UseCase @Inject constructor(
         onStageChanged: (DiagnosticStageProgress) -> Unit = {},
     ): DiagnosticReportV2 {
         val pipelineResult = pipeline.run(onStageChanged)
+        onStageChanged(
+            DiagnosticStageProgress(
+                stage = DiagnosticStage.ANALYSIS,
+                state = DiagnosticStageState.RUNNING,
+            ),
+        )
         val report = analyzer.analyze(pipelineResult)
         historyRecorder.record(DiagnosticReportV2HistorySerializer.toHistoryRecord(report))
+        onStageChanged(
+            DiagnosticStageProgress(
+                stage = DiagnosticStage.ANALYSIS,
+                state = DiagnosticStageState.COMPLETED,
+            ),
+        )
         return report
     }
 }

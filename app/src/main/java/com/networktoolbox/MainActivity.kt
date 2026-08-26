@@ -23,9 +23,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.feature.dashboard.DashboardViewModel
 import com.networktoolbox.feature.dashboard.HomeScreen
@@ -33,7 +35,6 @@ import com.networktoolbox.feature.dashboard.RecentHistoryPreview
 import com.networktoolbox.feature.dashboard.ToolsScreen
 import com.networktoolbox.feature.dns.presentation.DnsViewModel
 import com.networktoolbox.feature.dns.ui.DnsScreen
-import com.networktoolbox.core.network.dns.DnsRecordType
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.ui.HistoryScreen
@@ -41,6 +42,9 @@ import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
 import com.networktoolbox.feature.port.presentation.TcpViewModel
 import com.networktoolbox.feature.port.ui.TcpScreen
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2HistoryDeserializer
+import com.networktoolbox.feature.report.presentation.ReportStatus
 import com.networktoolbox.feature.report.presentation.ReportViewModel
 import com.networktoolbox.feature.report.ui.ReportScreen
 import com.networktoolbox.feature.subnet.presentation.SubnetViewModel
@@ -73,6 +77,9 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(TopLevelDestination.HOME)
             }
             var toolScreen by rememberSaveable { mutableStateOf(ToolScreen.NONE) }
+            var restoredDiagnosticReport by remember {
+                mutableStateOf<DiagnosticReportV2?>(null)
+            }
             val recentHistory = (historyUiState as? HistoryUiState.Success)
                 ?.records
                 ?.firstOrNull { it.type == HistoryType.REPORT }
@@ -86,6 +93,7 @@ class MainActivity : ComponentActivity() {
                 }
 
             fun openTool(screen: ToolScreen) {
+                restoredDiagnosticReport = null
                 topLevelDestination = TopLevelDestination.TOOLS
                 toolScreen = screen
                 if (screen == ToolScreen.HISTORY) {
@@ -94,13 +102,24 @@ class MainActivity : ComponentActivity() {
             }
 
             fun openTopLevel(destination: TopLevelDestination) {
+                if (reportUiState.status is ReportStatus.Running) {
+                    reportViewModel.stopCheck()
+                }
+                restoredDiagnosticReport = null
                 topLevelDestination = destination
                 toolScreen = ToolScreen.NONE
             }
 
+            fun openDiagnosticHistory(record: HistoryRecord) {
+                DiagnosticReportV2HistoryDeserializer.fromHistoryRecord(record)?.let { report ->
+                    restoredDiagnosticReport = report
+                    topLevelDestination = TopLevelDestination.TOOLS
+                    toolScreen = ToolScreen.REPORT
+                }
+            }
+
             BackHandler(enabled = toolScreen != ToolScreen.NONE) {
-                toolScreen = ToolScreen.NONE
-                topLevelDestination = TopLevelDestination.TOOLS
+                openTopLevel(TopLevelDestination.TOOLS)
             }
 
             NetworkToolboxTheme {
@@ -187,8 +206,16 @@ class MainActivity : ComponentActivity() {
                             )
                             ToolScreen.REPORT -> ReportScreen(
                                 uiState = reportUiState,
-                                onRunCheck = reportViewModel::runCheck,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                restoredReport = restoredDiagnosticReport,
+                                onRunCheck = {
+                                    restoredDiagnosticReport = null
+                                    reportViewModel.runCheck()
+                                },
+                                onStopCheck = reportViewModel::stopCheck,
+                                onBack = {
+                                    restoredDiagnosticReport = null
+                                    openTopLevel(TopLevelDestination.TOOLS)
+                                },
                             )
                             ToolScreen.HISTORY -> HistoryScreen(
                                 uiState = historyUiState,
@@ -196,6 +223,7 @@ class MainActivity : ComponentActivity() {
                                 onDelete = historyViewModel::delete,
                                 onClear = historyViewModel::clear,
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onOpenReport = ::openDiagnosticHistory,
                             )
                         }
                     }

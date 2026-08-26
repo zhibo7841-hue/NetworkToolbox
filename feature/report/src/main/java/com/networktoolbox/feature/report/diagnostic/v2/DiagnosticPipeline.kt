@@ -434,6 +434,11 @@ class DefaultDiagnosticPipeline(
                 "status" to result.status.name,
                 "requestedTypes" to result.requestedTypes.joinToString(",") { it.name },
                 "recordCount" to result.records.size.toString(),
+                "recordCounts" to result.requestedTypes
+                    .sortedBy { it.name }
+                    .joinToString(",") { type ->
+                        "$type=${result.records.count { record -> record.type == type }}"
+                    },
                 "durationMs" to (result.durationMs?.toString() ?: "unknown"),
                 "configuredDnsServers" to context.dnsServers.joinToString(","),
                 "fakeIpObserved" to fakeIp.toString(),

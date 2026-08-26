@@ -8,7 +8,7 @@ object DiagnosticReportV2HistorySerializer {
     fun toHistoryRecord(report: DiagnosticReportV2): HistoryRecord = HistoryRecord(
         timestamp = report.timestamp,
         type = HistoryType.REPORT,
-        title = "Network Diagnostic Report",
+        title = "网络诊断",
         summary = report.summary,
         detailJson = jsonObject(
             "schemaVersion" to "2",
@@ -17,6 +17,7 @@ object DiagnosticReportV2HistorySerializer {
             "overallStatus" to jsonString(report.overallStatus.name),
             "overallSeverity" to jsonString(report.overallSeverity.name),
             "summary" to jsonString(report.summary),
+            "historySummary" to jsonString(report.historySummary()),
             "networkSnapshot" to networkSnapshot(report),
             "checks" to report.checks.joinToString(prefix = "[", postfix = "]") { check ->
                 jsonObject(
@@ -54,6 +55,27 @@ object DiagnosticReportV2HistorySerializer {
             },
         ),
     )
+
+    private fun DiagnosticReportV2.historySummary(): String = listOf(
+        checkSummary("GATEWAY_REACHABILITY", "网关"),
+        checkSummary("PUBLIC_CONNECTIVITY", "公网"),
+        checkSummary("DNS_RESOLUTION", "DNS"),
+    ).joinToString(" · ")
+
+    private fun DiagnosticReportV2.checkSummary(id: String, label: String): String {
+        val check = checks.firstOrNull { it.id == id }
+        val status = when (check?.status) {
+            DiagnosticCheckStatus.PASS -> "正常"
+            DiagnosticCheckStatus.FAIL -> "异常"
+            DiagnosticCheckStatus.NO_RECORDS -> "无记录"
+            DiagnosticCheckStatus.NOT_APPLICABLE -> "不适用"
+            DiagnosticCheckStatus.SKIPPED -> "未执行"
+            DiagnosticCheckStatus.UNKNOWN,
+            null,
+            -> "未确定"
+        }
+        return "$label$status"
+    }
 
     private fun networkSnapshot(report: DiagnosticReportV2): String {
         val context = report.networkSnapshot ?: return "null"
