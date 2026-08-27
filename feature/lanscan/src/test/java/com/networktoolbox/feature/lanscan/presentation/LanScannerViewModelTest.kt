@@ -196,7 +196,7 @@ class LanScannerViewModelTest {
 
         assertEquals("本机", LanScannerPresentation.deviceRole(local))
         assertEquals("网关", LanScannerPresentation.deviceRole(gateway))
-        assertEquals("TCP 445 响应", LanScannerPresentation.discoveryEvidence(tcp))
+        assertEquals("TCP 445 可连接", LanScannerPresentation.discoveryEvidence(tcp))
         assertEquals(0.5f, LanScannerPresentation.progressFraction(1, 2))
     }
 

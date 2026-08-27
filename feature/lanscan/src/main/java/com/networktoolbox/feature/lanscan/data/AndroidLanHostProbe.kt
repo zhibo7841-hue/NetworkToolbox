@@ -5,7 +5,6 @@ import com.networktoolbox.core.network.ping.PingProtocol
 import com.networktoolbox.core.network.ping.PingRequest
 import com.networktoolbox.core.network.ping.PingSessionEngine
 import com.networktoolbox.core.network.tcp.TcpPortChecker
-import com.networktoolbox.core.network.tcp.TcpProbeResult
 import com.networktoolbox.feature.lanscan.domain.LanHostProbe
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
@@ -58,7 +57,7 @@ class AndroidLanHostProbe(
                 port = port,
                 timeoutMs = config.tcpTimeoutMs,
             )
-            if (tcpResult.success || tcpResult.isConnectionRefused()) {
+            if (tcpResult.success) {
                 return LanHostProbeResult(
                     ipAddress = ipAddress,
                     evidence = listOf(
@@ -66,11 +65,7 @@ class AndroidLanHostProbe(
                             method = LanDiscoveryMethod.TCP,
                             latencyMs = tcpResult.latencyMs,
                             successfulPort = port,
-                            detail = if (tcpResult.success) {
-                                "TCP connection succeeded."
-                            } else {
-                                "TCP connection was refused by the host."
-                            },
+                            detail = "TCP connection succeeded.",
                         ),
                     ),
                 )
@@ -79,9 +74,6 @@ class AndroidLanHostProbe(
         return LanHostProbeResult(ipAddress = ipAddress)
     }
 }
-
-private fun TcpProbeResult.isConnectionRefused(): Boolean =
-    errorMessage.equals("Connection refused", ignoreCase = true)
 
 private fun Double?.roundToLongOrNull(): Long? = this?.let { value ->
     if (value.isFinite() && value >= 0.0) value.toLong() else null

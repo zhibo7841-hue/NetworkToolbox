@@ -32,7 +32,7 @@ object LanScannerPresentation {
 
     private fun evidenceLabel(evidence: LanDeviceEvidence): String? = when (evidence.method) {
         LanDiscoveryMethod.REACHABILITY -> "可达性检测"
-        LanDiscoveryMethod.TCP -> evidence.successfulPort?.let { "TCP $it 响应" } ?: "TCP 响应"
+        LanDiscoveryMethod.TCP -> evidence.successfulPort?.let { "TCP $it 可连接" } ?: "TCP 可连接"
         LanDiscoveryMethod.LOCAL_CONTEXT -> "本机"
         LanDiscoveryMethod.GATEWAY_CONTEXT -> "网关"
     }
