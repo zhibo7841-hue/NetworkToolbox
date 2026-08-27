@@ -149,12 +149,18 @@ private fun NetworkSummaryCard(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("当前网络", style = MaterialTheme.typography.titleLarge)
-            DetailRow("网络类型", context.connectionType.displayName())
-            DetailRow("扫描范围", range.cidr)
-            Text("可扫描 ${range.hostCount} 个地址", style = MaterialTheme.typography.bodyMedium)
+            Text("当前网络", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "${context.connectionType.displayName()} · ${range.cidr}",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                "${range.hostCount} 个可扫描地址",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             context.ipv4Address?.takeIf(String::isNotBlank)?.let {
                 DetailRow("本机", it)
             }
@@ -220,7 +226,7 @@ private fun SessionContent(
         title = title,
         content = {
             session.range?.let { range ->
-                DetailRow("扫描范围", range.cidr)
+                Text(range.cidr, style = MaterialTheme.typography.titleMedium)
                 if (session.rangeWasLimited) {
                     Text(
                         "原始范围 ${range.originalCidr}，本次已限制为当前 /24。",
@@ -229,9 +235,15 @@ private fun SessionContent(
                     )
                 }
             }
-            Text("已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址")
-            Text("发现 ${session.discoveredDevices.size} 台设备")
-            Text("耗时 ${LanScannerPresentation.elapsedText(session.elapsedMs)}")
+            if (session.status == LanScanStatus.COMPLETED) {
+                Text(LanScannerPresentation.sessionSummary(session))
+            } else {
+                Text(
+                    "已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址 · " +
+                        "发现 ${session.discoveredDevices.size} 台设备 · " +
+                        LanScannerPresentation.elapsedText(session.elapsedMs),
+                )
+            }
         },
     )
     OutlinedButton(
@@ -320,8 +332,19 @@ private fun PrivacyHint() {
 private fun DeviceList(devices: List<LanDevice>) {
     if (devices.isEmpty()) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("已发现设备", style = MaterialTheme.typography.titleLarge)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("已发现设备", style = MaterialTheme.typography.titleMedium)
+            Text(
+                devices.size.toString(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
         devices.forEach { device -> DeviceCard(device) }
     }
 }
@@ -330,8 +353,8 @@ private fun DeviceList(devices: List<LanDevice>) {
 private fun DeviceCard(device: LanDevice) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -339,27 +362,36 @@ private fun DeviceCard(device: LanDevice) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(device.ipAddress, style = MaterialTheme.typography.titleMedium)
+                LanScannerPresentation.deviceRole(device)
+                    .takeIf(String::isNotBlank)
+                    ?.let { role ->
+                        Text(
+                            role,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+            }
+            LanScannerPresentation.deviceSecondaryText(device)?.let { secondary ->
                 Text(
-                    LanScannerPresentation.deviceRole(device),
-                    color = if (device.isLocalDevice || device.isGateway) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    style = MaterialTheme.typography.labelLarge,
+                    secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            LanScannerPresentation.discoveryEvidence(device)?.let { evidence ->
-                DetailRow("发现依据", evidence)
-            }
-            device.latencyMs?.let { latency ->
-                DetailRow("响应延迟", "$latency ms")
-            }
             device.hostName?.takeIf(String::isNotBlank)?.let { name ->
-                DetailRow("名称", name)
+                Text(
+                    "名称 · $name",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             device.macAddress?.takeIf(String::isNotBlank)?.let { mac ->
-                DetailRow("MAC", mac)
+                Text(
+                    "MAC · $mac",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }
@@ -373,9 +405,9 @@ private fun StatusCard(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(title, style = MaterialTheme.typography.titleMedium)
             content()
         }
     }

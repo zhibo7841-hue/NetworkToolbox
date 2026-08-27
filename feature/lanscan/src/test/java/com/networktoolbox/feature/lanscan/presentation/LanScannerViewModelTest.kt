@@ -196,8 +196,31 @@ class LanScannerViewModelTest {
 
         assertEquals("本机", LanScannerPresentation.deviceRole(local))
         assertEquals("网关", LanScannerPresentation.deviceRole(gateway))
+        assertEquals("", LanScannerPresentation.deviceRole(device("192.168.1.30")))
         assertEquals("TCP 445 可连接", LanScannerPresentation.discoveryEvidence(tcp))
+        assertEquals(
+            "可达性检测 · 16 ms",
+            LanScannerPresentation.deviceSecondaryText(
+                device("192.168.1.31", latencyMs = 16),
+            ),
+        )
+        assertEquals(
+            "可达性检测",
+            LanScannerPresentation.deviceSecondaryText(device("192.168.1.32")),
+        )
+        assertEquals("当前设备", LanScannerPresentation.deviceSecondaryText(local))
+        assertEquals("网关信息", LanScannerPresentation.deviceSecondaryText(gateway))
         assertEquals(0.5f, LanScannerPresentation.progressFraction(1, 2))
+
+        val completedSession = session(
+            context = context("192.168.1.5", 24),
+            range = readyRange(context("192.168.1.5", 24)),
+            devices = listOf(local, gateway),
+        )
+        assertEquals(
+            "254 个地址 · 2 台设备 · 1 毫秒",
+            LanScannerPresentation.sessionSummary(completedSession),
+        )
     }
 
     private fun viewModel(
@@ -265,6 +288,7 @@ class LanScannerViewModelTest {
         ipAddress: String,
         isLocal: Boolean = false,
         isGateway: Boolean = false,
+        latencyMs: Long? = null,
         evidence: List<LanDeviceEvidence> = listOf(
             LanDeviceEvidence(LanDiscoveryMethod.REACHABILITY),
         ),
@@ -272,10 +296,11 @@ class LanScannerViewModelTest {
         ipAddress = ipAddress,
         isLocalDevice = isLocal,
         isGateway = isGateway,
-        discoveryMethods = evidence.map(LanDeviceEvidence::method),
-        discoveryEvidence = evidence,
-        lastSeen = 1,
-    )
+            discoveryMethods = evidence.map(LanDeviceEvidence::method),
+            discoveryEvidence = evidence,
+            latencyMs = latencyMs,
+            lastSeen = 1,
+        )
 
     private fun context(address: String, prefixLength: Int) = NetworkContext(
         connectionType = ConnectionType.WIFI,

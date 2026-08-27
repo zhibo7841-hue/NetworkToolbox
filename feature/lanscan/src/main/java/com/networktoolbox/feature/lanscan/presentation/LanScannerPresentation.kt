@@ -3,13 +3,13 @@ package com.networktoolbox.feature.lanscan.presentation
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
+import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import java.util.Locale
 
 object LanScannerPresentation {
     fun deviceRole(device: LanDevice): String = buildList {
         if (device.isLocalDevice) add("本机")
         if (device.isGateway) add("网关")
-        if (isEmpty()) add("在线")
     }.joinToString(" · ")
 
     fun discoveryEvidence(device: LanDevice): String? {
@@ -21,6 +21,19 @@ object LanScannerPresentation {
             .joinToString(" · ")
             .takeIf(String::isNotBlank)
     }
+
+    fun deviceSecondaryText(device: LanDevice): String? {
+        if (device.isLocalDevice) return "当前设备"
+        if (device.isGateway) return "网关信息"
+
+        return listOfNotNull(
+            discoveryEvidence(device),
+            device.latencyMs?.let { "$it ms" },
+        ).joinToString(" · ").takeIf(String::isNotBlank)
+    }
+
+    fun sessionSummary(session: LanScanSession): String =
+        "${session.totalHosts} 个地址 · ${session.discoveredDevices.size} 台设备 · ${elapsedText(session.elapsedMs)}"
 
     fun elapsedText(elapsedMs: Long): String = when {
         elapsedMs < 1_000L -> "$elapsedMs 毫秒"
