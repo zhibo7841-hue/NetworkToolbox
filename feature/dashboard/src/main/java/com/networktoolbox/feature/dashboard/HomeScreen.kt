@@ -155,103 +155,77 @@ internal fun NetworkStatusCard(context: NetworkContext) {
     val ipv6Status = NetworkStatusPresentation.ipv6Status(ipv6Addresses)
     val showGateway = NetworkStatusPresentation.shouldShowGateway(context)
     val showWifiSignal = NetworkStatusPresentation.shouldShowWifiSignal(context)
+    val primaryAddress = NetworkStatusPresentation.primaryAddressForSummary(context)
+    val preferredDns = NetworkStatusPresentation.preferredDnsForSummary(context.dnsServers)
+    val subnetMask = NetworkStatusPresentation.ipv4PrefixToNetmask(
+        context.ipv4PrefixLength,
+    )?.takeIf { context.ipv4Address?.isNotBlank() == true }
+    val gateway = context.gateway?.takeIf(String::isNotBlank)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(connectionType, style = MaterialTheme.typography.titleLarge)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            "●",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            connectionStatus,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    if (context.vpnActive == true) {
-                        Text(
-                            "VPN 已启用",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                Text(connectionType, style = MaterialTheme.typography.titleLarge)
+                val statusText = buildString {
+                    append(connectionStatus)
+                    if (showWifiSignal) {
+                        append(" · 信号 ")
+                        append(context.wifiSignalLevel?.let { "$it/4" }.orUnknown())
                     }
                 }
-                Icon(
-                    imageVector = Icons.Outlined.WifiTethering,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                Text(
+                    statusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "IPv4 地址",
+                    primaryAddress.label,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    context.ipv4Address ?: "未配置",
-                    style = MaterialTheme.typography.headlineMedium,
+                    primaryAddress.value,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                if (showGateway) {
-                    StatusMetric(
-                        label = "网关",
-                        value = context.gateway.orUnknown(),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                StatusMetric(
-                    label = "DNS",
-                    value = NetworkStatusPresentation.dnsSummary(context.dnsServers.size),
-                    modifier = Modifier.weight(1f),
-                )
-                if (context.connectionType == ConnectionType.CELLULAR) {
-                    StatusMetric(
-                        label = "联网验证",
-                        value = context.validated.validationDisplayName(),
-                        modifier = Modifier.weight(1f),
-                    )
+            if (subnetMask != null || (showGateway && gateway != null)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    subnetMask?.let {
+                        StatusMetric(
+                            label = "子网掩码",
+                            value = it,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (showGateway && gateway != null) {
+                        StatusMetric(
+                            label = "网关",
+                            value = gateway,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
 
-            Row(
+            StatusMetric(
+                label = "DNS",
+                value = preferredDns ?: "未配置",
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                StatusMetric(
-                    label = "IPv6",
-                    value = NetworkStatusPresentation.ipv6Label(ipv6Status),
-                    modifier = Modifier.weight(1f),
-                )
-                if (showWifiSignal) {
-                    StatusMetric(
-                        label = "信号",
-                        value = context.wifiSignalLevel?.let { "$it/4" }.orUnknown(),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -265,34 +239,29 @@ internal fun NetworkStatusCard(context: NetworkContext) {
             if (showDetails) {
                 HorizontalDivider()
 
-                DetailSection("网络信息") {
-                    DetailRow("网络类型", connectionType)
+                DetailSection("网络详情") {
                     context.wifiName?.let { DetailRow("Wi-Fi 名称", it) }
+                    context.interfaceName?.let { DetailRow("接口", it) }
+                    context.ipv4PrefixLength?.let { prefix ->
+                        if (context.ipv4Address?.isNotBlank() == true) {
+                            DetailRow("IPv4 前缀", "/$prefix")
+                        }
+                    }
                     DetailRow(
-                        "IPv4 地址",
-                        context.ipv4Address?.let { address ->
-                            context.ipv4PrefixLength?.let { prefix -> "$address/$prefix" }
-                                ?: address
-                        } ?: "未配置",
+                        "IPv6 状态",
+                        NetworkStatusPresentation.ipv6Label(ipv6Status),
                     )
-                    if (ipv6Addresses.isEmpty()) {
-                        DetailRow("IPv6", "未配置")
-                    } else {
-                        Text("IPv6 · ${NetworkStatusPresentation.ipv6Label(ipv6Status)}")
+                    if (ipv6Addresses.isNotEmpty()) {
+                        Text(
+                            "IPv6 地址",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             ipv6Addresses.forEach { address ->
                                 Text(address, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
-                    }
-                    context.interfaceName?.let { DetailRow("接口", it) }
-                    DetailRow("VPN", context.vpnActive.vpnDisplayName())
-                    DetailRow("系统联网验证", context.validated.validationDisplayName())
-                }
-
-                if (showGateway) {
-                    DetailSection("路由") {
-                        DetailRow("IPv4 网关", context.gateway.orUnknown())
                     }
                 }
 
@@ -312,20 +281,16 @@ internal fun NetworkStatusCard(context: NetworkContext) {
                         }
                     }
                     context.privateDnsActive?.let { active ->
-                        DetailRow("Private DNS", if (active) "已启用" else "未启用")
+                        DetailRow("私人 DNS", if (active) "已启用" else "未启用")
                     }
                     context.privateDnsServerName?.let { name ->
-                        DetailRow("Private DNS 名称", name)
+                        DetailRow("私人 DNS 名称", name)
                     }
                 }
 
-                if (showWifiSignal) {
-                    DetailSection("Wi-Fi") {
-                        DetailRow(
-                            "信号",
-                            context.wifiSignalLevel?.let { "$it/4" }.orUnknown(),
-                        )
-                    }
+                DetailSection("连接状态") {
+                    DetailRow("VPN", context.vpnActive.vpnDisplayName())
+                    DetailRow("系统联网验证", context.validated.validationDisplayName())
                 }
             }
         }

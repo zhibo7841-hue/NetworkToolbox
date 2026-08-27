@@ -12,6 +12,11 @@ enum class Ipv6DisplayStatus {
     UNKNOWN,
 }
 
+data class PrimaryAddressSummary(
+    val label: String,
+    val value: String,
+)
+
 object NetworkStatusPresentation {
     fun ipv6Addresses(context: NetworkContext): List<String> =
         (context.ipv6Addresses.ifEmpty { listOfNotNull(context.ipv6Address) })
@@ -41,9 +46,44 @@ object NetworkStatusPresentation {
         Ipv6DisplayStatus.UNKNOWN -> "未知"
     }
 
-    fun dnsSummary(serverCount: Int): String = when {
-        serverCount <= 0 -> "未配置"
-        else -> "$serverCount 个服务器"
+    fun ipv4PrefixToNetmask(prefixLength: Int?): String? {
+        if (prefixLength == null || prefixLength !in 0..32) return null
+
+        val mask = if (prefixLength == 0) {
+            0L
+        } else {
+            (0xFFFFFFFFL shl (32 - prefixLength)) and 0xFFFFFFFFL
+        }
+        return (3 downTo 0).joinToString(".") { index ->
+            ((mask shr (index * 8)) and 0xFF).toString()
+        }
+    }
+
+    fun preferredDnsForSummary(dnsServers: List<String>): String? {
+        val configuredServers = dnsServers.filter(String::isNotBlank)
+        return configuredServers.firstOrNull(::isIpv4Literal)
+            ?: configuredServers.firstOrNull(::isIpv6Literal)
+    }
+
+    fun primaryAddressForSummary(context: NetworkContext): PrimaryAddressSummary {
+        context.ipv4Address
+            ?.takeIf(String::isNotBlank)
+            ?.let { return PrimaryAddressSummary("IPv4 地址", it) }
+
+        val ipv6Addresses = ipv6Addresses(context)
+        ipv6Addresses.firstOrNull { address ->
+            parseIpv6Literal(address)?.isLinkLocalAddress == false
+        }?.let { return PrimaryAddressSummary("IPv6 地址", it) }
+
+        return when (ipv6Status(ipv6Addresses)) {
+            Ipv6DisplayStatus.LINK_LOCAL_ONLY ->
+                PrimaryAddressSummary("IPv6", "仅链路本地")
+
+            Ipv6DisplayStatus.UNKNOWN -> PrimaryAddressSummary("IPv6", "未知")
+            Ipv6DisplayStatus.NOT_CONFIGURED,
+            Ipv6DisplayStatus.CONFIGURED,
+            -> PrimaryAddressSummary("IPv4 地址", "未配置")
+        }
     }
 
     fun shouldShowGateway(context: NetworkContext): Boolean =
@@ -58,10 +98,20 @@ object NetworkStatusPresentation {
         context.activeNetworkAvailable == null &&
             context.connectionType == ConnectionType.UNKNOWN -> "未知"
         context.activeNetworkAvailable == true -> "已连接"
-        context.ipv4Address != null || context.ipv6Address != null -> "已连接"
+        context.ipv4Address != null || ipv6Addresses(context).isNotEmpty() -> "已连接"
         context.connectionType == ConnectionType.UNKNOWN -> "未知"
         else -> "已连接"
     }
+
+    private fun isIpv4Literal(value: String): Boolean {
+        val parts = value.substringBefore('%').split('.')
+        return parts.size == 4 && parts.all { part ->
+            part.isNotEmpty() && part.all(Char::isDigit) &&
+                part.toIntOrNull()?.let { it in 0..255 } == true
+        }
+    }
+
+    private fun isIpv6Literal(value: String): Boolean = parseIpv6Literal(value) != null
 
     private fun parseIpv6Literal(value: String): Inet6Address? {
         val addressWithoutScope = value.substringBefore('%')
