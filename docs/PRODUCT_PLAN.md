@@ -120,6 +120,13 @@ The report must continue to communicate uncertainty clearly. It is a troubleshoo
 
 The LAN Scanner is planned as a later core module for local-network device discovery and analysis.
 
+The confirmed LAN Scanner v1 scope includes two ways to select the IPv4 range:
+
+- Automatic scanning of the current eligible local network, retaining the current /24 safety limit.
+- An optional inclusive custom start/end range limited to RFC1918 private IPv4 addresses and at most 254 hosts.
+
+Both modes use the same bounded discovery pipeline. Custom ranges do not add a port scanner, new discovery protocol, cloud service, or database schema migration. Cellular and VPN networks remain unavailable for LAN scanning.
+
 Planned capabilities:
 
 - Subnet scanning.

@@ -1,10 +1,16 @@
 package com.networktoolbox.feature.lanscan.presentation
 
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate
+
+enum class LanScanRangeMode {
+    CURRENT_NETWORK,
+    CUSTOM,
+}
 
 sealed interface LanScannerUiState {
     data object Idle : LanScannerUiState
@@ -12,6 +18,10 @@ sealed interface LanScannerUiState {
     data class Ready(
         val readiness: LanScanReadiness,
         val range: LanScanRange,
+        val rangeMode: LanScanRangeMode = LanScanRangeMode.CURRENT_NETWORK,
+        val customStartAddress: String = "",
+        val customEndAddress: String = "",
+        val customRangeResult: LanCustomRangeResult = LanCustomRangeResult.Incomplete,
     ) : LanScannerUiState
 
     data class Scanning(

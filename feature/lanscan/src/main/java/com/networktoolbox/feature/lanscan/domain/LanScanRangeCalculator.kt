@@ -4,6 +4,7 @@ import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRejectionReason
+import com.networktoolbox.feature.lanscan.domain.model.LanScanRangeSource
 
 class LanScanRangeCalculator(
     private val maxDefaultPrefixLength: Int = DEFAULT_MAX_DEFAULT_PREFIX_LENGTH,
@@ -13,24 +14,7 @@ class LanScanRangeCalculator(
     }
 
     fun calculate(context: NetworkContext): LanScanRangeResult {
-        if (context.activeNetworkAvailable == false) {
-            return LanScanRangeResult.Rejected(
-                reason = LanScanRejectionReason.NO_ACTIVE_NETWORK,
-                message = "No active network is available.",
-            )
-        }
-        if (context.vpnActive == true || context.connectionType == ConnectionType.VPN) {
-            return LanScanRangeResult.Rejected(
-                reason = LanScanRejectionReason.VPN_BLOCKED,
-                message = "LAN scanning is not enabled for VPN networks.",
-            )
-        }
-        if (context.connectionType !in setOf(ConnectionType.WIFI, ConnectionType.ETHERNET)) {
-            return LanScanRangeResult.Rejected(
-                reason = LanScanRejectionReason.UNSUPPORTED_NETWORK,
-                message = "LAN scanning requires Wi-Fi or Ethernet.",
-            )
-        }
+        contextRejection(context)?.let { return it }
 
         val address = context.ipv4Address?.toIpv4NumberOrNull()
             ?: return LanScanRangeResult.Rejected(
@@ -78,6 +62,62 @@ class LanScanRangeCalculator(
         )
     }
 
+    fun validateCustom(
+        context: NetworkContext,
+        range: LanScanRange,
+    ): LanScanRangeResult {
+        contextRejection(context)?.let { return it }
+        if (range.rangeSource != LanScanRangeSource.CUSTOM) {
+            return LanScanRangeResult.Rejected(
+                reason = LanScanRejectionReason.INVALID_CUSTOM_RANGE,
+                message = "自定义扫描范围无效。",
+            )
+        }
+
+        val first = range.firstHost.toIpv4NumberOrNull()
+            ?: return invalidCustomRange()
+        val last = range.lastHost.toIpv4NumberOrNull()
+            ?: return invalidCustomRange()
+        val count = last - first + 1L
+        if (first > last || count !in 1L..MAX_CUSTOM_HOST_COUNT) {
+            return invalidCustomRange()
+        }
+        if (!first.isRfc1918() || !last.isRfc1918()) {
+            return invalidCustomRange()
+        }
+        if (range.hostCount != count.toInt()) {
+            return invalidCustomRange()
+        }
+        return LanScanRangeResult.Ready(range)
+    }
+
+    private fun contextRejection(context: NetworkContext): LanScanRangeResult.Rejected? {
+        if (context.activeNetworkAvailable == false) {
+            return LanScanRangeResult.Rejected(
+                reason = LanScanRejectionReason.NO_ACTIVE_NETWORK,
+                message = "No active network is available.",
+            )
+        }
+        if (context.vpnActive == true || context.connectionType == ConnectionType.VPN) {
+            return LanScanRangeResult.Rejected(
+                reason = LanScanRejectionReason.VPN_BLOCKED,
+                message = "LAN scanning is not enabled for VPN networks.",
+            )
+        }
+        if (context.connectionType !in setOf(ConnectionType.WIFI, ConnectionType.ETHERNET)) {
+            return LanScanRangeResult.Rejected(
+                reason = LanScanRejectionReason.UNSUPPORTED_NETWORK,
+                message = "LAN scanning requires Wi-Fi or Ethernet.",
+            )
+        }
+        return null
+    }
+
+    private fun invalidCustomRange() = LanScanRangeResult.Rejected(
+        reason = LanScanRejectionReason.INVALID_CUSTOM_RANGE,
+        message = "自定义扫描范围无效。",
+    )
+
     private data class NumericRange(
         val network: Long,
         val broadcast: Long,
@@ -103,8 +143,16 @@ class LanScanRangeCalculator(
         else -> false
     }
 
+    private fun Long.isRfc1918(): Boolean = when {
+        this in 0x0A00_0000L..0x0AFF_FFFFL -> true
+        this in 0xAC10_0000L..0xAC1F_FFFFL -> true
+        this in 0xC0A8_0000L..0xC0A8_FFFFL -> true
+        else -> false
+    }
+
     private companion object {
         const val DEFAULT_MAX_DEFAULT_PREFIX_LENGTH = 24
+        const val MAX_CUSTOM_HOST_COUNT = 254L
     }
 }
 

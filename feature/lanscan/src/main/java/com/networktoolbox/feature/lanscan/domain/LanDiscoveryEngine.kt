@@ -63,13 +63,21 @@ class DefaultLanDiscoveryEngine(
         onUpdate: (LanScanUpdate) -> Unit,
     ): LanScanSession {
         val startedAt = clock.now()
-        val rangeResult = rangeCalculator.calculate(request.networkContext)
+        val rangeResult = request.requestedRange?.let { requestedRange ->
+            rangeCalculator.validateCustom(
+                context = request.networkContext,
+                range = requestedRange,
+            )
+        } ?: rangeCalculator.calculate(request.networkContext)
         if (rangeResult is LanScanRangeResult.Rejected) {
             val finishedAt = clock.now()
             val session = LanScanSession(
                 status = when (rangeResult.reason) {
                     LanScanRejectionReason.VPN_BLOCKED ->
                         LanScanStatus.VPN_BLOCKED
+
+                    LanScanRejectionReason.INVALID_CUSTOM_RANGE ->
+                        LanScanStatus.ERROR
 
                     else -> LanScanStatus.UNSUPPORTED_NETWORK
                 },

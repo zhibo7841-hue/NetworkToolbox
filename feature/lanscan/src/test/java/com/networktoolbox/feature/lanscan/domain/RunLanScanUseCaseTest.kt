@@ -11,6 +11,7 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanHostProbeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
+import com.networktoolbox.feature.lanscan.domain.model.LanScanRangeSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -106,6 +107,31 @@ class RunLanScanUseCaseTest {
         assertTrue(record.summary.contains("192.168.1.0/24"))
         assertTrue(record.detailJson.contains("\"isGateway\":true"))
         assertTrue(record.detailJson.contains("\"rangeWasLimited\":false"))
+    }
+
+    @Test
+    fun `custom range history preserves inclusive range and source`() {
+        val context = context()
+        val range = (LanCustomRangeCalculator().calculate("192.168.1.10", "192.168.1.20")
+            as LanCustomRangeResult.Valid).range
+        val session = LanScanSession(
+            status = LanScanStatus.COMPLETED,
+            initialNetworkContext = context,
+            range = range,
+            scannedHosts = 11,
+            totalHosts = 11,
+            discoveredDevices = emptyList(),
+            startedAt = 0,
+            finishedAt = 50,
+        )
+
+        val record = LanScanHistorySerializer.toHistoryRecord(session)
+
+        assertEquals(LanScanRangeSource.CUSTOM, range.rangeSource)
+        assertTrue(record.summary.contains("192.168.1.10 - 192.168.1.20"))
+        assertTrue(record.detailJson.contains("\"range\":\"192.168.1.10 - 192.168.1.20\""))
+        assertTrue(record.detailJson.contains("\"rangeSource\":\"CUSTOM\""))
+        assertTrue(record.detailJson.contains("\"originalRange\":\"192.168.1.10 - 192.168.1.20\""))
     }
 
     private class FakeNetworkRepository(

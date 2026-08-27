@@ -3,6 +3,7 @@ package com.networktoolbox.feature.lanscan.presentation
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
+import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
@@ -61,6 +62,89 @@ class LanScannerViewModelTest {
         val state = viewModel.uiState.value as LanScannerUiState.Ready
         assertEquals("192.168.1.0/30", state.range.cidr)
         assertEquals(2, state.range.hostCount)
+        assertEquals(LanScanRangeMode.CURRENT_NETWORK, state.rangeMode)
+    }
+
+    @Test
+    fun `custom mode is prefilled and edited values survive mode switches`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val viewModel = viewModel(readiness(context))
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+
+        var state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals("192.168.1.1", state.customStartAddress)
+        assertEquals("192.168.1.254", state.customEndAddress)
+        assertTrue(state.customRangeResult is LanCustomRangeResult.Valid)
+
+        viewModel.onCustomStartAddressChanged("192.168.1.10")
+        viewModel.onCustomEndAddressChanged("192.168.1.20")
+        viewModel.selectRangeMode(LanScanRangeMode.CURRENT_NETWORK)
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+
+        state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals("192.168.1.10", state.customStartAddress)
+        assertEquals("192.168.1.20", state.customEndAddress)
+        assertEquals(
+            11,
+            (state.customRangeResult as LanCustomRangeResult.Valid).range.hostCount,
+        )
+    }
+
+    @Test
+    fun `invalid custom range remains ready but cannot start a scan`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val viewModel = viewModel(readiness(context))
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        viewModel.onCustomStartAddressChanged("192.168.1.100")
+        viewModel.onCustomEndAddressChanged("192.168.1.10")
+        viewModel.startScan()
+
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertTrue(state.customRangeResult is LanCustomRangeResult.Invalid)
+        assertEquals(
+            com.networktoolbox.feature.lanscan.domain.LanCustomRangeError.START_AFTER_END,
+            (state.customRangeResult as LanCustomRangeResult.Invalid).reason,
+        )
+    }
+
+    @Test
+    fun `custom scan passes the selected range and retry keeps it`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val ranges = mutableListOf<com.networktoolbox.feature.lanscan.domain.model.LanScanRange>()
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession = error("automatic range should not be used")
+
+            override suspend fun invokeWithRange(
+                range: com.networktoolbox.feature.lanscan.domain.model.LanScanRange,
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                ranges += range
+                return session(context, range, emptyList())
+            }
+        }
+        val viewModel = viewModel(readiness(context), runner)
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        viewModel.onCustomStartAddressChanged("192.168.1.10")
+        viewModel.onCustomEndAddressChanged("192.168.1.20")
+        viewModel.startScan()
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+
+        assertEquals(2, ranges.size)
+        assertEquals("192.168.1.10", ranges[0].firstHost)
+        assertEquals("192.168.1.20", ranges[0].lastHost)
+        assertEquals(ranges[0], ranges[1])
     }
 
     @Test

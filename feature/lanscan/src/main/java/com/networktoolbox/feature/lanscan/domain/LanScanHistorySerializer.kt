@@ -3,6 +3,7 @@ package com.networktoolbox.feature.lanscan.domain
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
+import com.networktoolbox.feature.lanscan.domain.model.LanScanRangeSource
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 
@@ -12,7 +13,7 @@ object LanScanHistorySerializer {
             "Only completed LAN scans can be saved to history."
         }
         val range = requireNotNull(session.range)
-        val summary = "${range.cidr} · 发现 ${session.discoveredDevices.size} 台设备"
+        val summary = "${range.displayLabel} · 发现 ${session.discoveredDevices.size} 台设备"
         return HistoryRecord(
             timestamp = session.finishedAt,
             type = HistoryType.LAN_SCAN,
@@ -27,8 +28,15 @@ object LanScanHistorySerializer {
         return jsonObject(
             "schemaVersion" to "1",
             "status" to jsonString(session.status.name),
-            "range" to jsonString(range.cidr),
-            "originalRange" to jsonString(range.originalCidr),
+            "range" to jsonString(range.displayLabel),
+            "rangeSource" to jsonString(range.rangeSource.name),
+            "originalRange" to jsonString(
+                if (range.rangeSource == LanScanRangeSource.CUSTOM) {
+                    range.displayLabel
+                } else {
+                    range.originalCidr
+                },
+            ),
             "rangeWasLimited" to session.rangeWasLimited.toString(),
             "scannedHosts" to session.scannedHosts.toString(),
             "totalHosts" to session.totalHosts.toString(),

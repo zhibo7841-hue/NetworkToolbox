@@ -28,6 +28,12 @@ enum class LanScanRejectionReason {
     INVALID_PREFIX,
     SPECIAL_PREFIX,
     NON_LOCAL_RANGE,
+    INVALID_CUSTOM_RANGE,
+}
+
+enum class LanScanRangeSource {
+    AUTO_NETWORK,
+    CUSTOM,
 }
 
 data class LanScanProbeConfig(
@@ -69,6 +75,7 @@ data class LanScanProbeConfig(
 data class LanScanRequest(
     val networkContext: NetworkContext,
     val probeConfig: LanScanProbeConfig = LanScanProbeConfig(),
+    val requestedRange: LanScanRange? = null,
 )
 
 data class LanScanRange(
@@ -83,9 +90,16 @@ data class LanScanRange(
     val originalHostCount: Long,
     val originalPrefixLength: Int,
     val rangeWasLimited: Boolean,
+    val rangeSource: LanScanRangeSource = LanScanRangeSource.AUTO_NETWORK,
 ) {
     val cidr: String
         get() = "$networkAddress/$prefixLength"
+
+    val displayLabel: String
+        get() = when (rangeSource) {
+            LanScanRangeSource.AUTO_NETWORK -> cidr
+            LanScanRangeSource.CUSTOM -> "$firstHost - $lastHost"
+        }
 
     val originalCidr: String
         get() = "$originalNetworkAddress/$originalPrefixLength"

@@ -6,6 +6,7 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanHostProbeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanScanProbeConfig
+import com.networktoolbox.feature.lanscan.domain.model.LanScanRangeSource
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRequest
 import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import java.util.concurrent.atomic.AtomicInteger
@@ -19,6 +20,60 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DefaultLanDiscoveryEngineTest {
+    @Test
+    fun `custom request probes only the inclusive requested range`() = runTest {
+        val probedHosts = mutableListOf<String>()
+        val customRange = (LanCustomRangeCalculator().calculate("10.0.1.10", "10.0.1.20")
+            as LanCustomRangeResult.Valid).range
+        val context = context("10.0.1.206", 24, gateway = "10.0.1.1")
+        val engine = DefaultLanDiscoveryEngine(
+            hostProbe = LanHostProbe { ipAddress, _ ->
+                probedHosts += ipAddress
+                LanHostProbeResult(ipAddress)
+            },
+        )
+
+        val session = engine.scan(
+            request = LanScanRequest(
+                networkContext = context,
+                probeConfig = LanScanProbeConfig(maxConcurrency = 1),
+                requestedRange = customRange,
+            ),
+            currentNetworkContext = { context },
+        )
+
+        assertEquals(LanScanStatus.COMPLETED, session.status)
+        assertEquals(customRange, session.range)
+        assertEquals(LanScanRangeSource.CUSTOM, session.range?.rangeSource)
+        assertEquals((10..20).map { "10.0.1.$it" }, probedHosts.sortedWith(compareBy { it.substringAfterLast('.').toInt() }))
+        assertTrue("10.0.1.9" !in probedHosts)
+        assertTrue("10.0.1.21" !in probedHosts)
+    }
+
+    @Test
+    fun `custom range keeps local and gateway markers only when in range`() = runTest {
+        val probedHosts = mutableListOf<String>()
+        val context = context("192.168.1.206", 24, gateway = "192.168.1.1")
+        val customRange = (LanCustomRangeCalculator().calculate("192.168.1.1", "192.168.1.254")
+            as LanCustomRangeResult.Valid).range
+        val engine = DefaultLanDiscoveryEngine(
+            hostProbe = LanHostProbe { ipAddress, _ ->
+                probedHosts += ipAddress
+                LanHostProbeResult(ipAddress)
+            },
+        )
+
+        val session = engine.scan(
+            request = LanScanRequest(context, requestedRange = customRange),
+            currentNetworkContext = { context },
+        )
+
+        assertTrue(session.discoveredDevices.any { it.ipAddress == "192.168.1.1" && it.isGateway })
+        assertTrue(session.discoveredDevices.any { it.ipAddress == "192.168.1.206" && it.isLocalDevice })
+        assertTrue("192.168.1.1" !in probedHosts)
+        assertTrue("192.168.1.206" !in probedHosts)
+    }
+
     @Test
     fun `successful reachability adds online device and emits progressive updates`() = runTest {
         val updates = mutableListOf<com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate>()
@@ -334,6 +389,8 @@ class DefaultLanDiscoveryEngineTest {
     @Test
     fun `unsupported cellular and vpn sessions do not invoke host probe`() = runTest {
         val calls = AtomicInteger(0)
+        val customRange = (LanCustomRangeCalculator().calculate("10.0.0.10", "10.0.0.12")
+            as LanCustomRangeResult.Valid).range
         val engine = DefaultLanDiscoveryEngine(
             hostProbe = LanHostProbe { ipAddress, _ ->
                 calls.incrementAndGet()
@@ -349,9 +406,28 @@ class DefaultLanDiscoveryEngineTest {
             LanScanRequest(context("10.0.0.5", 24, null).copy(vpnActive = true)),
             currentNetworkContext = { context("10.0.0.5", 24, null).copy(vpnActive = true) },
         )
+        val cellularCustom = engine.scan(
+            LanScanRequest(
+                networkContext = context("10.0.0.5", 24, null)
+                    .copy(connectionType = ConnectionType.CELLULAR),
+                requestedRange = customRange,
+            ),
+            currentNetworkContext = {
+                context("10.0.0.5", 24, null).copy(connectionType = ConnectionType.CELLULAR)
+            },
+        )
+        val vpnCustom = engine.scan(
+            LanScanRequest(
+                networkContext = context("10.0.0.5", 24, null).copy(vpnActive = true),
+                requestedRange = customRange,
+            ),
+            currentNetworkContext = { context("10.0.0.5", 24, null).copy(vpnActive = true) },
+        )
 
         assertEquals(LanScanStatus.UNSUPPORTED_NETWORK, cellular.status)
         assertEquals(LanScanStatus.VPN_BLOCKED, vpn.status)
+        assertEquals(LanScanStatus.UNSUPPORTED_NETWORK, cellularCustom.status)
+        assertEquals(LanScanStatus.VPN_BLOCKED, vpnCustom.status)
         assertEquals(0, calls.get())
     }
 

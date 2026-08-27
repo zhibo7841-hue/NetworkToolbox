@@ -4,6 +4,7 @@ import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.feature.lanscan.domain.model.LanScanProbeConfig
+import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRequest
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
@@ -21,6 +22,12 @@ fun interface RunLanScan {
         probeConfig: LanScanProbeConfig,
         onUpdate: (LanScanUpdate) -> Unit,
     ): LanScanSession
+
+    suspend fun invokeWithRange(
+        range: LanScanRange,
+        probeConfig: LanScanProbeConfig,
+        onUpdate: (LanScanUpdate) -> Unit,
+    ): LanScanSession = invoke(probeConfig, onUpdate)
 }
 
 suspend operator fun RunLanScan.invoke(): LanScanSession = invoke(
@@ -37,6 +44,27 @@ class RunLanScanUseCase(
     suspend operator fun invoke(
         probeConfig: LanScanProbeConfig,
         onUpdate: (LanScanUpdate) -> Unit,
+    ): LanScanSession = execute(
+        requestedRange = null,
+        probeConfig = probeConfig,
+        onUpdate = onUpdate,
+    )
+
+    override
+    suspend fun invokeWithRange(
+        range: LanScanRange,
+        probeConfig: LanScanProbeConfig,
+        onUpdate: (LanScanUpdate) -> Unit,
+    ): LanScanSession = execute(
+        requestedRange = range,
+        probeConfig = probeConfig,
+        onUpdate = onUpdate,
+    )
+
+    private suspend fun execute(
+        requestedRange: LanScanRange?,
+        probeConfig: LanScanProbeConfig,
+        onUpdate: (LanScanUpdate) -> Unit,
     ): LanScanSession = coroutineScope {
         val initialContext = networkRepository.observeNetworkContext().first()
         val latestContext = MutableStateFlow<NetworkContext>(initialContext)
@@ -50,6 +78,7 @@ class RunLanScanUseCase(
                 request = LanScanRequest(
                     networkContext = initialContext,
                     probeConfig = probeConfig,
+                    requestedRange = requestedRange,
                 ),
                 currentNetworkContext = { latestContext.value },
                 onUpdate = onUpdate,

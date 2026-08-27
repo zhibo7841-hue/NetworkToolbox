@@ -2,6 +2,8 @@ package com.networktoolbox.feature.lanscan.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
+import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
@@ -33,6 +35,12 @@ class LanScannerViewModel @Inject constructor(
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
     private val stopRequested = AtomicBoolean(false)
+    private val customRangeCalculator = LanCustomRangeCalculator()
+    private var rangeMode = LanScanRangeMode.CURRENT_NETWORK
+    private var customRangeInitialized = false
+    private var customStartAddress = ""
+    private var customEndAddress = ""
+    private var customRangeResult: LanCustomRangeResult = LanCustomRangeResult.Incomplete
 
     init {
         viewModelScope.launch {
@@ -55,7 +63,13 @@ class LanScannerViewModel @Inject constructor(
             )
             return
         }
-        val range = (readiness.rangeResult as? LanScanRangeResult.Ready)?.range
+        val range = when (rangeMode) {
+            LanScanRangeMode.CURRENT_NETWORK ->
+                (readiness.rangeResult as? LanScanRangeResult.Ready)?.range
+
+            LanScanRangeMode.CUSTOM ->
+                (customRangeResult as? LanCustomRangeResult.Valid)?.range
+        }
         if (range == null) {
             _uiState.value = readiness.toUiState()
             return
@@ -79,15 +93,18 @@ class LanScannerViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             val currentJob = coroutineContext[Job]
             try {
-                val session = runScan(
-                    probeConfig = LanScanProbeConfig(),
-                    onUpdate = { update ->
-                        if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
-                            val current = _uiState.value as LanScannerUiState.Scanning
-                            _uiState.value = current.copy(update = update)
-                        }
-                    },
-                )
+                val session = if (rangeMode == LanScanRangeMode.CUSTOM) {
+                    runScan.invokeWithRange(
+                        range = range,
+                        probeConfig = LanScanProbeConfig(),
+                        onUpdate = ::publishScanUpdate,
+                    )
+                } else {
+                    runScan(
+                        probeConfig = LanScanProbeConfig(),
+                        onUpdate = ::publishScanUpdate,
+                    )
+                }
                 if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
                     _uiState.value = session.toUiState()
                 }
@@ -104,6 +121,39 @@ class LanScannerViewModel @Inject constructor(
                 if (scanJob === currentJob) scanJob = null
             }
         }
+    }
+
+    fun selectRangeMode(mode: LanScanRangeMode) {
+        if (scanJob?.isActive == true) return
+
+        if (mode == LanScanRangeMode.CUSTOM && !customRangeInitialized) {
+            val automaticRange = (latestReadiness?.rangeResult as? LanScanRangeResult.Ready)?.range
+            customStartAddress = automaticRange?.firstHost.orEmpty()
+            customEndAddress = automaticRange?.lastHost.orEmpty()
+            customRangeResult = customRangeCalculator.calculate(
+                startInput = customStartAddress,
+                endInput = customEndAddress,
+            )
+            customRangeInitialized = true
+        }
+        rangeMode = mode
+        publishReadinessState()
+    }
+
+    fun onCustomStartAddressChanged(value: String) {
+        if (scanJob?.isActive == true) return
+        customRangeInitialized = true
+        customStartAddress = value
+        recalculateCustomRange()
+        publishReadinessState()
+    }
+
+    fun onCustomEndAddressChanged(value: String) {
+        if (scanJob?.isActive == true) return
+        customRangeInitialized = true
+        customEndAddress = value
+        recalculateCustomRange()
+        publishReadinessState()
     }
 
     fun stopScan() {
@@ -162,6 +212,47 @@ class LanScannerViewModel @Inject constructor(
             finishedAt = System.currentTimeMillis(),
             errorMessage = "扫描已停止。",
         )
+
+    private fun publishScanUpdate(update: LanScanUpdate) {
+        if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
+            val current = _uiState.value as LanScannerUiState.Scanning
+            _uiState.value = current.copy(update = update)
+        }
+    }
+
+    private fun recalculateCustomRange() {
+        customRangeResult = customRangeCalculator.calculate(
+            startInput = customStartAddress,
+            endInput = customEndAddress,
+        )
+    }
+
+    private fun publishReadinessState() {
+        latestReadiness?.let { readiness ->
+            _uiState.value = readiness.toUiState()
+        }
+    }
+
+    private fun LanScanReadiness.toUiState(): LanScannerUiState = when (val result = rangeResult) {
+        is LanScanRangeResult.Ready -> LanScannerUiState.Ready(
+            readiness = this,
+            range = result.range,
+            rangeMode = rangeMode,
+            customStartAddress = customStartAddress,
+            customEndAddress = customEndAddress,
+            customRangeResult = customRangeResult,
+        )
+
+        is LanScanRangeResult.Rejected -> when (result.reason) {
+            com.networktoolbox.feature.lanscan.domain.model.LanScanRejectionReason.VPN_BLOCKED ->
+                LanScannerUiState.VpnBlocked(this, result.message)
+
+            com.networktoolbox.feature.lanscan.domain.model.LanScanRejectionReason.UNSUPPORTED_NETWORK ->
+                LanScannerUiState.UnsupportedNetwork(this, result.message)
+
+            else -> LanScannerUiState.Error(result.message, this)
+        }
+    }
 }
 
 private fun LanScannerUiState.canRefreshReadiness(): Boolean = when (this) {
@@ -177,17 +268,4 @@ private fun LanScannerUiState.canRefreshReadiness(): Boolean = when (this) {
     is LanScannerUiState.Cancelled,
     is LanScannerUiState.NetworkChanged,
     -> false
-}
-
-private fun LanScanReadiness.toUiState(): LanScannerUiState = when (val result = rangeResult) {
-    is LanScanRangeResult.Ready -> LanScannerUiState.Ready(this, result.range)
-    is LanScanRangeResult.Rejected -> when (result.reason) {
-        com.networktoolbox.feature.lanscan.domain.model.LanScanRejectionReason.VPN_BLOCKED ->
-            LanScannerUiState.VpnBlocked(this, result.message)
-
-        com.networktoolbox.feature.lanscan.domain.model.LanScanRejectionReason.UNSUPPORTED_NETWORK ->
-            LanScannerUiState.UnsupportedNetwork(this, result.message)
-
-        else -> LanScannerUiState.Error(result.message, this)
-    }
 }
