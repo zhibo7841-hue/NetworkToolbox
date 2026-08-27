@@ -9,7 +9,9 @@ import com.networktoolbox.core.network.ping.PingMethod
 import com.networktoolbox.core.network.tcp.TcpPortChecker
 import com.networktoolbox.core.network.tcp.TcpProbeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
+import com.networktoolbox.feature.lanscan.domain.model.LanReachabilityOutcome
 import com.networktoolbox.feature.lanscan.domain.model.LanScanProbeConfig
+import com.networktoolbox.feature.lanscan.domain.model.LanTcpOutcome
 import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -177,6 +179,35 @@ class AndroidLanHostProbeTest {
             assertEquals(listOf(80, 443, 22), checkedPorts)
             assertEquals(22, result.evidence.single().successfulPort)
         }
+
+    @Test
+    fun `host probe trace preserves reachability and tcp outcomes`() = kotlinx.coroutines.test.runTest {
+        val probe = AndroidLanHostProbe(
+            pingSessionEngine = FakePingSessionEngine(pingResult(success = false)),
+            tcpPortChecker = FakeTcpPortChecker(
+                checkedPorts = CopyOnWriteArrayList(),
+                response = { host, port, _ ->
+                    when (port) {
+                        80 -> TcpProbeResult(host, port, false, null, "Connection refused")
+                        443 -> TcpProbeResult(host, port, false, null, "Timeout")
+                        22 -> TcpProbeResult(host, port, true, 9, null)
+                        else -> TcpProbeResult(host, port, false, null, "Unknown error")
+                    }
+                },
+            ),
+        )
+
+        val trace = probe.probeWithTrace("192.168.1.17", LanScanProbeConfig())
+
+        assertEquals(LanReachabilityOutcome.FAILURE, trace.reachability.outcome)
+        assertEquals(
+            listOf(LanTcpOutcome.REFUSED, LanTcpOutcome.TIMEOUT, LanTcpOutcome.OPEN),
+            trace.tcpProbes.map { it.outcome },
+        )
+        assertTrue(trace.discovered)
+        assertEquals(LanDiscoveryMethod.TCP, trace.discoveryMethod)
+        assertEquals(22, trace.successfulPort)
+    }
 
     @Test
     fun `all fallback ports failing produces no discovered evidence`() =

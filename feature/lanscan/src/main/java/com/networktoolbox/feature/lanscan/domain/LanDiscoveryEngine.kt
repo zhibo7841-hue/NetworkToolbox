@@ -6,10 +6,12 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanHostProbeResult
+import com.networktoolbox.feature.lanscan.domain.model.LanHostProbeTrace
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRequest
 import com.networktoolbox.feature.lanscan.domain.model.LanScanProbeConfig
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRejectionReason
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
+import com.networktoolbox.feature.lanscan.domain.model.LanScanStatistics
 import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate
 import java.util.concurrent.CancellationException
@@ -29,6 +31,13 @@ fun interface LanHostProbe {
         ipAddress: String,
         config: LanScanProbeConfig,
     ): LanHostProbeResult
+}
+
+interface LanHostProbeTraceProvider {
+    suspend fun probeWithTrace(
+        ipAddress: String,
+        config: LanScanProbeConfig,
+    ): LanHostProbeTrace
 }
 
 fun interface LanScanClock {
@@ -84,6 +93,19 @@ class DefaultLanDiscoveryEngine(
         val discovered = linkedMapOf<String, LanDevice>()
         val stateMutex = Mutex()
         var scannedHosts = 0
+        var knownLocalCount = 0
+        var knownGatewayCount = 0
+        var reachabilityDiscoveredCount = 0
+        var tcpDiscoveredCount = 0
+        var notDiscoveredCount = 0
+
+        fun statistics(): LanScanStatistics = LanScanStatistics(
+            knownLocalCount = knownLocalCount,
+            knownGatewayCount = knownGatewayCount,
+            reachabilityDiscoveredCount = reachabilityDiscoveredCount,
+            tcpDiscoveredCount = tcpDiscoveredCount,
+            notDiscoveredCount = notDiscoveredCount,
+        )
 
         fun currentUpdate(
             status: LanScanStatus,
@@ -104,6 +126,16 @@ class DefaultLanDiscoveryEngine(
                 scannedHosts += 1
                 outcome.device?.let { device ->
                     discovered[device.ipAddress] = mergeDevice(discovered[device.ipAddress], device)
+                    if (device.isLocalDevice) knownLocalCount += 1
+                    if (device.isGateway) knownGatewayCount += 1
+                    if (LanDiscoveryMethod.REACHABILITY in device.discoveryMethods) {
+                        reachabilityDiscoveredCount += 1
+                    }
+                    if (LanDiscoveryMethod.TCP in device.discoveryMethods) {
+                        tcpDiscoveredCount += 1
+                    }
+                } ?: run {
+                    notDiscoveredCount += 1
                 }
                 onUpdate(currentUpdate(LanScanStatus.SCANNING, outcome.device))
             }
@@ -155,6 +187,7 @@ class DefaultLanDiscoveryEngine(
                 discoveredDevices = discovered.values.sortedForDisplay(),
                 startedAt = startedAt,
                 finishedAt = finishedAt,
+                statistics = statistics(),
             )
             onUpdate(session.toUpdate())
             return session
@@ -170,6 +203,7 @@ class DefaultLanDiscoveryEngine(
                 startedAt = startedAt,
                 finishedAt = finishedAt,
                 errorMessage = "The active network changed during the scan.",
+                statistics = statistics(),
             )
             onUpdate(session.toUpdate())
             return session
@@ -185,6 +219,7 @@ class DefaultLanDiscoveryEngine(
                 startedAt = startedAt,
                 finishedAt = finishedAt,
                 errorMessage = "The scan was cancelled.",
+                statistics = statistics(),
             )
             onUpdate(session.toUpdate())
             return session
@@ -200,6 +235,7 @@ class DefaultLanDiscoveryEngine(
                 startedAt = startedAt,
                 finishedAt = finishedAt,
                 errorMessage = "The scan was cancelled.",
+                statistics = statistics(),
             )
             onUpdate(session.toUpdate())
             return session
@@ -215,6 +251,7 @@ class DefaultLanDiscoveryEngine(
                 startedAt = startedAt,
                 finishedAt = finishedAt,
                 errorMessage = error.message ?: "LAN scan failed.",
+                statistics = statistics(),
             )
             onUpdate(session.toUpdate())
             return session

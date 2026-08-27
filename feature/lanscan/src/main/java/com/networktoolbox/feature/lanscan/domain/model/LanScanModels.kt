@@ -60,7 +60,7 @@ data class LanScanProbeConfig(
     companion object {
         const val DEFAULT_REACHABILITY_TIMEOUT_MS: Int = 500
         const val DEFAULT_TCP_TIMEOUT_MS: Int = 250
-        const val DEFAULT_MAX_CONCURRENCY: Int = 16
+        const val DEFAULT_MAX_CONCURRENCY: Int = 32
         const val MAX_CONCURRENCY: Int = 32
         val DEFAULT_TCP_FALLBACK_PORTS: List<Int> = listOf(80, 443, 22, 445, 53, 9_100)
     }
@@ -127,6 +127,50 @@ data class LanHostProbeResult(
         get() = evidence.firstNotNullOfOrNull(LanDeviceEvidence::latencyMs)
 }
 
+enum class LanReachabilityOutcome {
+    SUCCESS,
+    TIMEOUT,
+    FAILURE,
+}
+
+enum class LanTcpOutcome {
+    OPEN,
+    REFUSED,
+    TIMEOUT,
+    UNREACHABLE,
+    FAILURE,
+}
+
+data class LanReachabilityTrace(
+    val outcome: LanReachabilityOutcome,
+    val latencyMs: Long? = null,
+    val errorMessage: String? = null,
+)
+
+data class LanTcpProbeTrace(
+    val port: Int,
+    val outcome: LanTcpOutcome,
+    val latencyMs: Long? = null,
+    val errorMessage: String? = null,
+)
+
+data class LanHostProbeTrace(
+    val ipAddress: String,
+    val reachability: LanReachabilityTrace,
+    val tcpProbes: List<LanTcpProbeTrace> = emptyList(),
+    val discovered: Boolean,
+    val discoveryMethod: LanDiscoveryMethod? = null,
+    val successfulPort: Int? = null,
+)
+
+data class LanScanStatistics(
+    val knownLocalCount: Int = 0,
+    val knownGatewayCount: Int = 0,
+    val reachabilityDiscoveredCount: Int = 0,
+    val tcpDiscoveredCount: Int = 0,
+    val notDiscoveredCount: Int = 0,
+)
+
 data class LanScanUpdate(
     val status: LanScanStatus,
     val scannedHosts: Int,
@@ -150,6 +194,7 @@ data class LanScanSession(
     val rejectionReason: LanScanRejectionReason? = null,
     val errorMessage: String? = null,
     val networkChanged: Boolean = status == LanScanStatus.NETWORK_CHANGED,
+    val statistics: LanScanStatistics = LanScanStatistics(),
 ) {
     val elapsedMs: Long
         get() = (finishedAt - startedAt).coerceAtLeast(0L)

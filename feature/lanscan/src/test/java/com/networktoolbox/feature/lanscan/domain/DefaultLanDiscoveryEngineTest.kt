@@ -150,6 +150,133 @@ class DefaultLanDiscoveryEngineTest {
     }
 
     @Test
+    fun `default worker pool stays within the hard concurrency ceiling`() = runTest {
+        val active = AtomicInteger(0)
+        val maxActive = AtomicInteger(0)
+        val engine = DefaultLanDiscoveryEngine(
+            hostProbe = LanHostProbe { ipAddress, _ ->
+                val current = active.incrementAndGet()
+                maxActive.updateAndGet { maxOf(it, current) }
+                delay(2)
+                active.decrementAndGet()
+                LanHostProbeResult(ipAddress)
+            },
+        )
+
+        val session = engine.scan(
+            request = LanScanRequest(
+                networkContext = context("10.0.0.200", 24, gateway = null),
+                probeConfig = LanScanProbeConfig(),
+            ),
+            currentNetworkContext = { context("10.0.0.200", 24, gateway = null) },
+        )
+
+        assertEquals(LanScanStatus.COMPLETED, session.status)
+        assertEquals(32, LanScanProbeConfig.DEFAULT_MAX_CONCURRENCY)
+        assertTrue(maxActive.get() <= LanScanProbeConfig.MAX_CONCURRENCY)
+    }
+
+    @Test
+    fun `scan statistics separate context reachability tcp and undiscovered hosts`() = runTest {
+        val engine = DefaultLanDiscoveryEngine(
+            hostProbe = LanHostProbe { ipAddress, _ ->
+                when (ipAddress.substringAfterLast('.').toInt()) {
+                    3, 4 -> LanHostProbeResult(
+                        ipAddress,
+                        listOf(LanDeviceEvidence(LanDiscoveryMethod.REACHABILITY, latencyMs = 10)),
+                    )
+
+                    5 -> LanHostProbeResult(
+                        ipAddress,
+                        listOf(LanDeviceEvidence(LanDiscoveryMethod.TCP, successfulPort = 9_100)),
+                    )
+
+                    else -> LanHostProbeResult(ipAddress)
+                }
+            },
+        )
+
+        val session = engine.scan(
+            request = LanScanRequest(
+                networkContext = context("192.168.1.2", 29, gateway = "192.168.1.1"),
+                probeConfig = LanScanProbeConfig(maxConcurrency = 32),
+            ),
+            currentNetworkContext = { context("192.168.1.2", 29, gateway = "192.168.1.1") },
+        )
+
+        assertEquals(1, session.statistics.knownLocalCount)
+        assertEquals(1, session.statistics.knownGatewayCount)
+        assertEquals(2, session.statistics.reachabilityDiscoveredCount)
+        assertEquals(1, session.statistics.tcpDiscoveredCount)
+        assertEquals(1, session.statistics.notDiscoveredCount)
+    }
+
+    @Test
+    fun `tcp refused is not counted while tcp open is counted`() = runTest {
+        val engine = DefaultLanDiscoveryEngine(
+            hostProbe = LanHostProbe { ipAddress, _ ->
+                if (ipAddress == "192.168.1.3") {
+                    LanHostProbeResult(ipAddress)
+                } else if (ipAddress == "192.168.1.4") {
+                    LanHostProbeResult(
+                        ipAddress,
+                        listOf(LanDeviceEvidence(LanDiscoveryMethod.TCP, successfulPort = 443)),
+                    )
+                } else {
+                    LanHostProbeResult(ipAddress)
+                }
+            },
+        )
+
+        val session = engine.scan(
+            request = LanScanRequest(
+                networkContext = context("192.168.1.2", 29, gateway = "192.168.1.1"),
+                probeConfig = LanScanProbeConfig(maxConcurrency = 32),
+            ),
+            currentNetworkContext = { context("192.168.1.2", 29, gateway = "192.168.1.1") },
+        )
+
+        assertEquals(1, session.statistics.tcpDiscoveredCount)
+        assertEquals(3, session.statistics.notDiscoveredCount)
+    }
+
+    @Test
+    fun `concurrency sixteen and thirty two produce the same discovered result`() = runTest {
+        val hostProbe = LanHostProbe { ipAddress, _ ->
+            when (ipAddress.substringAfterLast('.').toInt()) {
+                3, 4 -> LanHostProbeResult(
+                    ipAddress,
+                    listOf(LanDeviceEvidence(LanDiscoveryMethod.REACHABILITY, latencyMs = 10)),
+                )
+
+                5 -> LanHostProbeResult(
+                    ipAddress,
+                    listOf(LanDeviceEvidence(LanDiscoveryMethod.TCP, successfulPort = 443)),
+                )
+
+                else -> LanHostProbeResult(ipAddress)
+            }
+        }
+
+        suspend fun scan(concurrency: Int) = DefaultLanDiscoveryEngine(
+            hostProbe = hostProbe,
+            clock = LanScanClock { 0L },
+        ).scan(
+            request = LanScanRequest(
+                networkContext = context("192.168.1.2", 29, gateway = "192.168.1.1"),
+                probeConfig = LanScanProbeConfig(maxConcurrency = concurrency),
+            ),
+            currentNetworkContext = { context("192.168.1.2", 29, gateway = "192.168.1.1") },
+        )
+
+        val sixteen = scan(16)
+        val thirtyTwo = scan(32)
+
+        assertEquals(sixteen.discoveredDevices, thirtyTwo.discoveredDevices)
+        assertEquals(sixteen.statistics, thirtyTwo.statistics)
+    }
+
+    @Test
     fun `cancellation returns cancelled session and does not start new probes`() = runTest {
         val calls = AtomicInteger(0)
         val engine = DefaultLanDiscoveryEngine(
@@ -162,23 +289,25 @@ class DefaultLanDiscoveryEngineTest {
         val session = engine.scan(
             request = LanScanRequest(
                 networkContext = context("192.168.1.100", 24, gateway = null),
-                probeConfig = LanScanProbeConfig(maxConcurrency = 1),
+                probeConfig = LanScanProbeConfig(),
             ),
             currentNetworkContext = { context("192.168.1.100", 24, gateway = null) },
         )
 
         assertEquals(LanScanStatus.CANCELLED, session.status)
-        assertTrue(calls.get() <= 1)
+        assertTrue(calls.get() <= LanScanProbeConfig.MAX_CONCURRENCY)
         assertTrue(session.scannedHosts == 0)
     }
 
     @Test
     fun `network change stops scan before mixing a second network`() = runTest {
         val changed = AtomicReference(false)
+        val calls = AtomicInteger(0)
         val initial = context("192.168.1.8", 29, gateway = "192.168.1.1")
         val next = context("192.168.2.8", 29, gateway = "192.168.2.1")
         val engine = DefaultLanDiscoveryEngine(
             hostProbe = LanHostProbe { ipAddress, _ ->
+                calls.incrementAndGet()
                 changed.set(true)
                 LanHostProbeResult(
                     ipAddress,
@@ -190,14 +319,15 @@ class DefaultLanDiscoveryEngineTest {
         val session = engine.scan(
             request = LanScanRequest(
                 networkContext = initial,
-                probeConfig = LanScanProbeConfig(maxConcurrency = 1),
+                probeConfig = LanScanProbeConfig(),
             ),
             currentNetworkContext = { if (changed.get()) next else initial },
         )
 
         assertEquals(LanScanStatus.NETWORK_CHANGED, session.status)
         assertTrue(session.networkChanged)
-        assertTrue(session.scannedHosts <= 1)
+        assertTrue(calls.get() <= LanScanProbeConfig.MAX_CONCURRENCY)
+        assertTrue(session.scannedHosts <= calls.get())
         assertFalse(session.discoveredDevices.any { it.ipAddress.startsWith("192.168.2.") })
     }
 
