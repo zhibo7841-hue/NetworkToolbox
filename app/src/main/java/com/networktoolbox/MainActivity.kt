@@ -257,5 +257,6 @@ private fun HistoryType.displayName(): String = when (this) {
     HistoryType.DNS -> "DNS Lookup"
     HistoryType.TCP -> "TCP Port Check"
     HistoryType.REPORT -> "Network Diagnostic"
+    HistoryType.LAN_SCAN -> "LAN Scanner"
     HistoryType.UNKNOWN -> "Other"
 }

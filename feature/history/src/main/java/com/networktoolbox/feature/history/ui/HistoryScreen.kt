@@ -389,6 +389,7 @@ private fun HistoryType.displayName(): String = when (this) {
     HistoryType.DNS -> "DNS 查询"
     HistoryType.TCP -> "TCP 端口检测"
     HistoryType.REPORT -> "网络诊断"
+    HistoryType.LAN_SCAN -> "局域网扫描"
     HistoryType.UNKNOWN -> "其他"
 }
 

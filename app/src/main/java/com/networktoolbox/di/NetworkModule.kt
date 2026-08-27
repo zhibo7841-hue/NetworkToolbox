@@ -1,6 +1,7 @@
 package com.networktoolbox.di
 
 import android.content.Context
+import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.data.AndroidDnsEngine
 import com.networktoolbox.core.network.data.dns.AndroidDnsQueryEngine
 import com.networktoolbox.core.network.data.AndroidNetworkRepository
@@ -19,6 +20,11 @@ import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
 import com.networktoolbox.feature.dns.domain.LookupDnsUseCase
 import com.networktoolbox.feature.ping.domain.ExecutePingUseCase
 import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
+import com.networktoolbox.feature.lanscan.data.AndroidLanHostProbe
+import com.networktoolbox.feature.lanscan.domain.DefaultLanDiscoveryEngine
+import com.networktoolbox.feature.lanscan.domain.LanDiscoveryEngine
+import com.networktoolbox.feature.lanscan.domain.LanHostProbe
+import com.networktoolbox.feature.lanscan.domain.RunLanScanUseCase
 import com.networktoolbox.feature.report.diagnostic.BasicDiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.DiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticAnalyzerV2
@@ -71,6 +77,34 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideTcpPortChecker(): TcpPortChecker = AndroidTcpPortChecker()
+
+    @Provides
+    @Singleton
+    fun provideLanHostProbe(
+        pingSessionEngine: PingSessionEngine,
+        tcpPortChecker: TcpPortChecker,
+    ): LanHostProbe = AndroidLanHostProbe(
+        pingSessionEngine = pingSessionEngine,
+        tcpPortChecker = tcpPortChecker,
+    )
+
+    @Provides
+    @Singleton
+    fun provideLanDiscoveryEngine(
+        hostProbe: LanHostProbe,
+    ): LanDiscoveryEngine = DefaultLanDiscoveryEngine(hostProbe)
+
+    @Provides
+    @Singleton
+    fun provideRunLanScanUseCase(
+        networkRepository: NetworkRepository,
+        discoveryEngine: LanDiscoveryEngine,
+        historyRecorder: HistoryRecorder,
+    ): RunLanScanUseCase = RunLanScanUseCase(
+        networkRepository = networkRepository,
+        discoveryEngine = discoveryEngine,
+        historyRecorder = historyRecorder,
+    )
 
     @Provides
     @Singleton

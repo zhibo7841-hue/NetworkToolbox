@@ -5,5 +5,6 @@ enum class HistoryType {
     DNS,
     TCP,
     REPORT,
+    LAN_SCAN,
     UNKNOWN,
 }

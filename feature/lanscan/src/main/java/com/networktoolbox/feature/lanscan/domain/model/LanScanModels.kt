@@ -1,0 +1,167 @@
+package com.networktoolbox.feature.lanscan.domain.model
+
+import com.networktoolbox.core.network.model.NetworkContext
+
+enum class LanScanStatus {
+    IDLE,
+    SCANNING,
+    COMPLETED,
+    CANCELLED,
+    NETWORK_CHANGED,
+    UNSUPPORTED_NETWORK,
+    VPN_BLOCKED,
+    ERROR,
+}
+
+enum class LanDiscoveryMethod {
+    REACHABILITY,
+    TCP,
+    LOCAL_CONTEXT,
+    GATEWAY_CONTEXT,
+}
+
+enum class LanScanRejectionReason {
+    NO_ACTIVE_NETWORK,
+    UNSUPPORTED_NETWORK,
+    VPN_BLOCKED,
+    NO_IPV4_ADDRESS,
+    INVALID_PREFIX,
+    SPECIAL_PREFIX,
+    NON_LOCAL_RANGE,
+}
+
+data class LanScanProbeConfig(
+    val reachabilityTimeoutMs: Int = DEFAULT_REACHABILITY_TIMEOUT_MS,
+    val tcpTimeoutMs: Int = DEFAULT_TCP_TIMEOUT_MS,
+    val tcpFallbackPorts: List<Int> = DEFAULT_TCP_FALLBACK_PORTS,
+    val maxConcurrency: Int = DEFAULT_MAX_CONCURRENCY,
+) {
+    init {
+        require(reachabilityTimeoutMs > 0) {
+            "Reachability timeout must be greater than zero."
+        }
+        require(tcpTimeoutMs > 0) {
+            "TCP timeout must be greater than zero."
+        }
+        require(tcpFallbackPorts.isNotEmpty()) {
+            "At least one TCP fallback port is required."
+        }
+        require(tcpFallbackPorts.all { it in 1..65_535 }) {
+            "TCP fallback ports must be valid."
+        }
+        require(tcpFallbackPorts.distinct().size == tcpFallbackPorts.size) {
+            "TCP fallback ports must be unique."
+        }
+        require(maxConcurrency in 1..MAX_CONCURRENCY) {
+            "Concurrency must be between 1 and $MAX_CONCURRENCY."
+        }
+    }
+
+    companion object {
+        const val DEFAULT_REACHABILITY_TIMEOUT_MS: Int = 500
+        const val DEFAULT_TCP_TIMEOUT_MS: Int = 250
+        const val DEFAULT_MAX_CONCURRENCY: Int = 16
+        const val MAX_CONCURRENCY: Int = 32
+        val DEFAULT_TCP_FALLBACK_PORTS: List<Int> = listOf(80, 443, 22, 445, 53, 9_100)
+    }
+}
+
+data class LanScanRequest(
+    val networkContext: NetworkContext,
+    val probeConfig: LanScanProbeConfig = LanScanProbeConfig(),
+)
+
+data class LanScanRange(
+    val networkAddress: String,
+    val broadcastAddress: String,
+    val firstHost: String,
+    val lastHost: String,
+    val hostCount: Int,
+    val prefixLength: Int,
+    val originalNetworkAddress: String,
+    val originalBroadcastAddress: String,
+    val originalHostCount: Long,
+    val originalPrefixLength: Int,
+    val rangeWasLimited: Boolean,
+) {
+    val cidr: String
+        get() = "$networkAddress/$prefixLength"
+
+    val originalCidr: String
+        get() = "$originalNetworkAddress/$originalPrefixLength"
+
+    fun hostAddresses(): List<String> = if (hostCount <= 0) {
+        emptyList()
+    } else {
+        (firstHost.toIpv4Number()..lastHost.toIpv4Number()).map(Long::toIpv4String)
+    }
+}
+
+data class LanDeviceEvidence(
+    val method: LanDiscoveryMethod,
+    val latencyMs: Long? = null,
+    val successfulPort: Int? = null,
+    val detail: String? = null,
+)
+
+data class LanDevice(
+    val ipAddress: String,
+    val macAddress: String? = null,
+    val hostName: String? = null,
+    val isLocalDevice: Boolean,
+    val isGateway: Boolean,
+    val latencyMs: Long? = null,
+    val discoveryMethods: List<LanDiscoveryMethod>,
+    val discoveryEvidence: List<LanDeviceEvidence>,
+    val lastSeen: Long,
+)
+
+data class LanHostProbeResult(
+    val ipAddress: String,
+    val evidence: List<LanDeviceEvidence> = emptyList(),
+) {
+    val hasPositiveEvidence: Boolean
+        get() = evidence.isNotEmpty()
+
+    val latencyMs: Long?
+        get() = evidence.firstNotNullOfOrNull(LanDeviceEvidence::latencyMs)
+}
+
+data class LanScanUpdate(
+    val status: LanScanStatus,
+    val scannedHosts: Int,
+    val totalHosts: Int,
+    val discoveredDevices: List<LanDevice>,
+    val newDevice: LanDevice? = null,
+    val elapsedMs: Long? = null,
+    val message: String? = null,
+)
+
+data class LanScanSession(
+    val status: LanScanStatus,
+    val initialNetworkContext: NetworkContext,
+    val range: LanScanRange?,
+    val scannedHosts: Int,
+    val totalHosts: Int,
+    val discoveredDevices: List<LanDevice>,
+    val startedAt: Long,
+    val finishedAt: Long,
+    val rangeWasLimited: Boolean = range?.rangeWasLimited == true,
+    val rejectionReason: LanScanRejectionReason? = null,
+    val errorMessage: String? = null,
+    val networkChanged: Boolean = status == LanScanStatus.NETWORK_CHANGED,
+) {
+    val elapsedMs: Long
+        get() = (finishedAt - startedAt).coerceAtLeast(0L)
+}
+
+private fun String.toIpv4Number(): Long = split('.').fold(0L) { result, part ->
+    (result shl 8) or part.toLong()
+}
+
+private fun Long.toIpv4String(): String = listOf(
+    (this ushr 24) and 0xFF,
+    (this ushr 16) and 0xFF,
+    (this ushr 8) and 0xFF,
+    this and 0xFF,
+).joinToString(".")
