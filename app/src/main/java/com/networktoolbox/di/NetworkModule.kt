@@ -24,7 +24,11 @@ import com.networktoolbox.feature.lanscan.data.AndroidLanHostProbe
 import com.networktoolbox.feature.lanscan.domain.DefaultLanDiscoveryEngine
 import com.networktoolbox.feature.lanscan.domain.LanDiscoveryEngine
 import com.networktoolbox.feature.lanscan.domain.LanHostProbe
+import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
+import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
+import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadinessUseCase
 import com.networktoolbox.feature.lanscan.domain.RunLanScanUseCase
+import com.networktoolbox.feature.lanscan.domain.RunLanScan
 import com.networktoolbox.feature.report.diagnostic.BasicDiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.DiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticAnalyzerV2
@@ -100,10 +104,24 @@ object NetworkModule {
         networkRepository: NetworkRepository,
         discoveryEngine: LanDiscoveryEngine,
         historyRecorder: HistoryRecorder,
-    ): RunLanScanUseCase = RunLanScanUseCase(
+    ): RunLanScan = RunLanScanUseCase(
         networkRepository = networkRepository,
         discoveryEngine = discoveryEngine,
         historyRecorder = historyRecorder,
+    )
+
+    @Provides
+    @Singleton
+    fun provideLanScanRangeCalculator(): LanScanRangeCalculator = LanScanRangeCalculator()
+
+    @Provides
+    @Singleton
+    fun provideObserveLanScanReadiness(
+        networkRepository: NetworkRepository,
+        rangeCalculator: LanScanRangeCalculator,
+    ): ObserveLanScanReadiness = ObserveLanScanReadinessUseCase(
+        networkRepository = networkRepository,
+        rangeCalculator = rangeCalculator,
     )
 
     @Provides

@@ -16,14 +16,27 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 
+fun interface RunLanScan {
+    suspend operator fun invoke(
+        probeConfig: LanScanProbeConfig,
+        onUpdate: (LanScanUpdate) -> Unit,
+    ): LanScanSession
+}
+
+suspend operator fun RunLanScan.invoke(): LanScanSession = invoke(
+    probeConfig = LanScanProbeConfig(),
+    onUpdate = {},
+)
+
 class RunLanScanUseCase(
     private val networkRepository: NetworkRepository,
     private val discoveryEngine: LanDiscoveryEngine,
     private val historyRecorder: HistoryRecorder,
-) {
+) : RunLanScan {
+    override
     suspend operator fun invoke(
-        probeConfig: LanScanProbeConfig = LanScanProbeConfig(),
-        onUpdate: (LanScanUpdate) -> Unit = {},
+        probeConfig: LanScanProbeConfig,
+        onUpdate: (LanScanUpdate) -> Unit,
     ): LanScanSession = coroutineScope {
         val initialContext = networkRepository.observeNetworkContext().first()
         val latestContext = MutableStateFlow<NetworkContext>(initialContext)

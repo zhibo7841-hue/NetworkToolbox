@@ -38,6 +38,8 @@ import com.networktoolbox.feature.dns.ui.DnsScreen
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.ui.HistoryScreen
+import com.networktoolbox.feature.lanscan.presentation.LanScannerViewModel
+import com.networktoolbox.feature.lanscan.ui.LanScannerScreen
 import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
 import com.networktoolbox.feature.port.presentation.TcpViewModel
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
     private val tcpViewModel: TcpViewModel by viewModels()
     private val reportViewModel: ReportViewModel by viewModels()
     private val subnetViewModel: SubnetViewModel by viewModels()
+    private val lanScannerViewModel: LanScannerViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +76,7 @@ class MainActivity : ComponentActivity() {
             val tcpUiState by tcpViewModel.uiState.collectAsState()
             val reportUiState by reportViewModel.uiState.collectAsState()
             val subnetUiState by subnetViewModel.uiState.collectAsState()
+            val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
             var topLevelDestination by rememberSaveable {
                 mutableStateOf(TopLevelDestination.HOME)
             }
@@ -93,6 +97,9 @@ class MainActivity : ComponentActivity() {
                 }
 
             fun openTool(screen: ToolScreen) {
+                if (toolScreen == ToolScreen.LAN_SCAN && screen != ToolScreen.LAN_SCAN) {
+                    lanScannerViewModel.stopScan()
+                }
                 restoredDiagnosticReport = null
                 topLevelDestination = TopLevelDestination.TOOLS
                 toolScreen = screen
@@ -105,6 +112,7 @@ class MainActivity : ComponentActivity() {
                 if (reportUiState.status is ReportStatus.Running) {
                     reportViewModel.stopCheck()
                 }
+                lanScannerViewModel.stopScan()
                 restoredDiagnosticReport = null
                 topLevelDestination = destination
                 toolScreen = ToolScreen.NONE
@@ -164,6 +172,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenDns = { openTool(ToolScreen.DNS) },
                                     onOpenTcp = { openTool(ToolScreen.TCP) },
                                     onOpenSubnet = { openTool(ToolScreen.SUBNET) },
+                                    onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
                                     onOpenHistory = { openTool(ToolScreen.HISTORY) },
                                 )
@@ -225,6 +234,12 @@ class MainActivity : ComponentActivity() {
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                                 onOpenReport = ::openDiagnosticHistory,
                             )
+                            ToolScreen.LAN_SCAN -> LanScannerScreen(
+                                uiState = lanScannerUiState,
+                                onStartScan = lanScannerViewModel::startScan,
+                                onStopScan = lanScannerViewModel::stopScan,
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                            )
                         }
                     }
                 }
@@ -250,6 +265,7 @@ private enum class ToolScreen {
     TCP,
     REPORT,
     HISTORY,
+    LAN_SCAN,
 }
 
 private fun HistoryType.displayName(): String = when (this) {

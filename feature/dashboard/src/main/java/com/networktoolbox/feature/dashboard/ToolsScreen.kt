@@ -30,6 +30,7 @@ fun ToolsScreen(
     onOpenDns: () -> Unit,
     onOpenTcp: () -> Unit,
     onOpenSubnet: () -> Unit,
+    onOpenLanScan: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
@@ -65,6 +66,7 @@ fun ToolsScreen(
                 subtitle = "计算和分析网络地址",
                 items = listOf(
                     ToolItem(Icons.Outlined.AccountTree, "IPv4子网计算", "计算网络地址", onOpenSubnet),
+                    ToolItem(Icons.Outlined.Lan, "局域网扫描", "发现在线设备", onOpenLanScan),
                 ),
             )
             ToolSection(
