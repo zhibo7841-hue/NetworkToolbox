@@ -41,6 +41,7 @@ class LanScannerViewModel @Inject constructor(
     private var customStartAddress = ""
     private var customEndAddress = ""
     private var customRangeResult: LanCustomRangeResult = LanCustomRangeResult.Incomplete
+    private var lastScanRange: LanScanRange? = null
 
     init {
         viewModelScope.launch {
@@ -54,6 +55,14 @@ class LanScannerViewModel @Inject constructor(
     }
 
     fun startScan() {
+        beginScan(requestedRange = null)
+    }
+
+    fun rescan() {
+        beginScan(requestedRange = lastScanRange)
+    }
+
+    fun modifyRange() {
         if (scanJob?.isActive == true) return
 
         val readiness = latestReadiness
@@ -63,7 +72,20 @@ class LanScannerViewModel @Inject constructor(
             )
             return
         }
-        val range = when (rangeMode) {
+        _uiState.value = readiness.toUiState()
+    }
+
+    private fun beginScan(requestedRange: LanScanRange?) {
+        if (scanJob?.isActive == true) return
+
+        val readiness = latestReadiness
+        if (readiness == null) {
+            _uiState.value = LanScannerUiState.Error(
+                message = "暂时无法读取当前网络状态，请稍后重试。",
+            )
+            return
+        }
+        val range = requestedRange ?: when (rangeMode) {
             LanScanRangeMode.CURRENT_NETWORK ->
                 (readiness.rangeResult as? LanScanRangeResult.Ready)?.range
 
@@ -89,11 +111,12 @@ class LanScannerViewModel @Inject constructor(
             startedAt = System.currentTimeMillis(),
             update = initialUpdate,
         )
+        lastScanRange = range
 
         scanJob = viewModelScope.launch {
             val currentJob = coroutineContext[Job]
             try {
-                val session = if (rangeMode == LanScanRangeMode.CUSTOM) {
+                val session = if (requestedRange != null || rangeMode == LanScanRangeMode.CUSTOM) {
                     runScan.invokeWithRange(
                         range = range,
                         probeConfig = LanScanProbeConfig(),
@@ -105,6 +128,7 @@ class LanScannerViewModel @Inject constructor(
                         onUpdate = ::publishScanUpdate,
                     )
                 }
+                lastScanRange = session.range ?: range
                 if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
                     _uiState.value = session.toUiState()
                 }
@@ -159,6 +183,7 @@ class LanScannerViewModel @Inject constructor(
     fun stopScan() {
         val current = _uiState.value as? LanScannerUiState.Scanning ?: return
         stopRequested.set(true)
+        lastScanRange = current.range
         scanJob?.cancel()
         _uiState.value = LanScannerUiState.Cancelled(
             session = current.toCancelledSession(),

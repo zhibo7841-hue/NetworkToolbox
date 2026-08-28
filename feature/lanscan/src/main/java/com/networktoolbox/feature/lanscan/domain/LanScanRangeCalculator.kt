@@ -68,12 +68,30 @@ class LanScanRangeCalculator(
     ): LanScanRangeResult {
         contextRejection(context)?.let { return it }
         if (range.rangeSource != LanScanRangeSource.CUSTOM) {
-            return LanScanRangeResult.Rejected(
-                reason = LanScanRejectionReason.INVALID_CUSTOM_RANGE,
-                message = "自定义扫描范围无效。",
-            )
+            return invalidCustomRange()
         }
 
+        return validateRequestedRange(range = range, requirePrivateRange = true)
+    }
+
+    fun validateRequestedRange(
+        context: NetworkContext,
+        range: LanScanRange,
+    ): LanScanRangeResult {
+        contextRejection(context)?.let { return it }
+        return validateRequestedRange(
+            range = range,
+            requirePrivateRange = range.rangeSource == LanScanRangeSource.CUSTOM,
+        )
+    }
+
+    private fun validateRequestedRange(
+        range: LanScanRange,
+        requirePrivateRange: Boolean,
+    ): LanScanRangeResult {
+        if (requirePrivateRange && range.rangeSource != LanScanRangeSource.CUSTOM) {
+            return invalidCustomRange()
+        }
         val first = range.firstHost.toIpv4NumberOrNull()
             ?: return invalidCustomRange()
         val last = range.lastHost.toIpv4NumberOrNull()
@@ -82,7 +100,7 @@ class LanScanRangeCalculator(
         if (first > last || count !in 1L..MAX_CUSTOM_HOST_COUNT) {
             return invalidCustomRange()
         }
-        if (!first.isRfc1918() || !last.isRfc1918()) {
+        if (requirePrivateRange && (!first.isRfc1918() || !last.isRfc1918())) {
             return invalidCustomRange()
         }
         if (range.hostCount != count.toInt()) {

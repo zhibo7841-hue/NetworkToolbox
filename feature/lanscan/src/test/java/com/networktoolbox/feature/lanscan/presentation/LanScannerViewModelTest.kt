@@ -112,7 +112,7 @@ class LanScannerViewModelTest {
     }
 
     @Test
-    fun `custom scan passes the selected range and retry keeps it`() = runTest {
+    fun `custom scan passes the selected range and rescan keeps it`() = runTest {
         val context = context("192.168.1.206", 24)
         val ranges = mutableListOf<com.networktoolbox.feature.lanscan.domain.model.LanScanRange>()
         val runner = object : RunLanScan {
@@ -138,13 +138,108 @@ class LanScannerViewModelTest {
         viewModel.onCustomEndAddressChanged("192.168.1.20")
         viewModel.startScan()
         advanceUntilIdle()
-        viewModel.startScan()
+        viewModel.rescan()
         advanceUntilIdle()
 
         assertEquals(2, ranges.size)
         assertEquals("192.168.1.10", ranges[0].firstHost)
         assertEquals("192.168.1.20", ranges[0].lastHost)
         assertEquals(ranges[0], ranges[1])
+    }
+
+    @Test
+    fun `completed custom scan can return to ready with edited values`() = runTest {
+        val context = context("192.168.1.206", 24)
+        var scanCalls = 0
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession = error("automatic range should not be used")
+
+            override suspend fun invokeWithRange(
+                range: com.networktoolbox.feature.lanscan.domain.model.LanScanRange,
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                scanCalls += 1
+                return session(context, range, emptyList())
+            }
+        }
+        val viewModel = viewModel(readiness(context), runner)
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        viewModel.onCustomStartAddressChanged("192.168.1.10")
+        viewModel.onCustomEndAddressChanged("192.168.1.100")
+        viewModel.startScan()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Completed)
+        viewModel.modifyRange()
+
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(LanScanRangeMode.CUSTOM, state.rangeMode)
+        assertEquals("192.168.1.10", state.customStartAddress)
+        assertEquals("192.168.1.100", state.customEndAddress)
+        assertEquals(1, scanCalls)
+    }
+
+    @Test
+    fun `completed automatic scan can return to ready and switch to custom`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val range = readyRange(context)
+        val viewModel = viewModel(
+            readiness(context),
+            fakeRunner(session(context, range, emptyList())),
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Completed)
+
+        viewModel.modifyRange()
+        var state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(LanScanRangeMode.CURRENT_NETWORK, state.rangeMode)
+
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(LanScanRangeMode.CUSTOM, state.rangeMode)
+        assertEquals(range.firstHost, state.customStartAddress)
+        assertEquals(range.lastHost, state.customEndAddress)
+    }
+
+    @Test
+    fun `completed automatic scan rescans the exact previous range`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val range = readyRange(context)
+        val exactRanges = mutableListOf<com.networktoolbox.feature.lanscan.domain.model.LanScanRange>()
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession = session(context, range, emptyList())
+
+            override suspend fun invokeWithRange(
+                range: com.networktoolbox.feature.lanscan.domain.model.LanScanRange,
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                exactRanges += range
+                return session(context, range, emptyList())
+            }
+        }
+        val viewModel = viewModel(readiness(context), runner)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        viewModel.rescan()
+        advanceUntilIdle()
+
+        assertEquals(listOf(range), exactRanges)
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Completed)
     }
 
     @Test
@@ -215,6 +310,9 @@ class LanScannerViewModelTest {
         assertTrue(cancellationObserved.get())
         assertEquals(1, state.session.scannedHosts)
         assertEquals("192.168.1.3", state.session.discoveredDevices.single().ipAddress)
+
+        viewModel.modifyRange()
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Ready)
     }
 
     @Test
@@ -230,6 +328,9 @@ class LanScannerViewModelTest {
 
         assertTrue(viewModel.uiState.value is LanScannerUiState.NetworkChanged)
         assertFalse(viewModel.uiState.value is LanScannerUiState.Error)
+
+        viewModel.modifyRange()
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Ready)
     }
 
     @Test

@@ -39,6 +39,7 @@ fun LanScannerScreen(
     onStopScan: () -> Unit,
     onBack: () -> Unit,
     onRetry: () -> Unit = onStartScan,
+    onModifyRange: () -> Unit = {},
     onRangeModeChanged: (LanScanRangeMode) -> Unit = {},
     onCustomStartAddressChanged: (String) -> Unit = {},
     onCustomEndAddressChanged: (String) -> Unit = {},
@@ -87,6 +88,7 @@ fun LanScannerScreen(
                     session = state.session,
                     actionLabel = "重新扫描",
                     onAction = onRetry,
+                    onModifyRange = onModifyRange,
                 )
 
                 is LanScannerUiState.Cancelled -> SessionContent(
@@ -94,11 +96,13 @@ fun LanScannerScreen(
                     session = state.session,
                     actionLabel = "重新扫描",
                     onAction = onRetry,
+                    onModifyRange = onModifyRange,
                 )
 
                 is LanScannerUiState.NetworkChanged -> NetworkChangedContent(
                     session = state.session,
                     onRetry = onRetry,
+                    onModifyRange = onModifyRange,
                 )
 
                 is LanScannerUiState.UnsupportedNetwork -> UnsupportedContent(
@@ -362,6 +366,7 @@ private fun SessionContent(
     session: LanScanSession,
     actionLabel: String,
     onAction: () -> Unit,
+    onModifyRange: () -> Unit,
 ) {
     StatusCard(
         title = title,
@@ -393,6 +398,9 @@ private fun SessionContent(
     ) {
         Text(actionLabel)
     }
+    TextButton(onClick = onModifyRange) {
+        Text("修改扫描范围 >")
+    }
     DeviceList(session.discoveredDevices)
 }
 
@@ -400,6 +408,7 @@ private fun SessionContent(
 private fun NetworkChangedContent(
     session: LanScanSession,
     onRetry: () -> Unit,
+    onModifyRange: () -> Unit,
 ) {
     StatusCard(
         title = "网络已发生变化",
@@ -414,6 +423,9 @@ private fun NetworkChangedContent(
     )
     OutlinedButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
         Text("重新扫描")
+    }
+    TextButton(onClick = onModifyRange) {
+        Text("修改扫描范围 >")
     }
     DeviceList(session.discoveredDevices)
 }

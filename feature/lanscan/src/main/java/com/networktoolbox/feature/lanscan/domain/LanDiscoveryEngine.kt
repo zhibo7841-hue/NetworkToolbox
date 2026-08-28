@@ -64,7 +64,7 @@ class DefaultLanDiscoveryEngine(
     ): LanScanSession {
         val startedAt = clock.now()
         val rangeResult = request.requestedRange?.let { requestedRange ->
-            rangeCalculator.validateCustom(
+            rangeCalculator.validateRequestedRange(
                 context = request.networkContext,
                 range = requestedRange,
             )

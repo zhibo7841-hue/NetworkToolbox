@@ -239,6 +239,8 @@ class MainActivity : ComponentActivity() {
                                 uiState = lanScannerUiState,
                                 onStartScan = lanScannerViewModel::startScan,
                                 onStopScan = lanScannerViewModel::stopScan,
+                                onRetry = lanScannerViewModel::rescan,
+                                onModifyRange = lanScannerViewModel::modifyRange,
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                                 onRangeModeChanged = lanScannerViewModel::selectRangeMode,
                                 onCustomStartAddressChanged = lanScannerViewModel::onCustomStartAddressChanged,
