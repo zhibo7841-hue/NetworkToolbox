@@ -47,7 +47,7 @@ fun TcpScreen(
                 Text("返回工具")
             }
             Text(
-                text = "TCP Port Check",
+                text = "TCP 端口检测",
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
@@ -122,7 +122,7 @@ private fun TcpResultCard(result: TcpProbeResult) {
             result.errorMessage
                 ?.takeIf { it.isNotBlank() }
                 ?.let { errorMessage ->
-                    ResultRow("Reason", errorMessage)
+                    ResultRow("原因", errorMessage.displayMessage())
                     errorMessage.toExplanation()?.let { explanation ->
                         ResultRow("说明", explanation)
                     }
@@ -169,4 +169,13 @@ private fun String.toExplanation(): String? = when (this) {
     "Timeout" -> "连接没有及时响应。"
     "Unknown error" -> "无法确定连接失败原因。"
     else -> null
+}
+
+private fun String.displayMessage(): String = when (this) {
+    "Connection refused" -> "连接被拒绝"
+    "Timeout" -> "连接超时"
+    "Invalid host." -> "主机地址无效"
+    "Invalid port." -> "端口无效"
+    "Unknown error" -> "未知错误"
+    else -> "无法完成 TCP 端口检测"
 }

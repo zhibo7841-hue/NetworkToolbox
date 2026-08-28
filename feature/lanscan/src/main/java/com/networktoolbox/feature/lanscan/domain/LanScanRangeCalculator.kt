@@ -19,24 +19,24 @@ class LanScanRangeCalculator(
         val address = context.ipv4Address?.toIpv4NumberOrNull()
             ?: return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.NO_IPV4_ADDRESS,
-                message = "No IPv4 address is available for the local network.",
+                message = "当前本地网络未检测到可用的 IPv4 地址。",
             )
         val originalPrefix = context.ipv4PrefixLength
             ?.takeIf { it in 0..32 }
             ?: return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.INVALID_PREFIX,
-                message = "The IPv4 prefix length is unavailable or invalid.",
+                message = "IPv4 前缀长度不可用或无效。",
             )
         if (originalPrefix >= 31) {
             return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.SPECIAL_PREFIX,
-                message = "Point-to-point and host-only prefixes are not scanned automatically.",
+                message = "点对点或主机专用 IPv4 前缀不支持自动扫描。",
             )
         }
         if (!address.isPrivateOrLinkLocal()) {
             return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.NON_LOCAL_RANGE,
-                message = "The IPv4 range is not clearly a local network.",
+                message = "当前 IPv4 范围无法确认属于本地网络。",
             )
         }
 
@@ -113,19 +113,19 @@ class LanScanRangeCalculator(
         if (context.activeNetworkAvailable == false) {
             return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.NO_ACTIVE_NETWORK,
-                message = "No active network is available.",
+                message = "当前没有可用的活动网络。",
             )
         }
         if (context.vpnActive == true || context.connectionType == ConnectionType.VPN) {
             return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.VPN_BLOCKED,
-                message = "LAN scanning is not enabled for VPN networks.",
+                message = "VPN 网络暂不支持局域网扫描。",
             )
         }
         if (context.connectionType !in setOf(ConnectionType.WIFI, ConnectionType.ETHERNET)) {
             return LanScanRangeResult.Rejected(
                 reason = LanScanRejectionReason.UNSUPPORTED_NETWORK,
-                message = "LAN scanning requires Wi-Fi or Ethernet.",
+                message = "局域网扫描需要连接 Wi-Fi 或以太网。",
             )
         }
         return null

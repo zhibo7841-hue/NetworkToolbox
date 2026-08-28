@@ -32,17 +32,17 @@ Detailed implementation acceptance criteria will be defined when Android develop
 
 ## V0.2.0
 
-- Status: Planning
+- Status: Implemented; release-readiness remediation in progress
 - Goal: Network Diagnostic Enhancement
 
-Planned areas:
+Implemented areas:
 
 - History persistence fix.
 - Ping enhancement.
 - DNS enhancement.
 - Diagnostic Report upgrade.
-- LAN Scanner research.
+- LAN Scanner v1, including bounded custom RFC1918 IPv4 scan ranges.
 
-V0.2.0 remains a planning baseline. The LAN Scanner item is limited to technical research in this phase and does not authorize direct implementation.
+The v0.2 implementation remains bounded by the documented privacy, local-first, and evidence-based product principles. It does not include mDNS, UPnP, MAC/OUI identification, device details, Wake-on-LAN, or IPv6 LAN discovery.
 
 V0.3 and V1.0 feature commitments are not defined by this document.

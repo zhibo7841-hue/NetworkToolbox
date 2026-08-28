@@ -19,7 +19,7 @@ class BasicDiagnosticAnalyzer : DiagnosticAnalyzer {
         if (basicConnectivityPassed) {
             findings += DiagnosticFinding(
                 level = FindingLevel.INFO,
-                title = "Network connectivity looks normal",
+                title = "网络连接状态正常",
                 description = "当前网络、解析和目标连通性均通过基础检测。",
             )
         } else if (ping?.success == true) {

@@ -147,6 +147,7 @@ private fun HistoryRecordCard(
     }
     val displayTitle = when {
         isDiagnosticV2 -> "网络诊断"
+        record.type == HistoryType.REPORT && record.title == "Network Diagnostic Report" -> "网络诊断"
         else -> pingDetails?.target ?: dnsDetails?.domain ?: record.title
     }
     val displaySummary = if (record.type == HistoryType.PING) {
@@ -155,7 +156,7 @@ private fun HistoryRecordCard(
             fallback = record.summary,
         )
     } else {
-        dnsDetails?.summary ?: record.summary
+        dnsDetails?.summary ?: record.summary.localizedHistorySummary()
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -312,6 +313,15 @@ private fun DnsHistoryDetails.metricsText(): String? = buildList {
         durationMs?.let { add("$it ms") }
     }
 }.joinToString(" · ").takeIf(String::isNotBlank)
+
+private fun String.localizedHistorySummary(): String = when (this) {
+    "DNS lookup completed" -> "DNS 查询完成"
+    "Ping completed" -> "Ping 检测完成"
+    "Ping failed" -> "Ping 检测失败"
+    "TCP port check completed" -> "TCP 端口检测完成"
+    "TCP port check failed" -> "TCP 端口检测失败"
+    else -> this
+}
 
 private fun String.readJsonString(key: String): String? {
     val marker = "\"$key\":\""

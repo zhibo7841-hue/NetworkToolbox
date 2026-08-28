@@ -18,7 +18,7 @@ class GenerateDiagnosticReportUseCaseTest {
         val report = useCase.invoke { steps += it }
 
         assertEquals("基础网络连接正常", report.summary)
-        assertTrue(report.findings.any { it.title == "Network connectivity looks normal" })
+        assertTrue(report.findings.any { it.title == "网络连接状态正常" })
         assertEquals(
             listOf(
                 ReportStep.NETWORK_INFORMATION,

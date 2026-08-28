@@ -343,7 +343,7 @@ private fun PingResultCard(result: PingSessionResult) {
                 result.errorMessage
                     ?.takeIf { it.isNotBlank() }
                     ?.let { errorMessage ->
-                        ResultRow("原因", errorMessage)
+                        ResultRow("原因", errorMessage.displayMessage())
                         errorMessage.toExplanation()?.let { explanation ->
                             Text(
                                 explanation,
@@ -507,9 +507,23 @@ private fun String.toExplanation(): String? = when (this) {
     "No IPv4 address available." -> "目标没有可用的 IPv4 地址。"
     "No IPv6 address available." -> "目标没有可用的 IPv6 地址。"
     "Target is not reachable." -> "目标未响应本次系统可达性检测。"
+    "Timeout" -> "检测在设定时间内未收到目标响应。"
     "System reachability is unavailable.", "Ping unavailable." ->
         "系统可达性检测暂时不可用。"
     else -> null
+}
+
+private fun String.displayMessage(): String = when (this) {
+    "Invalid target." -> "目标地址无效"
+    "Invalid count." -> "检测次数无效"
+    "Invalid interval." -> "检测间隔无效"
+    "Target could not be resolved." -> "目标无法解析"
+    "No IPv4 address available." -> "目标没有可用的 IPv4 地址"
+    "No IPv6 address available." -> "目标没有可用的 IPv6 地址"
+    "Target is not reachable." -> "目标无响应"
+    "Timeout" -> "检测超时"
+    "System reachability is unavailable.", "Ping unavailable." -> "系统可达性检测不可用"
+    else -> "无法完成 Ping 检测"
 }
 
 private fun Double?.latencyText(): String = this?.let { value ->

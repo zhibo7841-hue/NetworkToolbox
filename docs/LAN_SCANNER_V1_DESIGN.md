@@ -2,7 +2,9 @@
 
 ## Status and scope
 
-This document is a design and current-state audit for a future LAN Scanner v1. It does not add Kotlin, Compose, Gradle, permissions, navigation, a database migration, or a scanner implementation.
+> **Implementation status (v0.2 RC): Implemented.** This document retains the original design and audit rationale. Where its historical recommendations conflict with the current implementation, the implemented bounded discovery pipeline and the accepted Decision Log take precedence: automatic or custom RFC1918 IPv4 ranges are limited to 254 hosts; reachability timeout is 500 ms; TCP timeout is 250 ms; host concurrency is 32; fallback ports are 80, 443, 22, 445, 53, and 9100; and only TCP connect success is discovery evidence.
+
+This document began as a design and current-state audit for LAN Scanner v1. The later implementation did not add new permissions or a Room schema migration.
 
 LAN Scanner remains a confirmed future product direction. This document narrows the first implementation to a safe and explainable local IPv4 discovery workflow; it does not remove IPv6, mDNS, UPnP, vendor identification, or service discovery from the longer-term product direction.
 
@@ -83,7 +85,7 @@ HistoryRepository / Room
 History UI
 ```
 
-`HistoryRecord` and `HistoryEntity` use generic `type`, `title`, `summary`, and `detailJson` fields. There is no `LAN_SCAN` history factory today. The Tools screen also has no LAN Scanner entry. Both are expected implementation work for a later task; this design does not change either one.
+`HistoryRecord` and `HistoryEntity` use generic `type`, `title`, `summary`, and `detailJson` fields. The implemented scanner stores one `LAN_SCAN` History record for a completed scan, and the Tools screen contains the LAN Scanner entry. Internal probes do not create separate Ping or TCP History records.
 
 The existing product rule remains: one complete diagnostic operation creates one history record. Internal probes must not create individual Ping or TCP records.
 

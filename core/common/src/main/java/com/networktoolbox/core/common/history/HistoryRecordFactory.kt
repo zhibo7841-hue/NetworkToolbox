@@ -12,7 +12,7 @@ object HistoryRecordFactory {
         timestamp = timestamp,
         type = HistoryType.PING,
         title = "Ping · $target",
-        summary = if (success) "Ping completed" else "Ping failed",
+        summary = if (success) "Ping 检测完成" else "Ping 检测失败",
         detailJson = jsonObject(
             "target" to jsonString(target),
             "success" to success.toString(),
@@ -160,7 +160,7 @@ object HistoryRecordFactory {
         timestamp = timestamp,
         type = HistoryType.TCP,
         title = "TCP · $host:$port",
-        summary = if (success) "TCP port check completed" else "TCP port check failed",
+        summary = if (success) "TCP 端口检测完成" else "TCP 端口检测失败",
         detailJson = jsonObject(
             "host" to jsonString(host),
             "port" to port.toString(),
@@ -178,7 +178,7 @@ object HistoryRecordFactory {
     ): HistoryRecord = HistoryRecord(
         timestamp = timestamp,
         type = HistoryType.REPORT,
-        title = "Network Diagnostic Report",
+        title = "网络诊断",
         summary = summary,
         detailJson = jsonObject(
             "summary" to jsonString(summary),

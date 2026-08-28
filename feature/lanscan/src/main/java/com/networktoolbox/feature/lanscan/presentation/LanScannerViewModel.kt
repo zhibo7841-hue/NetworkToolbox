@@ -134,10 +134,10 @@ class LanScannerViewModel @Inject constructor(
                 }
             } catch (error: CancellationException) {
                 if (!stopRequested.get()) throw error
-            } catch (error: Exception) {
+            } catch (_: Exception) {
                 if (!stopRequested.get()) {
                     _uiState.value = LanScannerUiState.Error(
-                        message = error.message ?: "局域网扫描失败，请稍后重试。",
+                        message = "局域网扫描失败，请稍后重试。",
                         readiness = latestReadiness,
                     )
                 }
@@ -220,7 +220,7 @@ class LanScannerViewModel @Inject constructor(
         LanScanStatus.IDLE,
         LanScanStatus.SCANNING,
         -> LanScannerUiState.Error(
-            message = errorMessage ?: "局域网扫描失败，请稍后重试。",
+            message = "局域网扫描失败，请稍后重试。",
             readiness = latestReadiness,
         )
     }

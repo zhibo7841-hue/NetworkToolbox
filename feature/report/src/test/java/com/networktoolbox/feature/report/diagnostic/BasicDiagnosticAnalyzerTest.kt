@@ -25,7 +25,7 @@ class BasicDiagnosticAnalyzerTest {
 
         assertEquals("基础网络连接正常", report.summary)
         assertTrue(report.findings.any {
-            it.level == FindingLevel.INFO && it.title == "Network connectivity looks normal"
+            it.level == FindingLevel.INFO && it.title == "网络连接状态正常"
         })
         assertTrue(report.suggestions.isEmpty())
     }

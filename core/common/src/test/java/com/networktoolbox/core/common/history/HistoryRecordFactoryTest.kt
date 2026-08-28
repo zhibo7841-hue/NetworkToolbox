@@ -16,6 +16,7 @@ class HistoryRecordFactoryTest {
         )
 
         assertTrue(record.type == HistoryType.PING)
+        assertTrue(record.summary == "Ping 检测失败")
         assertTrue(record.detailJson.contains("\"target\":\"example.com\""))
         assertTrue(record.detailJson.contains("\"success\":false"))
         assertTrue(record.detailJson.contains("\"method\":\"SYSTEM_REACHABILITY\""))
@@ -119,9 +120,11 @@ class HistoryRecordFactoryTest {
         )
 
         assertTrue(tcp.type == HistoryType.TCP)
+        assertTrue(tcp.summary == "TCP 端口检测失败")
         assertTrue(tcp.detailJson.contains("\"port\":443"))
         assertTrue(tcp.detailJson.contains("Connection refused"))
         assertTrue(report.type == HistoryType.REPORT)
+        assertTrue(report.title == "网络诊断")
         assertTrue(report.detailJson.contains("\"findings\":[{"))
         assertTrue(report.detailJson.contains("Check application configuration."))
     }

@@ -67,7 +67,7 @@ class LanScanRangeCalculatorTest {
         assertEquals(
             LanScanRangeResult.Rejected(
                 LanScanRejectionReason.UNSUPPORTED_NETWORK,
-                "LAN scanning requires Wi-Fi or Ethernet.",
+                "局域网扫描需要连接 Wi-Fi 或以太网。",
             ),
             result,
         )

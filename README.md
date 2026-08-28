@@ -17,25 +17,26 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 - No ads
 - No account required
 - Local first
-- Network test results stay on the device and are not uploaded
+- Network diagnostic data is not uploaded, and app-local data does not participate in system cloud backup by default
 
 ## Features
 
-当前 V0.1 功能包括：
+当前已实现功能包括：
 
-- ✅ Network Information
-- ✅ Ping
-- ✅ DNS Lookup
+- ✅ 首页网络状态
+- ✅ Ping（网络质量、连续检测与详细统计）
+- ✅ DNS Lookup（A、AAAA、CNAME、MX、TXT 与 TTL）
 - ✅ TCP Port Check
-- ✅ IPv4 Subnet Calculator
-- ✅ Network Diagnostic Report
-- ✅ Local History
+- ✅ IPv4 子网计算
+- ✅ 网络诊断
+- ✅ 本地 History
+- ✅ LAN Scanner
+- ✅ 自定义 IPv4 扫描范围（RFC1918，单次最多 254 个地址）
 
 ## Roadmap
 
 以下内容仅为 Planned，不代表已承诺的发布范围：
 
-- LAN Scanner
 - Wi-Fi Analyzer
 - mDNS
 - Wake-on-LAN
@@ -58,19 +59,20 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 
 ## Installation
 
-Download the APK from GitHub Releases.
+Download the published APK from GitHub Releases.
 
 Requires Android 12 or later.
 
-The final `0.1.0` version is configured. Release APK publishing still requires a maintainer-provided signing configuration.
+The application version remains `0.1.0` until the approved v0.2 release-preparation task updates it.
 
 ## Privacy
 
 - All network test results are stored locally.
 - No account required.
 - No network data upload.
+- App-local data does not participate in Android system cloud backup by default.
 
-NetworkToolbox 不要求账号，检测结果和历史记录默认只保存在设备本地。应用访问网络是为了执行用户主动选择的检测，不代表会上传检测数据。
+NetworkToolbox 不要求账号，不上传网络诊断数据；应用本地数据默认不参与系统云备份。应用访问网络是为了执行用户主动选择的检测，不代表会上传检测数据。
 
 ## Documentation
 

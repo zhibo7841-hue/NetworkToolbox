@@ -95,5 +95,4 @@ class HistoryViewModel @Inject constructor(
     }
 }
 
-private fun Exception.userMessage(): String =
-    message?.takeIf { it.isNotBlank() } ?: "Unable to access local history."
+private fun Exception.userMessage(): String = "无法访问本地历史记录，请稍后重试。"
