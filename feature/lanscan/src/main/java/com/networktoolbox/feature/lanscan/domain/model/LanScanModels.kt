@@ -20,6 +20,11 @@ enum class LanDiscoveryMethod {
     GATEWAY_CONTEXT,
 }
 
+/** Source for an optional device name; it is never online-discovery evidence. */
+enum class LanDeviceNameSource {
+    REVERSE_DNS,
+}
+
 enum class LanScanRejectionReason {
     NO_ACTIVE_NETWORK,
     UNSUPPORTED_NETWORK,
@@ -122,6 +127,7 @@ data class LanDevice(
     val ipAddress: String,
     val macAddress: String? = null,
     val hostName: String? = null,
+    val hostNameSource: LanDeviceNameSource? = null,
     val isLocalDevice: Boolean,
     val isGateway: Boolean,
     val latencyMs: Long? = null,

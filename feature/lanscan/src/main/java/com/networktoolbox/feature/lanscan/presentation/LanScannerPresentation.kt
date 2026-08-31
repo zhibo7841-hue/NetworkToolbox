@@ -7,6 +7,12 @@ import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import java.util.Locale
 
 object LanScannerPresentation {
+    fun devicePrimaryText(device: LanDevice): String =
+        device.hostName?.takeIf(String::isNotBlank) ?: device.ipAddress
+
+    fun deviceAddressText(device: LanDevice): String? =
+        device.ipAddress.takeIf { device.hostName?.isNotBlank() == true }
+
     fun deviceRole(device: LanDevice): String = buildList {
         if (device.isLocalDevice) add("本机")
         if (device.isGateway) add("网关")

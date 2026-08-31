@@ -7,9 +7,13 @@ import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
+import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
+import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentResult
+import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentStatus
 import com.networktoolbox.feature.lanscan.domain.RunLanScan
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
+import com.networktoolbox.feature.lanscan.domain.model.LanDeviceNameSource
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanScanProbeConfig
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
@@ -17,6 +21,7 @@ import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
@@ -341,6 +346,7 @@ class LanScannerViewModelTest {
         val viewModel = LanScannerViewModel(
             observeReadiness = ObserveLanScanReadiness { readinessFlow },
             runScan = fakeRunner(session(context, range, emptyList(), LanScanStatus.NETWORK_CHANGED)),
+            reverseDnsEnricher = noOpEnricher(),
         )
 
         advanceUntilIdle()
@@ -397,6 +403,12 @@ class LanScannerViewModelTest {
         assertEquals("网关信息", LanScannerPresentation.deviceSecondaryText(gateway))
         assertEquals(0.5f, LanScannerPresentation.progressFraction(1, 2))
 
+        val named = device("192.168.1.40").copy(hostName = "HOME-SERVER")
+        assertEquals("HOME-SERVER", LanScannerPresentation.devicePrimaryText(named))
+        assertEquals("192.168.1.40", LanScannerPresentation.deviceAddressText(named))
+        assertEquals("192.168.1.30", LanScannerPresentation.devicePrimaryText(device("192.168.1.30")))
+        assertEquals(null, LanScannerPresentation.deviceAddressText(device("192.168.1.30")))
+
         val completedSession = session(
             context = context("192.168.1.5", 24),
             range = readyRange(context("192.168.1.5", 24)),
@@ -408,10 +420,156 @@ class LanScannerViewModelTest {
         )
     }
 
+    @Test
+    fun `completed scan progressively applies reverse dns hostname with source`() = runTest {
+        val context = context("192.168.1.2", 30)
+        val range = readyRange(context)
+        val viewModel = viewModel(
+            readiness(context),
+            runner = fakeRunner(session(context, range, listOf(device("192.168.1.3")))),
+            enricher = ReverseDnsEnricher { _, onResult ->
+                onResult(
+                    ReverseDnsEnrichmentResult(
+                        ipAddress = "192.168.1.3",
+                        hostname = "HOME-SERVER",
+                        status = ReverseDnsEnrichmentStatus.RESOLVED,
+                    ),
+                )
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+
+        val discovered = (viewModel.uiState.value as LanScannerUiState.Completed)
+            .session.discoveredDevices.single()
+        assertEquals("HOME-SERVER", discovered.hostName)
+        assertEquals(LanDeviceNameSource.REVERSE_DNS, discovered.hostNameSource)
+        assertEquals("192.168.1.3", discovered.ipAddress)
+    }
+
+    @Test
+    fun `rescan discards a late hostname from the previous generation`() = runTest {
+        val context = context("192.168.1.2", 30)
+        val range = readyRange(context)
+        val lateFirstResult = CompletableDeferred<ReverseDnsEnrichmentResult>()
+        var scans = 0
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession = if (++scans == 1) {
+                session(context, range, listOf(device("192.168.1.3")))
+            } else {
+                session(context, range, listOf(device("192.168.1.4")))
+            }
+        }
+        val viewModel = viewModel(
+            readiness(context),
+            runner = runner,
+            enricher = ReverseDnsEnricher { devices, onResult ->
+                if (devices.single().ipAddress == "192.168.1.3") {
+                    onResult(lateFirstResult.await())
+                } else {
+                    onResult(
+                        ReverseDnsEnrichmentResult(
+                            ipAddress = "192.168.1.4",
+                            hostname = "SECOND-SCAN",
+                            status = ReverseDnsEnrichmentStatus.RESOLVED,
+                        ),
+                    )
+                }
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        runCurrent()
+        viewModel.rescan()
+        advanceUntilIdle()
+        lateFirstResult.complete(
+            ReverseDnsEnrichmentResult(
+                ipAddress = "192.168.1.3",
+                hostname = "STALE-FIRST-SCAN",
+                status = ReverseDnsEnrichmentStatus.RESOLVED,
+            ),
+        )
+        advanceUntilIdle()
+
+        val device = (viewModel.uiState.value as LanScannerUiState.Completed)
+            .session.discoveredDevices.single()
+        assertEquals("192.168.1.4", device.ipAddress)
+        assertEquals("SECOND-SCAN", device.hostName)
+    }
+
+    @Test
+    fun `network change discards pending reverse dns result`() = runTest {
+        val initial = context("192.168.1.2", 30)
+        val changed = initial.copy(ipv4Address = "192.168.2.2", gateway = "192.168.2.1")
+        val range = readyRange(initial)
+        val readinessFlow = MutableStateFlow(readiness(initial))
+        val pending = CompletableDeferred<ReverseDnsEnrichmentResult>()
+        val viewModel = viewModel(
+            readiness(initial),
+            runner = fakeRunner(session(initial, range, listOf(device("192.168.1.3")))),
+            readinessFlow = readinessFlow,
+            enricher = ReverseDnsEnricher { _, onResult -> onResult(pending.await()) },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        runCurrent()
+        readinessFlow.value = readiness(changed)
+        runCurrent()
+        pending.complete(
+            ReverseDnsEnrichmentResult(
+                ipAddress = "192.168.1.3",
+                hostname = "OLD-NETWORK",
+                status = ReverseDnsEnrichmentStatus.RESOLVED,
+            ),
+        )
+        advanceUntilIdle()
+
+        val device = (viewModel.uiState.value as LanScannerUiState.Completed)
+            .session.discoveredDevices.single()
+        assertEquals(null, device.hostName)
+    }
+
+    @Test
+    fun `stopped scan never starts reverse dns enrichment`() = runTest {
+        val context = context("192.168.1.2", 30)
+        val range = readyRange(context)
+        val enrichmentCalls = AtomicBoolean(false)
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                onUpdate(update(range, 1, listOf(device("192.168.1.3"))))
+                awaitCancellation()
+            }
+        }
+        val viewModel = viewModel(
+            readiness(context),
+            runner = runner,
+            enricher = ReverseDnsEnricher { _, _ -> enrichmentCalls.set(true) },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        runCurrent()
+        viewModel.stopScan()
+        advanceUntilIdle()
+
+        assertFalse(enrichmentCalls.get())
+    }
+
     private fun viewModel(
         readiness: LanScanReadiness,
         runner: RunLanScan? = null,
         readinessFlow: Flow<LanScanReadiness> = flowOf(readiness),
+        enricher: ReverseDnsEnricher = noOpEnricher(),
     ): LanScannerViewModel {
         val effectiveRunner = runner ?: object : RunLanScan {
             override suspend fun invoke(
@@ -422,8 +580,11 @@ class LanScannerViewModelTest {
         return LanScannerViewModel(
             observeReadiness = ObserveLanScanReadiness { readinessFlow },
             runScan = effectiveRunner,
+            reverseDnsEnricher = enricher,
         )
     }
+
+    private fun noOpEnricher(): ReverseDnsEnricher = ReverseDnsEnricher { _, _ -> }
 
     private fun readiness(context: NetworkContext): LanScanReadiness = LanScanReadiness(
         networkContext = context,

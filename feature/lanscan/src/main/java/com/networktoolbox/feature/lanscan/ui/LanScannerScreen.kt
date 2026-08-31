@@ -514,7 +514,10 @@ private fun DeviceCard(device: LanDevice) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(device.ipAddress, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    LanScannerPresentation.devicePrimaryText(device),
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 LanScannerPresentation.deviceRole(device)
                     .takeIf(String::isNotBlank)
                     ?.let { role ->
@@ -525,18 +528,18 @@ private fun DeviceCard(device: LanDevice) {
                         )
                     }
             }
+            LanScannerPresentation.deviceAddressText(device)?.let { address ->
+                Text(
+                    address,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             LanScannerPresentation.deviceSecondaryText(device)?.let { secondary ->
                 Text(
                     secondary,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            device.hostName?.takeIf(String::isNotBlank)?.let { name ->
-                Text(
-                    "名称 · $name",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
                 )
             }
             device.macAddress?.takeIf(String::isNotBlank)?.let { mac ->

@@ -2,11 +2,15 @@ package com.networktoolbox.feature.lanscan.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
+import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
+import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentResult
+import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentStatus
 import com.networktoolbox.feature.lanscan.domain.RunLanScan
 import com.networktoolbox.feature.lanscan.domain.model.LanScanProbeConfig
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
@@ -28,12 +32,16 @@ import kotlinx.coroutines.launch
 class LanScannerViewModel @Inject constructor(
     observeReadiness: ObserveLanScanReadiness,
     private val runScan: RunLanScan,
+    private val reverseDnsEnricher: ReverseDnsEnricher,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<LanScannerUiState>(LanScannerUiState.Idle)
     val uiState: StateFlow<LanScannerUiState> = _uiState.asStateFlow()
 
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
+    private var enrichmentJob: Job? = null
+    private var enrichmentGeneration: Long = 0L
+    private var enrichmentNetworkContext: NetworkContext? = null
     private val stopRequested = AtomicBoolean(false)
     private val customRangeCalculator = LanCustomRangeCalculator()
     private var rangeMode = LanScanRangeMode.CURRENT_NETWORK
@@ -47,6 +55,9 @@ class LanScannerViewModel @Inject constructor(
         viewModelScope.launch {
             observeReadiness().collect { readiness ->
                 latestReadiness = readiness
+                if (enrichmentNetworkContext?.isSameLanScanNetworkAs(readiness.networkContext) == false) {
+                    invalidateEnrichment()
+                }
                 if (_uiState.value.canRefreshReadiness()) {
                     _uiState.value = readiness.toUiState()
                 }
@@ -64,6 +75,8 @@ class LanScannerViewModel @Inject constructor(
 
     fun modifyRange() {
         if (scanJob?.isActive == true) return
+
+        invalidateEnrichment()
 
         val readiness = latestReadiness
         if (readiness == null) {
@@ -97,6 +110,7 @@ class LanScannerViewModel @Inject constructor(
             return
         }
 
+        val generation = beginNewEnrichmentGeneration()
         stopRequested.set(false)
         val initialUpdate = LanScanUpdate(
             status = LanScanStatus.SCANNING,
@@ -131,6 +145,9 @@ class LanScannerViewModel @Inject constructor(
                 lastScanRange = session.range ?: range
                 if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
                     _uiState.value = session.toUiState()
+                    if (session.status == LanScanStatus.COMPLETED) {
+                        startReverseDnsEnrichment(session, generation)
+                    }
                 }
             } catch (error: CancellationException) {
                 if (!stopRequested.get()) throw error
@@ -183,6 +200,7 @@ class LanScannerViewModel @Inject constructor(
     fun stopScan() {
         val current = _uiState.value as? LanScannerUiState.Scanning ?: return
         stopRequested.set(true)
+        invalidateEnrichment()
         lastScanRange = current.range
         scanJob?.cancel()
         _uiState.value = LanScannerUiState.Cancelled(
@@ -245,6 +263,52 @@ class LanScannerViewModel @Inject constructor(
         }
     }
 
+    private fun startReverseDnsEnrichment(
+        session: LanScanSession,
+        generation: Long,
+    ) {
+        enrichmentNetworkContext = session.initialNetworkContext
+        enrichmentJob = viewModelScope.launch {
+            reverseDnsEnricher.enrich(session.discoveredDevices) { result ->
+                if (generation == enrichmentGeneration) {
+                    applyReverseDnsResult(result)
+                }
+            }
+        }
+    }
+
+    private fun applyReverseDnsResult(result: ReverseDnsEnrichmentResult) {
+        if (result.status != ReverseDnsEnrichmentStatus.RESOLVED || result.hostname.isNullOrBlank()) {
+            return
+        }
+        val state = _uiState.value as? LanScannerUiState.Completed ?: return
+        val updatedDevices = state.session.discoveredDevices.map { device ->
+            if (device.ipAddress == result.ipAddress) {
+                device.copy(
+                    hostName = result.hostname,
+                    hostNameSource = result.source,
+                )
+            } else {
+                device
+            }
+        }
+        _uiState.value = state.copy(
+            session = state.session.copy(discoveredDevices = updatedDevices),
+        )
+    }
+
+    private fun beginNewEnrichmentGeneration(): Long {
+        invalidateEnrichment()
+        return enrichmentGeneration
+    }
+
+    private fun invalidateEnrichment() {
+        enrichmentGeneration += 1L
+        enrichmentNetworkContext = null
+        enrichmentJob?.cancel()
+        enrichmentJob = null
+    }
+
     private fun recalculateCustomRange() {
         customRangeResult = customRangeCalculator.calculate(
             startInput = customStartAddress,
@@ -278,7 +342,23 @@ class LanScannerViewModel @Inject constructor(
             else -> LanScannerUiState.Error(result.message, this)
         }
     }
+
+    override fun onCleared() {
+        invalidateEnrichment()
+        super.onCleared()
+    }
 }
+
+private fun NetworkContext.isSameLanScanNetworkAs(
+    other: NetworkContext,
+): Boolean =
+    activeNetworkAvailable == other.activeNetworkAvailable &&
+        connectionType == other.connectionType &&
+        ipv4Address == other.ipv4Address &&
+        ipv4PrefixLength == other.ipv4PrefixLength &&
+        gateway == other.gateway &&
+        interfaceName == other.interfaceName &&
+        vpnActive == other.vpnActive
 
 private fun LanScannerUiState.canRefreshReadiness(): Boolean = when (this) {
     LanScannerUiState.Idle,
