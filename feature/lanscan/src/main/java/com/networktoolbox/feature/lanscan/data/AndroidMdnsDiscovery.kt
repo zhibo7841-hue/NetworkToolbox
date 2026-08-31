@@ -9,6 +9,7 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.ext.SdkExtensions
+import android.util.Log
 import com.networktoolbox.feature.lanscan.domain.MdnsDiscovery
 import com.networktoolbox.feature.lanscan.domain.MdnsDiscoveryEvent
 import com.networktoolbox.feature.lanscan.domain.MdnsDiscoveryRequest
@@ -20,6 +21,8 @@ import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CancellationException
@@ -63,14 +66,30 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
         private val callbackExecutor: ExecutorService = Executors.newSingleThreadExecutor()
         private val resolutionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val resolveSlots = Semaphore(MAX_CONCURRENT_RESOLUTIONS)
-        private val discoveryListeners = mutableMapOf<String, NsdManager.DiscoveryListener>()
+        private val pendingDiscoveryListeners =
+            mutableMapOf<String, NsdManager.DiscoveryListener>()
+        private val activeDiscoveryListeners =
+            mutableMapOf<String, NsdManager.DiscoveryListener>()
         private val resolving = mutableMapOf<MdnsServiceKey, NsdManager.ResolveListener>()
         private val seenServices = mutableSetOf<MdnsServiceKey>()
+        private val stoppedDiscoveryListeners =
+            Collections.newSetFromMap(
+                IdentityHashMap<NsdManager.DiscoveryListener, Boolean>(),
+            )
+        private val stoppedResolveListeners =
+            Collections.newSetFromMap(
+                IdentityHashMap<NsdManager.ResolveListener, Boolean>(),
+            )
         private var multicastLock: WifiManager.MulticastLock? = null
-        private var stopped = false
+        private var state = SessionState.NEW
 
         @SuppressLint("MissingPermission")
         fun start() {
+            synchronized(stateLock) {
+                if (state != SessionState.NEW) return
+                state = SessionState.STARTED
+            }
+            logEvent("MDNS_START")
             try {
                 if (nsdManager == null) {
                     emit(
@@ -79,7 +98,7 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                             errorCode = NsdManager.FAILURE_INTERNAL_ERROR,
                         ),
                     )
-                    stop()
+                    failAndStop()
                     return
                 }
                 val activeNetwork = connectivityManager?.activeNetwork
@@ -90,7 +109,7 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                             errorCode = NsdManager.FAILURE_BAD_PARAMETERS,
                         ),
                     )
-                    stop()
+                    failAndStop()
                     return
                 }
                 acquireMulticastLockIfRequired()
@@ -104,6 +123,9 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                         errorCode = errorCode(error),
                     ),
                 )
+                synchronized(stateLock) {
+                    if (state == SessionState.STARTED) state = SessionState.FAILED
+                }
                 stop()
             }
         }
@@ -112,91 +134,123 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
             val listeners: List<Pair<String, NsdManager.DiscoveryListener>>
             val resolveListeners: List<NsdManager.ResolveListener>
             synchronized(stateLock) {
-                if (stopped) return
-                stopped = true
-                listeners = discoveryListeners.toList()
+                if (state == SessionState.STOPPING || state == SessionState.STOPPED) return
+                state = SessionState.STOPPING
+                listeners = activeDiscoveryListeners.toList()
                 resolveListeners = resolving.values.toList()
-                discoveryListeners.clear()
+                activeDiscoveryListeners.clear()
                 resolving.clear()
             }
 
-            resolutionScope.cancel()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                resolveListeners.forEach { listener ->
-                    runCatching { nsdManager?.stopServiceResolution(listener) }
-                }
+            logEvent("MDNS_STOP_REQUESTED")
+            runCatching { resolutionScope.cancel() }
+                .onFailure { error -> logWarning("MDNS_STOP_FAILED", error) }
+            resolveListeners.forEach { listener ->
+                stopServiceResolutionSafely(listener)
             }
             listeners.forEach { (serviceType, listener) ->
-                runCatching {
-                    nsdManager?.stopServiceDiscovery(listener)
-                }.onFailure { error ->
-                    emit(
-                        MdnsDiscoveryEvent.DiscoveryStopFailed(
-                            serviceType = serviceType,
-                            errorCode = errorCode(error),
-                        ),
-                    )
-                }
+                stopServiceDiscoverySafely(serviceType, listener)
             }
             releaseMulticastLock()
-            callbackExecutor.shutdownNow()
+            runCatching { callbackExecutor.shutdownNow() }
+                .onFailure { error -> logWarning("MDNS_STOP_FAILED", error) }
+            synchronized(stateLock) {
+                state = SessionState.STOPPED
+            }
+            logEvent("MDNS_SESSION_CLOSED")
+        }
+
+        private fun failAndStop() {
+            synchronized(stateLock) {
+                if (state == SessionState.STARTED) state = SessionState.FAILED
+            }
+            stop()
         }
 
         private fun startDiscovery(serviceType: String, network: Network) {
             val listener = object : NsdManager.DiscoveryListener {
                 override fun onDiscoveryStarted(type: String) {
-                    emit(MdnsDiscoveryEvent.DiscoveryStarted(type))
+                    callbackBoundary("onDiscoveryStarted", serviceType) {
+                        logEvent("MDNS_DISCOVERY_STARTED", serviceType)
+                        emit(MdnsDiscoveryEvent.DiscoveryStarted(type))
+                    }
                 }
 
                 override fun onDiscoveryStopped(type: String) {
-                    removeDiscoveryListener(type, this)
-                    emit(MdnsDiscoveryEvent.DiscoveryStopped(type))
+                    callbackBoundary("onDiscoveryStopped", serviceType) {
+                        removeDiscoveryListener(serviceType, this)
+                        logEvent("MDNS_DISCOVERY_STOPPED", serviceType)
+                        emit(MdnsDiscoveryEvent.DiscoveryStopped(type))
+                    }
                 }
 
                 override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                    val key = serviceInfo.toServiceKey() ?: return
-                    val firstObservation = synchronized(stateLock) {
-                        if (stopped || !seenServices.add(key)) false else true
+                    callbackBoundary("onServiceFound", serviceType) {
+                        val key = serviceInfo.toServiceKey() ?: return@callbackBoundary
+                        val firstObservation = synchronized(stateLock) {
+                            if (!isSessionActiveLocked() || !seenServices.add(key)) false else true
+                        }
+                        if (!firstObservation) return@callbackBoundary
+                        logEvent("MDNS_SERVICE_FOUND", key.serviceType)
+                        emit(
+                            MdnsDiscoveryEvent.ServiceFound(
+                                serviceName = key.serviceName,
+                                serviceType = key.serviceType,
+                            ),
+                        )
+                        resolveService(serviceInfo, key, network)
                     }
-                    if (!firstObservation) return
-                    emit(
-                        MdnsDiscoveryEvent.ServiceFound(
-                            serviceName = key.serviceName,
-                            serviceType = key.serviceType,
-                        ),
-                    )
-                    resolveService(serviceInfo, key, network)
                 }
 
                 override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                    val key = serviceInfo.toServiceKey() ?: return
-                    synchronized(stateLock) { seenServices.remove(key) }
-                    stopResolution(key)
-                    emit(
-                        MdnsDiscoveryEvent.ServiceLost(
-                            serviceName = key.serviceName,
-                            serviceType = key.serviceType,
-                        ),
-                    )
+                    callbackBoundary("onServiceLost", serviceType) {
+                        val key = serviceInfo.toServiceKey() ?: return@callbackBoundary
+                        synchronized(stateLock) { seenServices.remove(key) }
+                        stopResolution(key)
+                        emit(
+                            MdnsDiscoveryEvent.ServiceLost(
+                                serviceName = key.serviceName,
+                                serviceType = key.serviceType,
+                            ),
+                        )
+                    }
                 }
 
                 override fun onStartDiscoveryFailed(type: String, errorCode: Int) {
-                    removeDiscoveryListener(type, this)
-                    emit(MdnsDiscoveryEvent.DiscoveryStartFailed(type, errorCode))
-                    runCatching { nsdManager?.stopServiceDiscovery(this) }
+                    callbackBoundary("onStartDiscoveryFailed", serviceType) {
+                        // A failed start is not an active registration. Do not
+                        // call stopServiceDiscovery for this listener.
+                        removeDiscoveryListener(serviceType, this)
+                        logWarning(
+                            "MDNS_START_FAILED",
+                            errorCode = errorCode,
+                            serviceType = serviceType,
+                        )
+                        emit(MdnsDiscoveryEvent.DiscoveryStartFailed(type, errorCode))
+                    }
                 }
 
                 override fun onStopDiscoveryFailed(type: String, errorCode: Int) {
-                    removeDiscoveryListener(type, this)
-                    emit(MdnsDiscoveryEvent.DiscoveryStopFailed(type, errorCode))
+                    callbackBoundary("onStopDiscoveryFailed", serviceType) {
+                        removeDiscoveryListener(serviceType, this)
+                        logWarning(
+                            "MDNS_STOP_FAILED",
+                            errorCode = errorCode,
+                            serviceType = serviceType,
+                        )
+                        // Cleanup warnings are deliberately non-fatal. The LAN
+                        // Scanner result was already produced by its core scan.
+                        emit(MdnsDiscoveryEvent.DiscoveryStopFailed(type, errorCode))
+                    }
                 }
             }
 
             synchronized(stateLock) {
-                if (stopped) return
-                discoveryListeners[serviceType] = listener
+                if (!isSessionActiveLocked()) return
+                pendingDiscoveryListeners[serviceType] = listener
             }
             try {
+                logEvent("MDNS_DISCOVERY_REQUESTED", serviceType)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     nsdManager?.discoverServices(
                         serviceType,
@@ -213,8 +267,20 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                         listener,
                     )
                 }
+                val stopAfterStart = synchronized(stateLock) {
+                    val stillPending = pendingDiscoveryListeners[serviceType] === listener
+                    if (stillPending) pendingDiscoveryListeners.remove(serviceType)
+                    if (stillPending && isSessionActiveLocked()) {
+                        activeDiscoveryListeners[serviceType] = listener
+                        false
+                    } else {
+                        stillPending && !isSessionActiveLocked()
+                    }
+                }
+                if (stopAfterStart) stopServiceDiscoverySafely(serviceType, listener)
             } catch (error: Exception) {
                 removeDiscoveryListener(serviceType, listener)
+                logWarning("MDNS_START_FAILED", error = error, serviceType = serviceType)
                 emit(
                     MdnsDiscoveryEvent.DiscoveryStartFailed(
                         serviceType = serviceType,
@@ -230,9 +296,15 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
             network: Network,
         ) {
             resolutionScope.launch {
-                resolveSlots.withPermit {
-                    if (!isSessionActive()) return@withPermit
-                    resolveOne(serviceInfo, key, network)
+                try {
+                    resolveSlots.withPermit {
+                        if (!isSessionActive()) return@withPermit
+                        resolveOne(serviceInfo, key, network)
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    logWarning("MDNS_RESOLVE_FAILED", error = error, serviceType = key.serviceType)
                 }
             }
         }
@@ -245,56 +317,91 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
         ) = suspendCancellableCoroutine<Unit> { continuation ->
             val listener = object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
-                    if (isSessionActive()) {
-                        resolvedInfo.toObservation(request, network)?.let { observation ->
-                            emit(MdnsDiscoveryEvent.ServiceResolved(observation))
+                    callbackBoundary("onServiceResolved", key.serviceType) {
+                        try {
+                            if (isSessionActive()) {
+                                resolvedInfo.toObservation(request, network)?.let { observation ->
+                                    logEvent("MDNS_RESOLVE_COMPLETED", key.serviceType)
+                                    emit(MdnsDiscoveryEvent.ServiceResolved(observation))
+                                }
+                            }
+                        } finally {
+                            completeResolution(key, this, continuation)
                         }
                     }
-                    completeResolution(key, this, continuation)
                 }
 
                 override fun onResolveFailed(failedInfo: NsdServiceInfo, errorCode: Int) {
-                    if (isSessionActive()) {
-                        emit(
-                            MdnsDiscoveryEvent.ResolveFailed(
-                                serviceName = key.serviceName,
-                                serviceType = key.serviceType,
-                                errorCode = errorCode,
-                            ),
-                        )
+                    callbackBoundary("onResolveFailed", key.serviceType) {
+                        try {
+                            if (isSessionActive()) {
+                                logWarning(
+                                    "MDNS_RESOLVE_FAILED",
+                                    errorCode = errorCode,
+                                    serviceType = key.serviceType,
+                                )
+                                emit(
+                                    MdnsDiscoveryEvent.ResolveFailed(
+                                        serviceName = key.serviceName,
+                                        serviceType = key.serviceType,
+                                        errorCode = errorCode,
+                                    ),
+                                )
+                            }
+                        } finally {
+                            completeResolution(key, this, continuation)
+                        }
                     }
-                    completeResolution(key, this, continuation)
                 }
 
                 override fun onResolutionStopped(stoppedInfo: NsdServiceInfo) {
-                    completeResolution(key, this, continuation)
+                    callbackBoundary("onResolutionStopped", key.serviceType) {
+                        completeResolution(key, this, continuation)
+                    }
                 }
 
                 override fun onStopResolutionFailed(stoppedInfo: NsdServiceInfo, errorCode: Int) {
-                    completeResolution(key, this, continuation)
+                    callbackBoundary("onStopResolutionFailed", key.serviceType) {
+                        logWarning(
+                            "MDNS_STOP_FAILED",
+                            errorCode = errorCode,
+                            serviceType = key.serviceType,
+                        )
+                        completeResolution(key, this, continuation)
+                    }
                 }
             }
-            synchronized(stateLock) {
-                if (stopped) {
-                    continuation.resume(Unit)
-                    return@suspendCancellableCoroutine
+            val canStart = synchronized(stateLock) {
+                if (!isSessionActiveLocked() || resolving.containsKey(key)) {
+                    false
+                } else {
+                    resolving[key] = listener
+                    true
                 }
-                resolving[key] = listener
+            }
+            if (!canStart) {
+                resumeIfActive(continuation)
+                return@suspendCancellableCoroutine
             }
             continuation.invokeOnCancellation {
                 removeResolution(key, listener)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    runCatching { nsdManager?.stopServiceResolution(listener) }
-                }
+                stopServiceResolutionSafely(listener)
             }
             try {
+                val manager = nsdManager
+                if (manager == null) {
+                    completeResolution(key, listener, continuation)
+                    return@suspendCancellableCoroutine
+                }
+                logEvent("MDNS_RESOLVE_STARTED", key.serviceType)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    nsdManager?.resolveService(serviceInfo, callbackExecutor, listener)
+                    manager.resolveService(serviceInfo, callbackExecutor, listener)
                 } else {
-                    nsdManager?.resolveService(serviceInfo, listener)
+                    manager.resolveService(serviceInfo, listener)
                 }
             } catch (error: Exception) {
                 if (isSessionActive()) {
+                    logWarning("MDNS_RESOLVE_FAILED", error = error, serviceType = key.serviceType)
                     emit(
                         MdnsDiscoveryEvent.ResolveFailed(
                             serviceName = key.serviceName,
@@ -309,9 +416,7 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
 
         private fun stopResolution(key: MdnsServiceKey) {
             val listener = synchronized(stateLock) { resolving.remove(key) }
-            if (listener != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                runCatching { nsdManager?.stopServiceResolution(listener) }
-            }
+            if (listener != null) stopServiceResolutionSafely(listener)
         }
 
         private fun completeResolution(
@@ -337,25 +442,120 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
             listener: NsdManager.DiscoveryListener,
         ) {
             synchronized(stateLock) {
-                if (discoveryListeners[serviceType] === listener) {
-                    discoveryListeners.remove(serviceType)
+                if (pendingDiscoveryListeners[serviceType] === listener) {
+                    pendingDiscoveryListeners.remove(serviceType)
+                }
+                if (activeDiscoveryListeners[serviceType] === listener) {
+                    activeDiscoveryListeners.remove(serviceType)
                 }
             }
         }
 
-        private fun isSessionActive(): Boolean = synchronized(stateLock) { !stopped }
+        private fun stopServiceDiscoverySafely(
+            serviceType: String,
+            listener: NsdManager.DiscoveryListener,
+        ) {
+            val shouldStop = synchronized(stateLock) {
+                stoppedDiscoveryListeners.add(listener)
+            }
+            if (!shouldStop) return
+            try {
+                nsdManager?.stopServiceDiscovery(listener)
+                logEvent("MDNS_DISCOVERY_STOPPED", serviceType)
+            } catch (error: IllegalArgumentException) {
+                logWarning("MDNS_STOP_FAILED", error = error, serviceType = serviceType)
+            } catch (error: RuntimeException) {
+                logWarning("MDNS_STOP_FAILED", error = error, serviceType = serviceType)
+            }
+        }
+
+        private fun stopServiceResolutionSafely(listener: NsdManager.ResolveListener) {
+            val shouldStop = synchronized(stateLock) {
+                stoppedResolveListeners.add(listener)
+            }
+            if (!shouldStop || Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                return
+            }
+            try {
+                nsdManager?.stopServiceResolution(listener)
+            } catch (error: IllegalArgumentException) {
+                logWarning("MDNS_STOP_FAILED", error = error)
+            } catch (error: RuntimeException) {
+                logWarning("MDNS_STOP_FAILED", error = error)
+            }
+        }
+
+        private fun isSessionActive(): Boolean = synchronized(stateLock) {
+            isSessionActiveLocked()
+        }
+
+        private fun isSessionActiveLocked(): Boolean = state == SessionState.STARTED
+
+        private inline fun callbackBoundary(
+            callbackName: String,
+            serviceType: String,
+            block: () -> Unit,
+        ) {
+            try {
+                block()
+            } catch (error: Exception) {
+                logWarning("MDNS_CALLBACK_ERROR", error = error, serviceType = serviceType)
+                Log.w(TAG, "callback=$callbackName generation=${request.generation}")
+            }
+        }
 
         private fun emit(event: MdnsDiscoveryEvent) {
-            if (isSessionActive()) onEvent(event)
+            if (!isSessionActive()) return
+            try {
+                onEvent(event)
+            } catch (error: Exception) {
+                logWarning("MDNS_CALLBACK_ERROR", error = error)
+            }
+        }
+
+        private fun logEvent(event: String, serviceType: String = "") {
+            Log.d(
+                TAG,
+                "$event generation=${request.generation} serviceType=${serviceType.take(MAX_LOG_SERVICE_TYPE_LENGTH)}",
+            )
+        }
+
+        private fun logWarning(
+            event: String,
+            error: Throwable? = null,
+            serviceType: String = "",
+            errorCode: Int? = null,
+        ) {
+            val suffix = buildString {
+                if (errorCode != null) append(" errorCode=$errorCode")
+                if (error != null) append(" error=${error.javaClass.simpleName}")
+            }
+            Log.w(
+                TAG,
+                "$event generation=${request.generation} serviceType=${serviceType.take(MAX_LOG_SERVICE_TYPE_LENGTH)}$suffix",
+            )
         }
 
         private fun acquireMulticastLockIfRequired() {
             if (request.connectionType != com.networktoolbox.core.network.model.ConnectionType.WIFI) return
             if (!requiresManualMulticastLock()) return
             val lock = wifiManager?.createMulticastLock("NetworkToolbox.mDNS") ?: return
-            lock.setReferenceCounted(false)
-            lock.acquire()
-            multicastLock = lock
+            try {
+                lock.setReferenceCounted(false)
+                lock.acquire()
+                val keepLock = synchronized(stateLock) {
+                    if (isSessionActiveLocked() && multicastLock == null) {
+                        multicastLock = lock
+                        true
+                    } else {
+                        false
+                    }
+                }
+                if (!keepLock) releaseMulticastLockInstance(lock)
+            } catch (error: Exception) {
+                releaseMulticastLockInstance(lock)
+                throw error
+            }
         }
 
         private fun releaseMulticastLock() {
@@ -364,15 +564,27 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                 multicastLock = null
                 current
             }
-            if (lock?.isHeld == true) runCatching { lock.release() }
+            if (lock != null) releaseMulticastLockInstance(lock)
+        }
+
+        private fun releaseMulticastLockInstance(lock: WifiManager.MulticastLock) {
+            try {
+                if (lock.isHeld) {
+                    lock.release()
+                }
+            } catch (error: RuntimeException) {
+                logWarning("MDNS_STOP_FAILED", error = error)
+            }
         }
 
         private fun requiresManualMulticastLock(): Boolean =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                 SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU) < 7
 
-        private fun errorCode(error: Throwable): Int =
-            (error as? SecurityException)?.hashCode() ?: NsdManager.FAILURE_INTERNAL_ERROR
+        private fun errorCode(error: Throwable): Int = when (error) {
+            is IllegalArgumentException -> NsdManager.FAILURE_BAD_PARAMETERS
+            else -> NsdManager.FAILURE_INTERNAL_ERROR
+        }
 
         private fun NsdServiceInfo.toServiceKey(): MdnsServiceKey? {
             val name = getServiceName()?.trim().orEmpty()
@@ -463,6 +675,14 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
             if (continuation.isActive) continuation.resume(Unit)
         }
 
+        private enum class SessionState {
+            NEW,
+            STARTED,
+            STOPPING,
+            STOPPED,
+            FAILED,
+        }
+
         companion object {
             const val MAX_CONCURRENT_RESOLUTIONS: Int = 2
             const val MAX_TXT_ATTRIBUTE_COUNT: Int = 16
@@ -470,5 +690,10 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
             const val MAX_TXT_VALUE_LENGTH: Int = 256
             const val MAX_TXT_TOTAL_LENGTH: Int = 1_024
         }
+    }
+
+    private companion object {
+        private const val TAG = "NetworkToolbox.mDNS"
+        private const val MAX_LOG_SERVICE_TYPE_LENGTH = 64
     }
 }

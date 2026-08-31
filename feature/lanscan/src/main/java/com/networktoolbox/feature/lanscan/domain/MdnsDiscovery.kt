@@ -5,6 +5,7 @@ import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceNameSource
 import com.networktoolbox.feature.lanscan.domain.model.LanMdnsObservation
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -178,7 +179,7 @@ class DefaultMdnsEnricher(
             maxConcurrentServiceTypes = maxConcurrentServiceTypes,
         )
         val accepting = AtomicBoolean(true)
-        val observedServiceAddresses = mutableSetOf<Pair<MdnsServiceKey, String>>()
+        val observedServiceAddresses = ConcurrentHashMap.newKeySet<Pair<MdnsServiceKey, String>>()
         val session = try {
             discovery.start(request) { event ->
                 if (accepting.get()) {

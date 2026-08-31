@@ -88,6 +88,149 @@ class MdnsDiscoveryTest {
     }
 
     @Test
+    fun `session stop is idempotent after timeout`() = runTest {
+        val discovery = FakeMdnsDiscovery()
+        val job = launch {
+            DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+                devices = listOf(device("10.0.1.50")),
+                networkContext = wifiContext(),
+                generation = 2L,
+                onResult = {},
+            )
+        }
+
+        runCurrent()
+        advanceUntilIdle()
+        discovery.session.stop()
+        discovery.session.stop()
+
+        assertEquals(1, discovery.stopCount)
+        assertTrue(job.isCompleted)
+    }
+
+    @Test
+    fun `cancellation racing with timeout closes session once`() = runTest {
+        val discovery = FakeMdnsDiscovery()
+        val job = launch {
+            DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+                devices = listOf(device("10.0.1.50")),
+                networkContext = wifiContext(),
+                generation = 3L,
+                onResult = {},
+            )
+        }
+
+        runCurrent()
+        job.cancel()
+        job.join()
+        advanceUntilIdle()
+
+        assertEquals(1, discovery.stopCount)
+    }
+
+    @Test
+    fun `stop callback after timeout is ignored`() = runTest {
+        val discovery = FakeMdnsDiscovery(
+            stopEvents = listOf(
+                MdnsDiscoveryEvent.DiscoveryStopped("_http._tcp"),
+                MdnsDiscoveryEvent.DiscoveryStopped("_ipp._tcp"),
+                MdnsDiscoveryEvent.DiscoveryStopped("_smb._tcp"),
+            ),
+        )
+        val results = mutableListOf<MdnsDeviceEnrichment>()
+        val job = launch {
+            DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+                devices = listOf(device("10.0.1.50")),
+                networkContext = wifiContext(),
+                generation = 4L,
+                onResult = results::add,
+            )
+        }
+
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(1, discovery.stopCount)
+        assertTrue(results.isEmpty())
+        assertTrue(job.isCompleted)
+    }
+
+    @Test
+    fun `duplicate discovery stopped events are harmless`() = runTest {
+        val discovery = FakeMdnsDiscovery()
+        val job = launch {
+            DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+                devices = listOf(device("10.0.1.50")),
+                networkContext = wifiContext(),
+                generation = 5L,
+                onResult = {},
+            )
+        }
+
+        runCurrent()
+        discovery.emit(MdnsDiscoveryEvent.DiscoveryStopped("_http._tcp"))
+        discovery.emit(MdnsDiscoveryEvent.DiscoveryStopped("_http._tcp"))
+        advanceUntilIdle()
+
+        assertEquals(1, discovery.stopCount)
+        assertTrue(job.isCompleted)
+    }
+
+    @Test
+    fun `stop failure event is non fatal`() = runTest {
+        val discovery = FakeMdnsDiscovery(
+            stopEvents = listOf(MdnsDiscoveryEvent.DiscoveryStopFailed("_http._tcp", 1)),
+        )
+
+        DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+            devices = listOf(device("10.0.1.50")),
+            networkContext = wifiContext(),
+            generation = 6L,
+            onResult = {},
+        )
+
+        assertEquals(1, discovery.stopCount)
+    }
+
+    @Test
+    fun `start failure event is non fatal`() = runTest {
+        val discovery = FakeMdnsDiscovery(
+            startEvents = listOf(MdnsDiscoveryEvent.DiscoveryStartFailed("_http._tcp", 1)),
+        )
+
+        DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+            devices = listOf(device("10.0.1.50")),
+            networkContext = wifiContext(),
+            generation = 7L,
+            onResult = {},
+        )
+
+        assertEquals(1, discovery.stopCount)
+    }
+
+    @Test
+    fun `three service types stop through one shared session`() = runTest {
+        val discovery = FakeMdnsDiscovery(
+            stopEvents = MdnsServiceTypes.DEFAULT.map(MdnsDiscoveryEvent::DiscoveryStopped),
+        )
+        val job = launch {
+            DefaultMdnsEnricher(discovery, discoveryWindowMs = 1_000L).enrich(
+                devices = listOf(device("10.0.1.50")),
+                networkContext = wifiContext(),
+                generation = 8L,
+                onResult = {},
+            )
+        }
+
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(MdnsServiceTypes.DEFAULT, discovery.request.serviceTypes)
+        assertEquals(1, discovery.stopCount)
+        assertTrue(job.isCompleted)
+    }
+
+    @Test
     fun `late event after window and stale network event are ignored`() = runTest {
         val discovery = FakeMdnsDiscovery()
         val results = mutableListOf<MdnsDeviceEnrichment>()
@@ -210,9 +353,13 @@ class MdnsDiscoveryTest {
     private class FakeMdnsDiscovery(
         private val startFailure: Exception? = null,
         private val stopFailure: Exception? = null,
+        private val startEvents: List<MdnsDiscoveryEvent> = emptyList(),
+        private val stopEvents: List<MdnsDiscoveryEvent> = emptyList(),
     ) : MdnsDiscovery {
         lateinit var request: MdnsDiscoveryRequest
+        lateinit var session: MdnsDiscoverySession
         private var callback: ((MdnsDiscoveryEvent) -> Unit)? = null
+        private var sessionStopped = false
         var startCount: Int = 0
         var stopCount: Int = 0
 
@@ -224,10 +371,16 @@ class MdnsDiscoveryTest {
             startFailure?.let { throw it }
             this.request = request
             callback = onEvent
-            return MdnsDiscoverySession {
-                stopCount += 1
-                stopFailure?.let { throw it }
+            startEvents.forEach(onEvent)
+            session = MdnsDiscoverySession {
+                if (!sessionStopped) {
+                    sessionStopped = true
+                    stopCount += 1
+                    stopEvents.forEach { event -> callback?.invoke(event) }
+                    stopFailure?.let { throw it }
+                }
             }
+            return session
         }
 
         fun emit(event: MdnsDiscoveryEvent) {
