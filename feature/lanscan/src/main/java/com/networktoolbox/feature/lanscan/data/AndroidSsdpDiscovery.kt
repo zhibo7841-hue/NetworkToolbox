@@ -1,12 +1,16 @@
 package com.networktoolbox.feature.lanscan.data
 
 import android.content.Context
-import android.util.Log
 import com.networktoolbox.feature.lanscan.domain.SsdpDiscovery
 import com.networktoolbox.feature.lanscan.domain.SsdpMessageBuilder
 import com.networktoolbox.feature.lanscan.domain.SsdpDiscoveryRequest
 import com.networktoolbox.feature.lanscan.domain.SsdpResponse
 import com.networktoolbox.feature.lanscan.domain.SsdpResponseParser
+import com.networktoolbox.feature.lanscan.domain.NoOpUpnpDiagnosticLogger
+import com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticEvent
+import com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticEventType
+import com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticLogger
+import com.networktoolbox.feature.lanscan.domain.safeUpnpLocationForLog
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -29,7 +33,10 @@ import kotlinx.coroutines.withContext
  * closing it on cancellation is safe and distinct from shutting down a
  * framework-owned callback executor.
  */
-class AndroidSsdpDiscovery(context: Context) : SsdpDiscovery {
+class AndroidSsdpDiscovery(
+    context: Context,
+    private val diagnosticLogger: UpnpDiagnosticLogger = NoOpUpnpDiagnosticLogger,
+) : SsdpDiscovery {
     private val networkSelector = AndroidLanNetworkSelector(context)
 
     override suspend fun discover(request: SsdpDiscoveryRequest): List<SsdpResponse> =
@@ -54,7 +61,13 @@ class AndroidSsdpDiscovery(context: Context) : SsdpDiscovery {
                         ),
                     ),
                 )
-                logDebug("SSDP_START generation=${request.generation} network=${request.networkIdentity}")
+                log(
+                    UpnpDiagnosticEvent(
+                        type = UpnpDiagnosticEventType.SSDP_START,
+                        generation = request.generation,
+                        networkIdentity = request.networkIdentity,
+                    ),
+                )
 
                 val deadlineNanos = System.nanoTime() + request.discoveryWindowMs * NANOS_PER_MILLISECOND
                 val responses = mutableListOf<SsdpResponse>()
@@ -87,11 +100,23 @@ class AndroidSsdpDiscovery(context: Context) : SsdpDiscovery {
                     )
                     SsdpResponseParser.parse(sourceIp, rawResponse)?.let { response ->
                         responses += response
-                        logDebug("SSDP_RESPONSE generation=${request.generation} source=$sourceIp")
+                        log(
+                            UpnpDiagnosticEvent(
+                                type = UpnpDiagnosticEventType.SSDP_RESPONSE_RECEIVED,
+                                generation = request.generation,
+                                sourceIp = sourceIp,
+                                location = safeUpnpLocationForLog(response.location),
+                            ),
+                        )
                     }
                 }
                 if (responses.isEmpty()) {
-                    logDebug("SSDP_TIMEOUT generation=${request.generation}")
+                    log(
+                        UpnpDiagnosticEvent(
+                            type = UpnpDiagnosticEventType.SSDP_TIMEOUT,
+                            generation = request.generation,
+                        ),
+                    )
                 }
                 responses
             } catch (error: CancellationException) {
@@ -101,20 +126,23 @@ class AndroidSsdpDiscovery(context: Context) : SsdpDiscovery {
             } finally {
                 cancellationHandle?.dispose()
                 runCatching { socket.close() }
-                logDebug("SSDP_STOP generation=${request.generation}")
+                log(
+                    UpnpDiagnosticEvent(
+                        type = UpnpDiagnosticEventType.SSDP_STOP,
+                        generation = request.generation,
+                    ),
+                )
             }
         }
 
-    private fun logDebug(message: String) {
-        runCatching { Log.d(TAG, message.take(MAX_LOG_LENGTH)) }
+    private fun log(event: UpnpDiagnosticEvent) {
+        runCatching { diagnosticLogger.log(event) }
     }
 
     private companion object {
-        private const val TAG = "NetworkToolbox.SSDP"
         private const val SSDP_MULTICAST_ADDRESS = "239.255.255.250"
         private const val SSDP_PORT = 1_900
         private const val RECEIVE_TIMEOUT_MS = 250L
         private const val NANOS_PER_MILLISECOND = 1_000_000L
-        private const val MAX_LOG_LENGTH = 256
     }
 }

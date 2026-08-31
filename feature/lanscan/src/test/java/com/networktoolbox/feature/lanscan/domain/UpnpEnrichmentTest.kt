@@ -136,6 +136,36 @@ class UpnpEnrichmentTest {
         assertTrue(maximum.get() <= 2)
     }
 
+    @Test
+    fun `passes the captured network identity to description fetch and logs association`() = runBlocking {
+        var capturedRequest: UpnpDescriptionRequest? = null
+        val events = mutableListOf<UpnpDiagnosticEvent>()
+        val result = mutableListOf<UpnpDeviceEnrichment>()
+
+        DefaultUpnpEnricher(
+            discovery = SsdpDiscovery {
+                listOf(response("10.0.1.10", "description.xml", "uuid:device"))
+            },
+            descriptionFetcher = UpnpDescriptionFetcher { request ->
+                capturedRequest = request
+                UpnpDeviceDescription(friendlyName = "Router")
+            },
+            diagnosticLogger = UpnpDiagnosticLogger { event -> events += event },
+        ).enrich(
+            devices = listOf(device("10.0.1.10")),
+            networkContext = wifiContext(),
+            generation = 12L,
+            onResult = result::add,
+        )
+
+        val request = requireNotNull(capturedRequest)
+        assertEquals("WIFI|wlan0|10.0.1.20|24|10.0.1.1", request.networkIdentity)
+        assertEquals("wlan0", request.interfaceName)
+        assertEquals("10.0.1.10", result.single().ipAddress)
+        assertTrue(events.any { it.type == UpnpDiagnosticEventType.UPNP_LOCATION_ACCEPTED })
+        assertTrue(events.any { it.type == UpnpDiagnosticEventType.UPNP_DEVICE_ASSOCIATED })
+    }
+
     private fun response(ip: String, path: String, usn: String) = SsdpResponse(
         sourceIp = ip,
         location = "http://$ip/$path",

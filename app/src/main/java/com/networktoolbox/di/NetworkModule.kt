@@ -24,6 +24,7 @@ import com.networktoolbox.feature.lanscan.data.AndroidLanHostProbe
 import com.networktoolbox.feature.lanscan.data.AndroidMdnsDiscovery
 import com.networktoolbox.feature.lanscan.data.AndroidReverseDnsResolver
 import com.networktoolbox.feature.lanscan.data.AndroidSsdpDiscovery
+import com.networktoolbox.feature.lanscan.data.AndroidUpnpDiagnosticLogger
 import com.networktoolbox.feature.lanscan.data.AndroidUpnpDescriptionFetcher
 import com.networktoolbox.feature.lanscan.domain.DefaultLanDiscoveryEngine
 import com.networktoolbox.feature.lanscan.domain.DefaultReverseDnsEnricher
@@ -150,22 +151,31 @@ object NetworkModule {
     @Singleton
     fun provideSsdpDiscovery(
         @ApplicationContext context: Context,
-    ): SsdpDiscovery = AndroidSsdpDiscovery(context)
+        diagnosticLogger: com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticLogger,
+    ): SsdpDiscovery = AndroidSsdpDiscovery(context, diagnosticLogger)
 
     @Provides
     @Singleton
     fun provideUpnpDescriptionFetcher(
         @ApplicationContext context: Context,
-    ): UpnpDescriptionFetcher = AndroidUpnpDescriptionFetcher(context)
+        diagnosticLogger: com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticLogger,
+    ): UpnpDescriptionFetcher = AndroidUpnpDescriptionFetcher(context, diagnosticLogger)
+
+    @Provides
+    @Singleton
+    fun provideUpnpDiagnosticLogger(): com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticLogger =
+        AndroidUpnpDiagnosticLogger()
 
     @Provides
     @Singleton
     fun provideUpnpEnricher(
         discovery: SsdpDiscovery,
         descriptionFetcher: UpnpDescriptionFetcher,
+        diagnosticLogger: com.networktoolbox.feature.lanscan.domain.UpnpDiagnosticLogger,
     ): UpnpEnricher = DefaultUpnpEnricher(
         discovery = discovery,
         descriptionFetcher = descriptionFetcher,
+        diagnosticLogger = diagnosticLogger,
     )
 
     @Provides

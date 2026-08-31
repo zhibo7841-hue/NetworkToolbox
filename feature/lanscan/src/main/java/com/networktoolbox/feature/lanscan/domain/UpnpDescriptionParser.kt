@@ -3,11 +3,10 @@ package com.networktoolbox.feature.lanscan.domain
 import java.io.ByteArrayInputStream
 import java.io.StringReader
 import java.nio.charset.StandardCharsets
-import javax.xml.XMLConstants
+import java.util.Locale
 import javax.xml.parsers.SAXParserFactory
 import org.xml.sax.InputSource
 import org.xml.sax.EntityResolver
-import org.xml.sax.XMLReader
 import org.xml.sax.helpers.DefaultHandler
 
 /**
@@ -23,34 +22,61 @@ object UpnpDescriptionParser {
     fun parse(xml: String): UpnpDeviceDescription? =
         parse(xml.toByteArray(StandardCharsets.UTF_8))
 
-    fun parse(xml: ByteArray): UpnpDeviceDescription? {
-        if (xml.isEmpty() || xml.size > MAX_XML_BYTES) return null
+    fun parse(xml: ByteArray): UpnpDeviceDescription? = parseWithDiagnostics(xml).description
+
+    fun parseWithDiagnostics(xml: ByteArray): UpnpParseResult {
+        if (xml.isEmpty()) {
+            return UpnpParseResult(failureCategory = UpnpFailureCategory.EMPTY_RESPONSE)
+        }
+        if (xml.size > MAX_XML_BYTES) {
+            return UpnpParseResult(failureCategory = UpnpFailureCategory.RESPONSE_TOO_LARGE)
+        }
+        if (xml.containsDoctypeDeclaration()) {
+            return UpnpParseResult(failureCategory = UpnpFailureCategory.XML_SECURITY_REJECTED)
+        }
         val handler = Handler()
         return try {
             val factory = SAXParserFactory.newInstance().apply {
                 isNamespaceAware = true
-                setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                setFeature("http://xml.org/sax/features/external-general-entities", false)
-                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-                isXIncludeAware = false
                 isValidating = false
             }
             val reader = factory.newSAXParser().xmlReader.apply {
-                setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                setFeature("http://xml.org/sax/features/external-general-entities", false)
-                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
                 entityResolver = EntityResolver { _, _ -> InputSource(StringReader("")) }
                 contentHandler = handler
                 errorHandler = handler
             }
             reader.parse(InputSource(ByteArrayInputStream(xml)))
-            handler.result()
-        } catch (_: Exception) {
-            null
+            val description = handler.result()
+            when {
+                !handler.rootDevicePresent -> UpnpParseResult(
+                    failureCategory = UpnpFailureCategory.NO_ROOT_DEVICE,
+                    embeddedDevicePresent = handler.embeddedDevicePresent,
+                )
+
+                !description.hasIdentity -> UpnpParseResult(
+                    description = description,
+                    failureCategory = UpnpFailureCategory.NO_IDENTITY_FIELDS,
+                    rootDevicePresent = true,
+                    embeddedDevicePresent = handler.embeddedDevicePresent,
+                )
+
+                else -> UpnpParseResult(
+                    description = description,
+                    rootDevicePresent = true,
+                    embeddedDevicePresent = handler.embeddedDevicePresent,
+                )
+            }
+        } catch (error: Exception) {
+            UpnpParseResult(
+                failureCategory = if (error.isXmlSecurityRejection()) {
+                    UpnpFailureCategory.XML_SECURITY_REJECTED
+                } else {
+                    UpnpFailureCategory.INVALID_XML
+                },
+                rootDevicePresent = handler.rootDevicePresent,
+                embeddedDevicePresent = handler.embeddedDevicePresent,
+                failureDetail = error.safeDetail(),
+            )
         }
     }
 
@@ -58,6 +84,7 @@ object UpnpDescriptionParser {
         private var depth = 0
         private var rootDeviceDepth: Int? = null
         private var embeddedDeviceDepth: Int? = null
+        private var embeddedDeviceSeen = false
         private var serviceDepth: Int? = null
         private var captureDepth: Int? = null
         private var captureName: String? = null
@@ -67,13 +94,22 @@ object UpnpDescriptionParser {
         private val services = mutableListOf<UpnpServiceDescription>()
         private val fields = linkedMapOf<String, String>()
 
+        val rootDevicePresent: Boolean
+            get() = rootDeviceDepth != null
+
+        val embeddedDevicePresent: Boolean
+            get() = embeddedDeviceSeen
+
         override fun startElement(uri: String?, localName: String?, qName: String?, attributes: org.xml.sax.Attributes?) {
             depth += 1
             if (depth > MAX_XML_DEPTH) throw IllegalArgumentException("UPnP XML is too deep.")
             val name = elementName(localName, qName)
             if (name == "device") {
                 if (rootDeviceDepth == null) rootDeviceDepth = depth
-                else if (embeddedDeviceDepth == null) embeddedDeviceDepth = depth
+                else if (embeddedDeviceDepth == null) {
+                    embeddedDeviceDepth = depth
+                    embeddedDeviceSeen = true
+                }
             }
             if (embeddedDeviceDepth == null && rootDeviceDepth != null) {
                 if (name == "service" && depth > rootDeviceDepth!!) {
@@ -151,10 +187,37 @@ object UpnpDescriptionParser {
     private fun elementName(localName: String?, qName: String?): String =
         (localName ?: qName.orEmpty()).substringAfter(':').trim()
 
+    /** Reject DTDs before platform SAX feature differences can affect safety. */
+    private fun ByteArray.containsDoctypeDeclaration(): Boolean = buildString(size) {
+        for (byte in this@containsDoctypeDeclaration) {
+            val code = byte.toInt() and 0xFF
+            if (code in 0x20..0x7E) append(code.toChar())
+        }
+    }.contains("<!DOCTYPE", ignoreCase = true)
+
     private fun String.sanitizeXmlText(): String =
         filter { character -> character.code >= 0x20 && character.code != 0x7F }
             .trim()
             .take(MAX_TEXT_LENGTH)
+
+    private fun Throwable.isXmlSecurityRejection(): Boolean =
+        generateSequence(this) { it.cause }.any { throwable ->
+            val message = throwable.message.orEmpty().lowercase(Locale.US)
+            message.contains("doctype") ||
+                message.contains("external") ||
+                message.contains("entity") ||
+                message.contains("xinclude") ||
+                throwable::class.java.simpleName.contains("SAXNot", ignoreCase = true)
+        }
+
+    private fun Throwable.safeDetail(): String = buildString {
+        append(javaClass.simpleName)
+        message
+            ?.filter { character -> character.code >= 0x20 && character.code != 0x7F }
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?.let { text -> append(": ").append(text.take(160)) }
+    }
 
     private val DEVICE_FIELDS = setOf(
         "friendlyName",

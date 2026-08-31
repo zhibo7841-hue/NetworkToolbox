@@ -126,17 +126,36 @@ object UpnpLocationValidator {
     const val MAX_LOCATION_LENGTH: Int = 2 * 1024
 
     fun validate(location: String?, sourceIp: String): String? {
-        if (location.isNullOrBlank() || location.length > MAX_LOCATION_LENGTH) return null
-        if (location.any { it.code < 0x20 || it.code == 0x7F || it.isWhitespace() }) return null
-        val uri = runCatching { URI(location) }.getOrNull() ?: return null
+        return validateDetailed(location, sourceIp).normalizedLocation
+    }
+
+    fun validateDetailed(location: String?, sourceIp: String): UpnpLocationValidationResult {
+        if (location.isNullOrBlank() || location.length > MAX_LOCATION_LENGTH) {
+            return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
+        }
+        if (location.any { it.code < 0x20 || it.code == 0x7F || it.isWhitespace() }) {
+            return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
+        }
+        val uri = runCatching { URI(location) }.getOrNull()
+            ?: return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
         val scheme = uri.scheme?.lowercase(Locale.US)
-        if (scheme != "http" && scheme != "https") return null
-        if (uri.host.isNullOrBlank() || uri.userInfo != null || uri.fragment != null) return null
-        if (uri.port !in -1..65_535) return null
-        val normalizedSource = normalizeHost(sourceIp) ?: return null
-        val normalizedTarget = normalizeHost(uri.host) ?: return null
-        if (normalizedSource != normalizedTarget) return null
-        return uri.toASCIIString()
+        if (scheme != "http" && scheme != "https") {
+            return UpnpLocationValidationResult(null, UpnpFailureCategory.UNSUPPORTED_SCHEME)
+        }
+        if (uri.host.isNullOrBlank() || uri.userInfo != null || uri.fragment != null) {
+            return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
+        }
+        if (uri.port !in -1..65_535) {
+            return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
+        }
+        val normalizedSource = normalizeHost(sourceIp)
+            ?: return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
+        val normalizedTarget = normalizeHost(uri.host)
+            ?: return UpnpLocationValidationResult(null, UpnpFailureCategory.INVALID_LOCATION)
+        if (normalizedSource != normalizedTarget) {
+            return UpnpLocationValidationResult(null, UpnpFailureCategory.LOCATION_HOST_MISMATCH)
+        }
+        return UpnpLocationValidationResult(uri.toASCIIString())
     }
 
     private fun normalizeHost(value: String): String? {
@@ -188,7 +207,7 @@ data class UpnpDeviceDescription(
             modelNumber,
             deviceType,
             udn,
-        ).any { !it.isNullOrBlank() } || services.isNotEmpty()
+        ).any { !it.isNullOrBlank() }
 }
 
 fun interface SsdpDiscovery {
@@ -229,6 +248,7 @@ class DefaultUpnpEnricher(
     private val descriptionFetcher: UpnpDescriptionFetcher,
     private val discoveryWindowMs: Long = SsdpDiscoveryRequest.DEFAULT_DISCOVERY_WINDOW_MS,
     private val maxConcurrentFetches: Int = MAX_CONCURRENT_FETCHES,
+    private val diagnosticLogger: UpnpDiagnosticLogger = NoOpUpnpDiagnosticLogger,
 ) : UpnpEnricher {
     init {
         require(discoveryWindowMs in 2_000L..4_000L) {
@@ -267,9 +287,32 @@ class DefaultUpnpEnricher(
             .asSequence()
             .mapNotNull { response ->
                 val ip = response.sourceIp.substringBefore('%').trim()
-                if (ip !in knownIps) return@mapNotNull null
-                val location = UpnpLocationValidator.validate(response.location, ip)
-                    ?: return@mapNotNull null
+                if (ip !in knownIps) {
+                    log(
+                        UpnpDiagnosticEvent(
+                            type = UpnpDiagnosticEventType.UPNP_DEVICE_IGNORED,
+                            generation = generation,
+                            sourceIp = ip,
+                            location = safeUpnpLocationForLog(response.location),
+                            failureCategory = UpnpFailureCategory.DEVICE_IP_NOT_IN_SCAN_RESULTS,
+                        ),
+                    )
+                    return@mapNotNull null
+                }
+                val validation = UpnpLocationValidator.validateDetailed(response.location, ip)
+                val location = validation.normalizedLocation
+                if (location == null) {
+                    log(
+                        UpnpDiagnosticEvent(
+                            type = UpnpDiagnosticEventType.UPNP_LOCATION_REJECTED,
+                            generation = generation,
+                            sourceIp = ip,
+                            location = safeUpnpLocationForLog(response.location),
+                            failureCategory = validation.failureCategory ?: UpnpFailureCategory.INVALID_LOCATION,
+                        ),
+                    )
+                    return@mapNotNull null
+                }
                 response.copy(sourceIp = ip, location = location)
             }
             .distinctBy { response ->
@@ -277,6 +320,16 @@ class DefaultUpnpEnricher(
                     response.sourceIp,
                     response.location?.lowercase(Locale.US).orEmpty(),
                 ).joinToString("\u0000")
+            }
+            .onEach { response ->
+                log(
+                    UpnpDiagnosticEvent(
+                        type = UpnpDiagnosticEventType.UPNP_LOCATION_ACCEPTED,
+                        generation = generation,
+                        sourceIp = response.sourceIp,
+                        location = safeUpnpLocationForLog(response.location),
+                    ),
+                )
             }
             .take(MAX_DESCRIPTION_FETCHES)
             .toList()
@@ -303,8 +356,20 @@ class DefaultUpnpEnricher(
                     } catch (_: Exception) {
                         null
                     }
-                    if (description?.hasIdentity != true) null
-                    else FetchedDescription(response, description)
+                    if (description?.hasIdentity != true) {
+                        log(
+                            UpnpDiagnosticEvent(
+                                type = UpnpDiagnosticEventType.UPNP_DEVICE_IGNORED,
+                                generation = generation,
+                                sourceIp = response.sourceIp,
+                                location = safeUpnpLocationForLog(response.location),
+                                failureCategory = UpnpFailureCategory.NO_IDENTITY_FIELDS,
+                            ),
+                        )
+                        null
+                    } else {
+                        FetchedDescription(response, description)
+                    }
                 }
             }
         }.awaitAll().filterNotNull()
@@ -327,7 +392,19 @@ class DefaultUpnpEnricher(
                     upnpDisplayNameCandidate = observation.friendlyName,
                 ),
             )
+            log(
+                UpnpDiagnosticEvent(
+                    type = UpnpDiagnosticEventType.UPNP_DEVICE_ASSOCIATED,
+                    generation = generation,
+                    sourceIp = ipAddress,
+                    networkIdentity = request.networkIdentity,
+                ),
+            )
         }
+    }
+
+    private fun log(event: UpnpDiagnosticEvent) {
+        runCatching { diagnosticLogger.log(event) }
     }
 
     private data class FetchedDescription(
