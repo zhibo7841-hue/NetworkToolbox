@@ -70,6 +70,19 @@ The initial scope is frozen around a focused local diagnostic workflow:
 - Reports.
 - Local history.
 
+### V0.2.0 — Released
+
+NetworkToolbox v0.2.0 is released. Its published capabilities include:
+
+- Enhanced Ping and DNS diagnostics.
+- TCP Port Check and IPv4 subnet calculation.
+- Enhanced network diagnostic reporting and local History.
+- Improved Home network information, including IPv4/IPv6 presentation.
+- LAN Scanner v1 with bounded automatic local-network scanning and custom IPv4
+  start/end ranges.
+
+The scope of the next version is TBD and requires a separate product decision.
+
 ### V0.2.x planning baseline
 
 ## V0.2 Network Diagnostic Enhancement

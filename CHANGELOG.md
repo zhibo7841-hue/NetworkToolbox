@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Maintenance
+
+- Updated GitHub Actions dependencies to remove deprecated Node.js 20 runtime warnings.
+
 ## [0.2.0] - 2026-08-29
 
 ### Added

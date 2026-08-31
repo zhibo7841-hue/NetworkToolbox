@@ -71,3 +71,15 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Constraints: Custom ranges must use RFC1918 private IPv4 addresses, contain no more than 254 addresses, and use the same bounded discovery pipeline as automatic scanning. Automatic scanning retains the current-network /24 safety limit.
 - Safety: Cellular and VPN scanning remain blocked. Reachability timeout (500 ms), TCP timeout (250 ms), host concurrency (32), fallback ports, and TCP CONNECT SUCCESS-only discovery semantics remain unchanged. No new discovery protocol, permission, or Room schema migration is introduced.
 - Consequence: Range selection is a presentation/use-case concern; both modes converge on `LanScanRange` and `LanDiscoveryEngine`, so discovery evidence and false-positive protections remain consistent.
+
+## Decision: v0.2.0 release boundary
+
+- Date: 2026-08-31
+- Status: Accepted
+- Decision: v0.2.0 is formally released after completing LAN Scanner v1,
+  custom IPv4 ranges, and the confirmed diagnostic enhancements.
+- Boundary: Device identification, mDNS, UPnP, MAC/OUI information,
+  Wake-on-LAN, and other candidate capabilities are not retroactively included
+  in v0.2.0.
+- Consequence: The v0.2.0 Tag and release commit remain immutable. Any future
+  version scope requires a separate product decision.

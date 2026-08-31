@@ -32,7 +32,7 @@ Detailed implementation acceptance criteria will be defined when Android develop
 
 ## V0.2.0
 
-- Status: Implemented; release-readiness remediation in progress
+- Status: Released (v0.2.0)
 - Goal: Network Diagnostic Enhancement
 
 Implemented areas:
