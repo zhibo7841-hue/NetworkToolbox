@@ -83,3 +83,21 @@ This log records the confirmed project decisions. New scope or changes to these 
   in v0.2.0.
 - Consequence: The v0.2.0 Tag and release commit remain immutable. Any future
   version scope requires a separate product decision.
+
+## Decision: v0.3.0 product direction and scope boundary
+
+- Date: 2026-08-31
+- Status: Accepted
+- Decision: The next confirmed feature version is v0.3.0. Its scope is LAN
+  Device Identification Phase 1 and Traceroute Phase 1.
+- LAN identification: First-stage enrichment prioritizes Hostname / Reverse
+  DNS, mDNS / Bonjour, and UPnP / SSDP information that devices openly provide.
+  Results must retain their source. MAC/OUI, cloud identification, device
+  fingerprinting, and Wake-on-LAN are excluded from this phase.
+- Traceroute: First-stage work prioritizes reliable per-hop probing, accurate
+  response/timeout semantics, cancellation, and cautious basic interpretation.
+  Maps, GeoIP, ASN, automatic carrier identification, and MTR are excluded.
+- Consequence: The v0.2.0 LAN Scanner discovery Core remains frozen. Device
+  identification is an enrichment layer and must not turn an identification
+  failure into an offline decision. Traceroute is introduced as an independent
+  tool before any later Diagnostic integration is considered.

@@ -154,9 +154,23 @@ Potential follow-up capabilities include:
 - Wake-on-LAN.
 - mDNS.
 
-### V0.3
+### V0.3.0 — Planned
 
-Release scope is not yet defined. Feature commitments will be recorded only after a separate planning decision.
+The confirmed v0.3.0 release goal is **LAN Device Identification Phase 1** and
+**Traceroute Phase 1**.
+
+- LAN device identification will enrich already discovered LAN hosts with
+  evidence-backed Hostname / Reverse DNS, mDNS / Bonjour, and UPnP / SSDP
+  information when the local network and Android platform make it available.
+- Traceroute will provide cancellable IPv4, IPv6, and automatic path checks for
+  a domain or IP target, with per-hop results and cautious basic interpretation.
+- Device identification and Traceroute results must preserve their actual
+  source and uncertainty. They do not alter the v0.2.0 LAN Scanner online
+  decision or claim a definitive network fault from a missing response.
+
+MAC/OUI lookup, cloud identification, Wake-on-LAN, deep fingerprinting,
+Traceroute maps, GeoIP, ASN data, and MTR are not part of v0.3.0 Phase 1. See
+`docs/V0.3_PLAN.md` for the approved development phases and release gates.
 
 ### V1.0
 
