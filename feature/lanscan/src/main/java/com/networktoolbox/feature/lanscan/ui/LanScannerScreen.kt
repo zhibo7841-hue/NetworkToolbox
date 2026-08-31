@@ -535,6 +535,13 @@ private fun DeviceCard(device: LanDevice) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            LanScannerPresentation.deviceIdentitySummary(device)?.let { identity ->
+                Text(
+                    identity,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             LanScannerPresentation.deviceSecondaryText(device)?.let { secondary ->
                 Text(
                     secondary,

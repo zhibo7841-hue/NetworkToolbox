@@ -4,17 +4,29 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
+import com.networktoolbox.feature.lanscan.domain.model.identity
 import java.util.Locale
 
 object LanScannerPresentation {
-    fun devicePrimaryText(device: LanDevice): String =
-        device.hostName?.takeIf(String::isNotBlank)
-            ?: device.mdnsDisplayNameCandidate?.takeIf(String::isNotBlank)?.let { "mDNS：$it" }
-            ?: device.upnpDisplayNameCandidate?.takeIf(String::isNotBlank)?.let { "UPnP：$it" }
-            ?: device.ipAddress
+    fun devicePrimaryText(device: LanDevice): String = device.identity.displayName.value
 
     fun deviceAddressText(device: LanDevice): String? = device.ipAddress.takeIf {
         devicePrimaryText(device) != device.ipAddress
+    }
+
+    /** One optional auxiliary line; raw source labels stay in the model, not on every card. */
+    fun deviceIdentitySummary(device: LanDevice): String? {
+        val identity = device.identity
+        val model = identity.modelName?.value
+            ?: identity.modelDescription?.value
+            ?: identity.modelNumber?.value
+        return when {
+            identity.manufacturer != null && model != null ->
+                "${identity.manufacturer.value} · $model"
+            identity.manufacturer != null -> identity.manufacturer.value
+            model != null -> model
+            else -> null
+        }
     }
 
     fun deviceRole(device: LanDevice): String = buildList {

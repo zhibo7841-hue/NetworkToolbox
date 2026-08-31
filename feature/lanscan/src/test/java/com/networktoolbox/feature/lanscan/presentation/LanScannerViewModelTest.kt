@@ -411,7 +411,7 @@ class LanScannerViewModelTest {
         assertEquals("HOME-SERVER", LanScannerPresentation.devicePrimaryText(named))
         assertEquals("192.168.1.40", LanScannerPresentation.deviceAddressText(named))
         val mdnsNamed = device("192.168.1.41").copy(mdnsDisplayNameCandidate = "Living Room Printer")
-        assertEquals("mDNS：Living Room Printer", LanScannerPresentation.devicePrimaryText(mdnsNamed))
+        assertEquals("Living Room Printer", LanScannerPresentation.devicePrimaryText(mdnsNamed))
         assertEquals("192.168.1.41", LanScannerPresentation.deviceAddressText(mdnsNamed))
         assertEquals("192.168.1.30", LanScannerPresentation.devicePrimaryText(device("192.168.1.30")))
         assertEquals(null, LanScannerPresentation.deviceAddressText(device("192.168.1.30")))
@@ -611,7 +611,7 @@ class LanScannerViewModelTest {
         assertEquals("reverse.example.lan", discovered.hostName)
         assertEquals("Friendly Printer", discovered.mdnsDisplayNameCandidate)
         assertEquals(1, discovered.mdnsObservations.size)
-        assertEquals("reverse.example.lan", LanScannerPresentation.devicePrimaryText(discovered))
+        assertEquals("Friendly Printer", LanScannerPresentation.devicePrimaryText(discovered))
     }
 
     @Test
