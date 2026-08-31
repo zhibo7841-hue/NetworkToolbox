@@ -24,6 +24,7 @@ enum class LanDiscoveryMethod {
 enum class LanDeviceNameSource {
     REVERSE_DNS,
     MDNS,
+    UPNP,
 }
 
 data class LanMdnsObservation(
@@ -40,6 +41,31 @@ data class LanMdnsObservation(
     val identityKey: String
         get() = "$serviceType\u0000$serviceName"
 }
+
+data class LanUpnpService(
+    val serviceType: String,
+    val serviceId: String? = null,
+)
+
+/** A source-labelled UPnP observation; it is enrichment, not online evidence. */
+data class LanUpnpObservation(
+    val friendlyName: String? = null,
+    val manufacturer: String? = null,
+    val manufacturerUrl: String? = null,
+    val modelDescription: String? = null,
+    val modelName: String? = null,
+    val modelNumber: String? = null,
+    val deviceType: String? = null,
+    val udn: String? = null,
+    val presentationUrl: String? = null,
+    val services: List<LanUpnpService> = emptyList(),
+    val usn: String? = null,
+    val server: String? = null,
+    val observedAt: Long,
+    val generation: Long? = null,
+    val networkIdentity: String? = null,
+    val source: LanDeviceNameSource = LanDeviceNameSource.UPNP,
+)
 
 enum class LanScanRejectionReason {
     NO_ACTIVE_NETWORK,
@@ -146,6 +172,8 @@ data class LanDevice(
     val hostNameSource: LanDeviceNameSource? = null,
     val mdnsDisplayNameCandidate: String? = null,
     val mdnsObservations: List<LanMdnsObservation> = emptyList(),
+    val upnpDisplayNameCandidate: String? = null,
+    val upnpObservations: List<LanUpnpObservation> = emptyList(),
     val isLocalDevice: Boolean,
     val isGateway: Boolean,
     val latencyMs: Long? = null,

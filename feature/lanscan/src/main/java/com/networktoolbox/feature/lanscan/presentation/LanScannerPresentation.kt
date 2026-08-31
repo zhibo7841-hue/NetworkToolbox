@@ -10,6 +10,7 @@ object LanScannerPresentation {
     fun devicePrimaryText(device: LanDevice): String =
         device.hostName?.takeIf(String::isNotBlank)
             ?: device.mdnsDisplayNameCandidate?.takeIf(String::isNotBlank)?.let { "mDNS：$it" }
+            ?: device.upnpDisplayNameCandidate?.takeIf(String::isNotBlank)?.let { "UPnP：$it" }
             ?: device.ipAddress
 
     fun deviceAddressText(device: LanDevice): String? = device.ipAddress.takeIf {

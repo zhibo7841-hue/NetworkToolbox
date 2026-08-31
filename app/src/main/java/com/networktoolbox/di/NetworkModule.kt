@@ -23,6 +23,8 @@ import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
 import com.networktoolbox.feature.lanscan.data.AndroidLanHostProbe
 import com.networktoolbox.feature.lanscan.data.AndroidMdnsDiscovery
 import com.networktoolbox.feature.lanscan.data.AndroidReverseDnsResolver
+import com.networktoolbox.feature.lanscan.data.AndroidSsdpDiscovery
+import com.networktoolbox.feature.lanscan.data.AndroidUpnpDescriptionFetcher
 import com.networktoolbox.feature.lanscan.domain.DefaultLanDiscoveryEngine
 import com.networktoolbox.feature.lanscan.domain.DefaultReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.LanDiscoveryEngine
@@ -37,6 +39,10 @@ import com.networktoolbox.feature.lanscan.domain.RunLanScanUseCase
 import com.networktoolbox.feature.lanscan.domain.RunLanScan
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsResolver
+import com.networktoolbox.feature.lanscan.domain.DefaultUpnpEnricher
+import com.networktoolbox.feature.lanscan.domain.SsdpDiscovery
+import com.networktoolbox.feature.lanscan.domain.UpnpDescriptionFetcher
+import com.networktoolbox.feature.lanscan.domain.UpnpEnricher
 import com.networktoolbox.feature.report.diagnostic.BasicDiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.DiagnosticAnalyzer
 import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticAnalyzerV2
@@ -139,6 +145,28 @@ object NetworkModule {
     fun provideMdnsEnricher(
         discovery: MdnsDiscovery,
     ): MdnsEnricher = DefaultMdnsEnricher(discovery)
+
+    @Provides
+    @Singleton
+    fun provideSsdpDiscovery(
+        @ApplicationContext context: Context,
+    ): SsdpDiscovery = AndroidSsdpDiscovery(context)
+
+    @Provides
+    @Singleton
+    fun provideUpnpDescriptionFetcher(
+        @ApplicationContext context: Context,
+    ): UpnpDescriptionFetcher = AndroidUpnpDescriptionFetcher(context)
+
+    @Provides
+    @Singleton
+    fun provideUpnpEnricher(
+        discovery: SsdpDiscovery,
+        descriptionFetcher: UpnpDescriptionFetcher,
+    ): UpnpEnricher = DefaultUpnpEnricher(
+        discovery = discovery,
+        descriptionFetcher = descriptionFetcher,
+    )
 
     @Provides
     @Singleton
