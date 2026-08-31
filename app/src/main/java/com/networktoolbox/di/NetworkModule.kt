@@ -21,12 +21,16 @@ import com.networktoolbox.feature.dns.domain.LookupDnsUseCase
 import com.networktoolbox.feature.ping.domain.ExecutePingUseCase
 import com.networktoolbox.feature.port.domain.CheckTcpPortUseCase
 import com.networktoolbox.feature.lanscan.data.AndroidLanHostProbe
+import com.networktoolbox.feature.lanscan.data.AndroidMdnsDiscovery
 import com.networktoolbox.feature.lanscan.data.AndroidReverseDnsResolver
 import com.networktoolbox.feature.lanscan.domain.DefaultLanDiscoveryEngine
 import com.networktoolbox.feature.lanscan.domain.DefaultReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.LanDiscoveryEngine
 import com.networktoolbox.feature.lanscan.domain.LanHostProbe
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
+import com.networktoolbox.feature.lanscan.domain.DefaultMdnsEnricher
+import com.networktoolbox.feature.lanscan.domain.MdnsDiscovery
+import com.networktoolbox.feature.lanscan.domain.MdnsEnricher
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadinessUseCase
 import com.networktoolbox.feature.lanscan.domain.RunLanScanUseCase
@@ -123,6 +127,18 @@ object NetworkModule {
     fun provideReverseDnsEnricher(
         resolver: ReverseDnsResolver,
     ): ReverseDnsEnricher = DefaultReverseDnsEnricher(resolver)
+
+    @Provides
+    @Singleton
+    fun provideMdnsDiscovery(
+        @ApplicationContext context: Context,
+    ): MdnsDiscovery = AndroidMdnsDiscovery(context)
+
+    @Provides
+    @Singleton
+    fun provideMdnsEnricher(
+        discovery: MdnsDiscovery,
+    ): MdnsEnricher = DefaultMdnsEnricher(discovery)
 
     @Provides
     @Singleton

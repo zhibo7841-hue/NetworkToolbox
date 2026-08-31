@@ -6,6 +6,9 @@ import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
+import com.networktoolbox.feature.lanscan.domain.MdnsDeviceEnrichment
+import com.networktoolbox.feature.lanscan.domain.MdnsEnricher
+import com.networktoolbox.feature.lanscan.domain.MdnsObservation
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentResult
@@ -347,6 +350,7 @@ class LanScannerViewModelTest {
             observeReadiness = ObserveLanScanReadiness { readinessFlow },
             runScan = fakeRunner(session(context, range, emptyList(), LanScanStatus.NETWORK_CHANGED)),
             reverseDnsEnricher = noOpEnricher(),
+            mdnsEnricher = noOpMdnsEnricher(),
         )
 
         advanceUntilIdle()
@@ -406,6 +410,9 @@ class LanScannerViewModelTest {
         val named = device("192.168.1.40").copy(hostName = "HOME-SERVER")
         assertEquals("HOME-SERVER", LanScannerPresentation.devicePrimaryText(named))
         assertEquals("192.168.1.40", LanScannerPresentation.deviceAddressText(named))
+        val mdnsNamed = device("192.168.1.41").copy(mdnsDisplayNameCandidate = "Living Room Printer")
+        assertEquals("mDNS：Living Room Printer", LanScannerPresentation.devicePrimaryText(mdnsNamed))
+        assertEquals("192.168.1.41", LanScannerPresentation.deviceAddressText(mdnsNamed))
         assertEquals("192.168.1.30", LanScannerPresentation.devicePrimaryText(device("192.168.1.30")))
         assertEquals(null, LanScannerPresentation.deviceAddressText(device("192.168.1.30")))
 
@@ -565,11 +572,96 @@ class LanScannerViewModelTest {
         assertFalse(enrichmentCalls.get())
     }
 
+    @Test
+    fun `completed scan applies mdns candidate and preserves reverse dns hostname`() = runTest {
+        val context = context("192.168.1.2", 30)
+        val range = readyRange(context)
+        val original = device("192.168.1.3").copy(
+            hostName = "reverse.example.lan",
+            hostNameSource = LanDeviceNameSource.REVERSE_DNS,
+        )
+        val observation = MdnsObservation(
+            serviceName = "Friendly Printer",
+            serviceType = "_ipp._tcp",
+            ipv4Addresses = listOf(original.ipAddress),
+            observedAt = 1L,
+            generation = 1L,
+            networkIdentity = mdnsIdentity(context),
+        )
+        val viewModel = viewModel(
+            readiness(context),
+            runner = fakeRunner(session(context, range, listOf(original))),
+            mdnsEnricher = MdnsEnricher { _, _, _, onResult ->
+                onResult(
+                    MdnsDeviceEnrichment(
+                        ipAddress = original.ipAddress,
+                        observation = observation,
+                        mdnsDisplayNameCandidate = "Friendly Printer",
+                    ),
+                )
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+
+        val discovered = (viewModel.uiState.value as LanScannerUiState.Completed)
+            .session.discoveredDevices.single()
+        assertEquals("reverse.example.lan", discovered.hostName)
+        assertEquals("Friendly Printer", discovered.mdnsDisplayNameCandidate)
+        assertEquals(1, discovered.mdnsObservations.size)
+        assertEquals("reverse.example.lan", LanScannerPresentation.devicePrimaryText(discovered))
+    }
+
+    @Test
+    fun `leaving completed scan cancels mdns enrichment and ignores late result`() = runTest {
+        val context = context("192.168.1.2", 30)
+        val range = readyRange(context)
+        val pending = CompletableDeferred<MdnsDeviceEnrichment>()
+        val original = device("192.168.1.3")
+        val viewModel = viewModel(
+            readiness(context),
+            runner = fakeRunner(session(context, range, listOf(original))),
+            mdnsEnricher = MdnsEnricher { _, _, _, onResult ->
+                onResult(pending.await())
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        runCurrent()
+        viewModel.stopScan()
+        pending.complete(
+            MdnsDeviceEnrichment(
+                ipAddress = original.ipAddress,
+                observation = MdnsObservation(
+                    serviceName = "Stale",
+                    serviceType = "_http._tcp",
+                    ipv4Addresses = listOf(original.ipAddress),
+                    observedAt = 1L,
+                    generation = 1L,
+                    networkIdentity = mdnsIdentity(context),
+                ),
+                mdnsDisplayNameCandidate = "Stale",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Completed)
+        assertEquals(
+            null,
+            (viewModel.uiState.value as LanScannerUiState.Completed)
+                .session.discoveredDevices.single().mdnsDisplayNameCandidate,
+        )
+    }
+
     private fun viewModel(
         readiness: LanScanReadiness,
         runner: RunLanScan? = null,
         readinessFlow: Flow<LanScanReadiness> = flowOf(readiness),
         enricher: ReverseDnsEnricher = noOpEnricher(),
+        mdnsEnricher: MdnsEnricher = noOpMdnsEnricher(),
     ): LanScannerViewModel {
         val effectiveRunner = runner ?: object : RunLanScan {
             override suspend fun invoke(
@@ -581,10 +673,21 @@ class LanScannerViewModelTest {
             observeReadiness = ObserveLanScanReadiness { readinessFlow },
             runScan = effectiveRunner,
             reverseDnsEnricher = enricher,
+            mdnsEnricher = mdnsEnricher,
         )
     }
 
     private fun noOpEnricher(): ReverseDnsEnricher = ReverseDnsEnricher { _, _ -> }
+
+    private fun noOpMdnsEnricher(): MdnsEnricher = MdnsEnricher { _, _, _, _ -> }
+
+    private fun mdnsIdentity(context: NetworkContext) = listOf(
+        context.connectionType.name,
+        context.interfaceName.orEmpty(),
+        context.ipv4Address.orEmpty(),
+        context.ipv4PrefixLength?.toString().orEmpty(),
+        context.gateway.orEmpty(),
+    ).joinToString("|")
 
     private fun readiness(context: NetworkContext): LanScanReadiness = LanScanReadiness(
         networkContext = context,

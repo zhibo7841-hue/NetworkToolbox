@@ -8,10 +8,13 @@ import java.util.Locale
 
 object LanScannerPresentation {
     fun devicePrimaryText(device: LanDevice): String =
-        device.hostName?.takeIf(String::isNotBlank) ?: device.ipAddress
+        device.hostName?.takeIf(String::isNotBlank)
+            ?: device.mdnsDisplayNameCandidate?.takeIf(String::isNotBlank)?.let { "mDNS：$it" }
+            ?: device.ipAddress
 
-    fun deviceAddressText(device: LanDevice): String? =
-        device.ipAddress.takeIf { device.hostName?.isNotBlank() == true }
+    fun deviceAddressText(device: LanDevice): String? = device.ipAddress.takeIf {
+        devicePrimaryText(device) != device.ipAddress
+    }
 
     fun deviceRole(device: LanDevice): String = buildList {
         if (device.isLocalDevice) add("本机")

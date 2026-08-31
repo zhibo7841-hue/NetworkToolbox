@@ -7,6 +7,8 @@ import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
+import com.networktoolbox.feature.lanscan.domain.MdnsDeviceEnrichment
+import com.networktoolbox.feature.lanscan.domain.MdnsEnricher
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentResult
@@ -17,6 +19,7 @@ import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate
+import com.networktoolbox.feature.lanscan.domain.toLanMdnsObservation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -33,6 +36,7 @@ class LanScannerViewModel @Inject constructor(
     observeReadiness: ObserveLanScanReadiness,
     private val runScan: RunLanScan,
     private val reverseDnsEnricher: ReverseDnsEnricher,
+    private val mdnsEnricher: MdnsEnricher,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<LanScannerUiState>(LanScannerUiState.Idle)
     val uiState: StateFlow<LanScannerUiState> = _uiState.asStateFlow()
@@ -40,6 +44,7 @@ class LanScannerViewModel @Inject constructor(
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
     private var enrichmentJob: Job? = null
+    private var mdnsJob: Job? = null
     private var enrichmentGeneration: Long = 0L
     private var enrichmentNetworkContext: NetworkContext? = null
     private val stopRequested = AtomicBoolean(false)
@@ -146,7 +151,7 @@ class LanScannerViewModel @Inject constructor(
                 if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
                     _uiState.value = session.toUiState()
                     if (session.status == LanScanStatus.COMPLETED) {
-                        startReverseDnsEnrichment(session, generation)
+                        startPostDiscoveryEnrichment(session, generation)
                     }
                 }
             } catch (error: CancellationException) {
@@ -198,7 +203,13 @@ class LanScannerViewModel @Inject constructor(
     }
 
     fun stopScan() {
-        val current = _uiState.value as? LanScannerUiState.Scanning ?: return
+        val current = _uiState.value as? LanScannerUiState.Scanning
+        if (current == null) {
+            // This method is also called when leaving the screen. A completed
+            // scan may still have active post-discovery enrichment to stop.
+            invalidateEnrichment()
+            return
+        }
         stopRequested.set(true)
         invalidateEnrichment()
         lastScanRange = current.range
@@ -263,15 +274,44 @@ class LanScannerViewModel @Inject constructor(
         }
     }
 
-    private fun startReverseDnsEnrichment(
+    private fun startPostDiscoveryEnrichment(
         session: LanScanSession,
         generation: Long,
     ) {
         enrichmentNetworkContext = session.initialNetworkContext
+        startReverseDnsEnrichment(session, generation)
+        startMdnsEnrichment(session, generation)
+    }
+
+    private fun startReverseDnsEnrichment(
+        session: LanScanSession,
+        generation: Long,
+    ) {
         enrichmentJob = viewModelScope.launch {
             reverseDnsEnricher.enrich(session.discoveredDevices) { result ->
                 if (generation == enrichmentGeneration) {
                     applyReverseDnsResult(result)
+                }
+            }
+        }
+    }
+
+    private fun startMdnsEnrichment(
+        session: LanScanSession,
+        generation: Long,
+    ) {
+        mdnsJob = viewModelScope.launch {
+            mdnsEnricher.enrich(
+                devices = session.discoveredDevices,
+                networkContext = session.initialNetworkContext,
+                generation = generation,
+            ) { result ->
+                if (
+                    generation == enrichmentGeneration &&
+                        result.observation.generation == generation &&
+                        result.observation.networkIdentity == session.initialNetworkContext.mdnsIdentityForUi()
+                ) {
+                    applyMdnsResult(result)
                 }
             }
         }
@@ -297,6 +337,30 @@ class LanScannerViewModel @Inject constructor(
         )
     }
 
+    private fun applyMdnsResult(result: MdnsDeviceEnrichment) {
+        val state = _uiState.value as? LanScannerUiState.Completed ?: return
+        val observation = result.observation.toLanMdnsObservation()
+        val updatedDevices = state.session.discoveredDevices.map { device ->
+            if (device.ipAddress != result.ipAddress) {
+                device
+            } else {
+                val observations = (device.mdnsObservations
+                    .filterNot { it.identityKey == observation.identityKey } + observation)
+                    .takeLast(MAX_MDNS_OBSERVATIONS_PER_DEVICE)
+                device.copy(
+                    // Reverse DNS remains the primary existing hostName. mDNS
+                    // contributes a candidate without overwriting that result.
+                    mdnsDisplayNameCandidate = device.mdnsDisplayNameCandidate
+                        ?: result.mdnsDisplayNameCandidate,
+                    mdnsObservations = observations,
+                )
+            }
+        }
+        _uiState.value = state.copy(
+            session = state.session.copy(discoveredDevices = updatedDevices),
+        )
+    }
+
     private fun beginNewEnrichmentGeneration(): Long {
         invalidateEnrichment()
         return enrichmentGeneration
@@ -307,6 +371,8 @@ class LanScannerViewModel @Inject constructor(
         enrichmentNetworkContext = null
         enrichmentJob?.cancel()
         enrichmentJob = null
+        mdnsJob?.cancel()
+        mdnsJob = null
     }
 
     private fun recalculateCustomRange() {
@@ -360,6 +426,14 @@ private fun NetworkContext.isSameLanScanNetworkAs(
         interfaceName == other.interfaceName &&
         vpnActive == other.vpnActive
 
+private fun NetworkContext.mdnsIdentityForUi(): String = listOf(
+    connectionType.name,
+    interfaceName.orEmpty(),
+    ipv4Address.orEmpty(),
+    ipv4PrefixLength?.toString().orEmpty(),
+    gateway.orEmpty(),
+).joinToString(separator = "|")
+
 private fun LanScannerUiState.canRefreshReadiness(): Boolean = when (this) {
     LanScannerUiState.Idle,
     is LanScannerUiState.Ready,
@@ -374,3 +448,5 @@ private fun LanScannerUiState.canRefreshReadiness(): Boolean = when (this) {
     is LanScannerUiState.NetworkChanged,
     -> false
 }
+
+private const val MAX_MDNS_OBSERVATIONS_PER_DEVICE = 16

@@ -23,6 +23,22 @@ enum class LanDiscoveryMethod {
 /** Source for an optional device name; it is never online-discovery evidence. */
 enum class LanDeviceNameSource {
     REVERSE_DNS,
+    MDNS,
+}
+
+data class LanMdnsObservation(
+    val serviceName: String,
+    val serviceType: String,
+    val hostname: String? = null,
+    val ipv4Addresses: List<String> = emptyList(),
+    val ipv6Addresses: List<String> = emptyList(),
+    val port: Int? = null,
+    val txtAttributes: Map<String, String> = emptyMap(),
+    val observedAt: Long,
+    val source: LanDeviceNameSource = LanDeviceNameSource.MDNS,
+) {
+    val identityKey: String
+        get() = "$serviceType\u0000$serviceName"
 }
 
 enum class LanScanRejectionReason {
@@ -128,6 +144,8 @@ data class LanDevice(
     val macAddress: String? = null,
     val hostName: String? = null,
     val hostNameSource: LanDeviceNameSource? = null,
+    val mdnsDisplayNameCandidate: String? = null,
+    val mdnsObservations: List<LanMdnsObservation> = emptyList(),
     val isLocalDevice: Boolean,
     val isGateway: Boolean,
     val latencyMs: Long? = null,
