@@ -23,6 +23,7 @@ import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CancellationException
@@ -43,6 +44,14 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
     private val connectivityManager =
         appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     private val wifiManager = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+    /**
+     * NsdManager can enqueue callbacks after an individual discovery session is
+     * stopped. This executor therefore belongs to the application-scoped
+     * adapter, not to a Session, and must remain alive for the adapter lifetime.
+     */
+    private val callbackExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "NetworkToolbox-mDNS")
+    }
 
     override fun start(
         request: MdnsDiscoveryRequest,
@@ -51,19 +60,20 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
         nsdManager = nsdManager,
         connectivityManager = connectivityManager,
         wifiManager = wifiManager,
+        callbackExecutor = callbackExecutor,
         request = request,
         onEvent = onEvent,
     ).also(Session::start)
 
-    private class Session(
+    internal class Session(
         private val nsdManager: NsdManager?,
         private val connectivityManager: ConnectivityManager?,
         private val wifiManager: WifiManager?,
+        private val callbackExecutor: Executor,
         private val request: MdnsDiscoveryRequest,
         private val onEvent: (MdnsDiscoveryEvent) -> Unit,
     ) : MdnsDiscoverySession {
         private val stateLock = Any()
-        private val callbackExecutor: ExecutorService = Executors.newSingleThreadExecutor()
         private val resolutionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val resolveSlots = Semaphore(MAX_CONCURRENT_RESOLUTIONS)
         private val pendingDiscoveryListeners =
@@ -152,8 +162,6 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                 stopServiceDiscoverySafely(serviceType, listener)
             }
             releaseMulticastLock()
-            runCatching { callbackExecutor.shutdownNow() }
-                .onFailure { error -> logWarning("MDNS_STOP_FAILED", error) }
             synchronized(stateLock) {
                 state = SessionState.STOPPED
             }
@@ -499,8 +507,11 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
             try {
                 block()
             } catch (error: Exception) {
-                logWarning("MDNS_CALLBACK_ERROR", error = error, serviceType = serviceType)
-                Log.w(TAG, "callback=$callbackName generation=${request.generation}")
+                logWarning(
+                    "MDNS_CALLBACK_ERROR",
+                    error = error,
+                    serviceType = "$serviceType:$callbackName",
+                )
             }
         }
 
@@ -514,10 +525,13 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
         }
 
         private fun logEvent(event: String, serviceType: String = "") {
-            Log.d(
-                TAG,
-                "$event generation=${request.generation} serviceType=${serviceType.take(MAX_LOG_SERVICE_TYPE_LENGTH)}",
-            )
+            runCatching {
+                Log.d(
+                    TAG,
+                    "$event generation=${request.generation} serviceType=" +
+                        serviceType.take(MAX_LOG_SERVICE_TYPE_LENGTH),
+                )
+            }
         }
 
         private fun logWarning(
@@ -530,10 +544,13 @@ class AndroidMdnsDiscovery(context: Context) : MdnsDiscovery {
                 if (errorCode != null) append(" errorCode=$errorCode")
                 if (error != null) append(" error=${error.javaClass.simpleName}")
             }
-            Log.w(
-                TAG,
-                "$event generation=${request.generation} serviceType=${serviceType.take(MAX_LOG_SERVICE_TYPE_LENGTH)}$suffix",
-            )
+            runCatching {
+                Log.w(
+                    TAG,
+                    "$event generation=${request.generation} serviceType=" +
+                        serviceType.take(MAX_LOG_SERVICE_TYPE_LENGTH) + suffix,
+                )
+            }
         }
 
         private fun acquireMulticastLockIfRequired() {
