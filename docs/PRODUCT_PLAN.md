@@ -154,7 +154,7 @@ Potential follow-up capabilities include:
 - Wake-on-LAN.
 - mDNS.
 
-### V0.3.0 — Planned
+### V0.3.0 — Released
 
 The confirmed v0.3.0 release goal is **LAN Device Identification Phase 1** and
 **Traceroute Phase 1**.

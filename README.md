@@ -6,7 +6,7 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 
 ## Current version
 
-- Application version: `0.2.0`
+- Application version: `0.3.0`
 - Minimum Android version: Android 12 (API 31)
 - Target Android SDK: API 36
 
@@ -32,13 +32,14 @@ NetworkToolbox 是一个开源 Android 网络分析与故障排查工具箱，�
 - ✅ 本地 History
 - ✅ LAN Scanner
 - ✅ 自定义 IPv4 扫描范围（RFC1918，单次最多 254 个地址）
+- ✅ IPv4 Traceroute
+- ✅ LAN Device Identification（Reverse DNS、mDNS/Bonjour、SSDP/UPnP）
 
 ## Roadmap
 
 以下内容仅为 Planned，不代表已承诺的发布范围：
 
 - Wi-Fi Analyzer
-- mDNS
 - Wake-on-LAN
 
 ## Screenshots
@@ -63,7 +64,7 @@ Download the published APK from GitHub Releases.
 
 Requires Android 12 or later.
 
-The current public release is `0.2.0`.
+The current public release is `0.3.0`.
 
 ## Privacy
 
@@ -80,7 +81,7 @@ NetworkToolbox 不要求账号，不上传网络诊断数据；应用本地数�
 - [Architecture](docs/ARCHITECTURE.md)
 - [Decision log](docs/DECISIONS.md)
 - [Release plan](docs/RELEASE_PLAN.md)
-- [Release notes draft](docs/RELEASE_v0.1.0.md)
+- [Release notes](docs/releases/v0.3.0.md)
 - [Development workflow](docs/DEVELOPMENT_WORKFLOW.md)
 - [OSS research](docs/OSS_RESEARCH.md)
 
