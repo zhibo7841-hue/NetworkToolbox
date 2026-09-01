@@ -101,3 +101,21 @@ This log records the confirmed project decisions. New scope or changes to these 
   identification is an enrichment layer and must not turn an identification
   failure into an offline decision. Traceroute is introduced as an independent
   tool before any later Diagnostic integration is considered.
+
+## Decision: IPv4 traceroute Core implementation
+
+- Date: 2026-09-01
+- Status: Accepted
+- Decision: Implement the first Traceroute Core as an IPv4-only, app-owned UDP
+  probe using Linux extended error queues through a minimal NDK/JNI adapter.
+- Evidence boundary: The approach was validated as a technical candidate by
+  the Sony Xperia 1 VII / XQ-FS72 Android 16 App-UID spike. It remains
+  device-qualified and must expose explicit unsupported, timeout, malformed,
+  permission, and network-change results on other devices.
+- Safety: The implementation does not use Root, `SOCK_RAW`, `CAP_NET_RAW`, a
+  system traceroute command, `ProcessBuilder`, TCP-as-traceroute, or a third-
+  party packet library. Socket operations are bound to the selected Android
+  `Network` and run off the main thread.
+- Scope: This decision authorizes the Core only. IPv6, UI, History, automatic
+  Diagnostic integration, reverse DNS, maps, ASN/GeoIP, and background tracing
+  remain outside this task and require separate decisions.

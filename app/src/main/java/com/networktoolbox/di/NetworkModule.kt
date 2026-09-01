@@ -8,6 +8,8 @@ import com.networktoolbox.core.network.data.AndroidNetworkRepository
 import com.networktoolbox.core.network.data.AndroidPingEngine
 import com.networktoolbox.core.network.data.AndroidPingSessionProbe
 import com.networktoolbox.core.network.data.AndroidTcpPortChecker
+import com.networktoolbox.core.network.data.traceroute.AndroidNativeUdpTracerouteProbe
+import com.networktoolbox.core.network.data.traceroute.AndroidTracerouteNetworkProvider
 import com.networktoolbox.core.network.dns.DnsEngine
 import com.networktoolbox.core.network.dns.DnsQueryEngine
 import com.networktoolbox.core.network.ping.PingEngine
@@ -15,6 +17,10 @@ import com.networktoolbox.core.network.ping.DefaultPingSessionEngine
 import com.networktoolbox.core.network.ping.PingProbe
 import com.networktoolbox.core.network.ping.PingSessionEngine
 import com.networktoolbox.core.network.tcp.TcpPortChecker
+import com.networktoolbox.core.network.traceroute.DefaultTracerouteEngine
+import com.networktoolbox.core.network.traceroute.TracerouteEngine
+import com.networktoolbox.core.network.traceroute.TracerouteNetworkProvider
+import com.networktoolbox.core.network.traceroute.UdpTracerouteNativeProbe
 import com.networktoolbox.core.network.repository.NetworkRepository
 import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
 import com.networktoolbox.feature.dns.domain.LookupDnsUseCase
@@ -96,6 +102,27 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideTcpPortChecker(): TcpPortChecker = AndroidTcpPortChecker()
+
+    @Provides
+    @Singleton
+    fun provideTracerouteNetworkProvider(
+        @ApplicationContext context: Context,
+    ): TracerouteNetworkProvider = AndroidTracerouteNetworkProvider(context)
+
+    @Provides
+    @Singleton
+    fun provideTracerouteNativeProbe(): UdpTracerouteNativeProbe =
+        AndroidNativeUdpTracerouteProbe()
+
+    @Provides
+    @Singleton
+    fun provideTracerouteEngine(
+        networkProvider: TracerouteNetworkProvider,
+        nativeProbe: UdpTracerouteNativeProbe,
+    ): TracerouteEngine = DefaultTracerouteEngine(
+        networkProvider = networkProvider,
+        nativeProbe = nativeProbe,
+    )
 
     @Provides
     @Singleton

@@ -1,6 +1,6 @@
 # Traceroute Phase 1 Technical Baseline
 
-**Status:** Technical baseline and implementation recommendation only  
+**Status:** Technical baseline plus implemented IPv4 Core (no UI)
 **Product line:** NetworkToolbox v0.3.0  
 **Date:** 2026-08-31
 
@@ -82,9 +82,9 @@ also suppress or rewrite the expected responses.
 The Task 044-A App-UID spike below is a device-specific refinement of this
 general limitation. It does not make ordinary Android UDP error-queue support
 portable across OEMs, but it did establish a working IPv4 capability on the
-validated Sony device. A production implementation would still require a
-separate authorization, protocol design, parser tests, and device fallback
-behavior.
+validated Sony device. Task 044 then approved and implemented a separately
+scoped IPv4 Core that retains explicit capability, parser, timeout, and
+unsupported-state behavior; it does not claim portability to unvalidated OEMs.
 
 ## 5. TCP traceroute feasibility
 
@@ -294,9 +294,10 @@ Task 044-A ran a temporary debug-only Android harness on the same Sony Xperia
 1 VII / XQ-FS72 running Android 16 (API 36). The harness was launched as the
 installed application, not through `adb shell`; `getuid()` and `geteuid()`
 both reported application UID `10420`. It used a small NDK/JNI probe only for
-this local capability check and was removed after validation. No native code,
-NDK configuration, activity, permission, or dependency from the spike remains
-in the project.
+that local capability check and was removed after validation. Task 044 retains
+a separate production NDK/JNI adapter with the protocol and lifecycle
+boundaries documented in §36; the temporary activity and its ad-hoc logging
+remain removed.
 
 The bounded probe used IPv4 `AF_INET`, `SOCK_DGRAM`, `IPPROTO_UDP`, one UDP
 datagram per TTL, `IP_TTL` for TTL 1 through 8, `IP_RECVERR`, `poll(POLLERR |
@@ -340,13 +341,12 @@ that the device-specific IPv6 route situation required separate handling. This
 does not change the IPv4 result or authorize silent IPv4 fallback for a future
 IPv6 request.
 
-**Task 044-A gate result:** app-owned UDP error queue is **GO for an IPv4
-technical candidate on Sony XQ-FS72 / Android 16**, subject to a separate
-production design and implementation task. The system-command approach
-remains **NO-GO** on this device. The spike intentionally did not test a
-mid-poll cancellation race; its resource-close behavior was verified at the
-end of each bounded probe, and a production coroutine adapter must close the
-socket on cancellation.
+**Task 044-A gate result:** app-owned UDP error queue was **GO for an IPv4
+technical candidate on Sony XQ-FS72 / Android 16**. Task 044 implemented the
+separate production Core described in §36. The system-command approach remains
+**NO-GO** on this device. The spike itself intentionally did not test a
+mid-poll cancellation race; the production Core adds a cancellation pipe and
+closes the socket from the coroutine lifecycle.
 
 ## 9. IPv4 policy
 
@@ -453,9 +453,9 @@ The proposed system-command method is **not approved** for Sony XQ-FS72 /
 Android 16. Although the Toybox applets exist, both IPv4 and IPv6 fail at socket
 creation for the non-Root ADB shell. No real hop output or parser fixture was
 obtained through that system-command path. The App-UID UDP error-queue spike
-later produced real IPv4 intermediate ICMP responses, so app-owned UDP is now
-a validated device-specific technical candidate, not a portable Android
-guarantee.
+later produced real IPv4 intermediate ICMP responses, and Task 044 now provides
+an IPv4-only production Core using that capability. It remains a
+device-qualified capability, not a portable Android guarantee.
 
 The project must not begin production Traceroute implementation from the
 temporary spike alone. A separate implementation task must define the pure
@@ -733,10 +733,10 @@ debug builds.
 ## 31. Dependency decision
 
 No third-party dependency is justified for Phase 1. Kotlin standard-library
-parsing, `ProcessBuilder`, coroutines already present in the project, and a
-small platform adapter are sufficient. A DNS or packet library would not
-solve Android raw-socket policy and would create additional license, parser,
-security, and maintenance surface.
+orchestration, coroutines already present in the project, and a small C++17
+NDK/JNI platform adapter are sufficient. A DNS or packet library would not
+solve Android socket-policy differences and would create additional license,
+parser, security, and maintenance surface.
 
 ## 32. Testing plan
 
@@ -799,13 +799,119 @@ This baseline does not authorize:
 - LAN Scanner changes;
 - version changes, tags, releases, or APK uploads.
 
-No production implementation task is authorized by this baseline. A future
-task may explicitly evaluate the App-UID UDP error-queue candidate, but it must
-not add Root flow, `SOCK_RAW`, a native traceroute binary, `ProcessBuilder`, or a
-third-party library implicitly. The temporary spike itself is not a product
-feature and has been removed.
+Task 044 now implements the production IPv4 Core under the separate
+implementation scope below. It does not authorize a UI, History, Diagnostic,
+or IPv6 integration, and it must not add Root flow, `SOCK_RAW`, a native
+traceroute binary, `ProcessBuilder`, or a third-party library implicitly. The
+temporary spike activity itself remains removed.
 
-## 36. References
+## 36. Task 044 IPv4 production Core
+
+Task 044 implements the approved non-Root IPv4 path as an isolated Core module.
+The implementation is deliberately narrower than the broader v0.3 product
+direction: it is a cancellable, evidence-labelled engine and not yet a user
+screen or an automatic diagnostic stage.
+
+### Architecture and boundaries
+
+```text
+TracerouteEngine
+        |
+DefaultTracerouteEngine       Kotlin orchestration on Dispatchers.IO
+        |
+UdpTracerouteNativeProbe      platform abstraction
+        |
+AndroidNativeUdpTracerouteProbe
+        |
+NativeUdpTracerouteJni        minimal C++17 NDK adapter
+        |
+AF_INET UDP socket + Linux extended error queue
+```
+
+The domain model is pure Kotlin in `core:network` and contains request,
+per-probe, per-hop, resolution, binding, and session result types. Kotlin owns
+input validation, hostname-to-IPv4 resolution through the selected Android
+`Network`, network fingerprint checks, TTL/port sequencing, result mapping,
+timeouts, cancellation, and session cleanup. Native code owns only one bounded
+probe: socket creation, `IP_RECVERR`, `IP_TTL`, `sendto`, `poll`,
+`recvmsg(MSG_ERRQUEUE)`, safe ancillary-data parsing, ICMP classification, and
+file-descriptor cleanup.
+
+The native adapter uses `socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)`. It never
+uses `SOCK_RAW`, `CAP_NET_RAW`, Root, a shell, `ProcessBuilder`, or a TCP
+connect result as a traceroute hop. The existing `INTERNET` and
+`ACCESS_NETWORK_STATE` permissions are sufficient; no new permission or
+third-party dependency was added. `Network.bindSocket(fd)` is called for the
+selected active network, and bind failure is returned as a structured failure;
+there is no silent default-network fallback.
+
+### Protocol and status semantics
+
+The first production contract is IPv4 only. IPv6 requests return an explicit
+unsupported validation result and never fall back to IPv4. IPv4 literals and
+hostnames are accepted; hostnames are resolved outside native code. Addresses
+in `198.18.0.0/15` are retained and marked `fakeIpDetected`; they are not
+blocked and do not imply a particular proxy application.
+
+Defaults are `maxHops=30`, `probesPerHop=3`, `timeoutMs=1500`, and a high UDP
+destination port beginning at `33434`. The request is bounded to 1–30 hops,
+1–3 probes, 100–5000 ms, and legal destination ports; ports 53 and 123 are
+rejected. Each probe uses a deterministic per-probe port offset and an
+8-byte payload. No DNS/HTTP/other application protocol is used as the probe.
+
+`ICMP_TIME_EXCEEDED` is `HOP`. `ICMP_DEST_UNREACH` with
+`ICMP_PORT_UNREACH` is `DESTINATION_REACHED`. Other ICMP errors are local
+errors, not destination success. A probe timeout is retained as a timeout and
+does not stop later TTLs. Exhausting the hop limit without destination proof is
+`PARTIAL`, not `FAILED`. `FAILED` is reserved for resolution, socket,
+`IP_RECVERR`, bind, permission, malformed-response, unsupported, or persistent
+local-operation failures. Unknown native codes map to `LOCAL_ERROR`.
+
+### Cancellation and network changes
+
+Every native socket owns a nonblocking cancellation pipe. Native `poll()` waits
+on both the socket error state and the cancellation read end, so coroutine
+cancellation wakes a probe rather than waiting for the full timeout. The
+engine also registers cancellation cleanup, disposes that registration before
+normal close, and closes the socket and pipe descriptors in `finally`.
+
+The engine snapshots the selected `Network` fingerprint and checks it before
+each probe/TTL. A changed fingerprint returns `NETWORK_CHANGED` with the
+partial trace and never combines observations from the two networks. Late
+callbacks are not applicable to this synchronous native probe; no process or
+background monitor is retained after the session.
+
+### Native safety and ABI
+
+The NDK is pinned to `27.0.12077973`; CMake uses C++17, `-Wall -Wextra
+-Werror`, and a 16 KB maximum page-size linker option for Android 16 readiness.
+No `abiFilters` were present or added, so Gradle builds the project-supported
+ABIs by default. The Debug APK contains the following library slices from the
+same implementation:
+
+| ABI | Library |
+| --- | --- |
+| `arm64-v8a` | `libnetworktoolbox_traceroute.so` |
+| `armeabi-v7a` | `libnetworktoolbox_traceroute.so` |
+| `x86` | `libnetworktoolbox_traceroute.so` |
+| `x86_64` | `libnetworktoolbox_traceroute.so` |
+
+The exact per-slice sizes and APK delta are recorded in the Task 044
+completion report after the final build artifact is hashed. Release native
+compilation is a required gate; no APK or tag is published by this task.
+
+### Test and integration boundary
+
+The Core tests use fake networks and native probes, so CI does not depend on
+the public Internet. They cover validation, hostname resolution and Fake-IP
+marking, all native outcome mappings, hop/destination/timeout semantics,
+partial traces, no-network/resolution/open/bind failures, network changes,
+cancellation cleanup, and per-probe port sequencing. A temporary debug-only
+device harness is permitted for the Sony gate and is removed after use. There
+is no Traceroute UI, History record, Reverse DNS, ASN/GeoIP, TCP fallback,
+automatic Diagnostic integration, or product version change in Task 044.
+
+## 37. References
 
 - [Android `Network`](https://developer.android.com/reference/android/net/Network)
 - [Android `ProcessBuilder`](https://developer.android.com/reference/java/lang/ProcessBuilder)
