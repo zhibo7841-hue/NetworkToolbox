@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -111,35 +112,26 @@ fun TracerouteScreen(
                         RunningCard(status, onStop)
                     }
                     if (status.hops.isNotEmpty()) {
-                        item { SectionTitle("实时路径") }
-                        items(status.hops, key = { it.hopNumber }) { hop ->
-                            HopRow(hop)
-                        }
+                        tracerouteHopList("实时路径", status.hops)
                     }
                 }
 
                 is TracerouteUiStatus.Completed -> {
                     item { ResultCard(status.result, status.presentation) }
                     if (status.result.hops.isNotEmpty()) {
-                        item { SectionTitle("路由路径") }
-                        items(status.result.hops, key = { it.hopNumber }) { hop ->
-                            HopRow(hop)
-                        }
+                        tracerouteHopList("路由路径", status.result.hops)
                     }
                 }
 
-                is TracerouteUiStatus.Cancelled -> item {
-                    MessageCard(
-                        title = "追踪已停止",
-                        message = TraceroutePresentationMapper.cancelledSummary(status.hops.size),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (status.hops.isNotEmpty()) {
-                        SectionTitle("已获取路径")
-                        status.hops.forEach { hop ->
-                            HopRow(hop)
-                        }
+                is TracerouteUiStatus.Cancelled -> {
+                    item {
+                        MessageCard(
+                            title = "追踪已停止",
+                            message = TraceroutePresentationMapper.cancelledSummary(status.hops.size),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+                    tracerouteHopList("已获取路径", status.hops)
                 }
 
                 is TracerouteUiStatus.Error -> item {
@@ -151,6 +143,18 @@ fun TracerouteScreen(
                 }
             }
         }
+    }
+}
+
+private fun LazyListScope.tracerouteHopList(
+    title: String,
+    hops: List<TracerouteHop>,
+) {
+    if (hops.isEmpty()) return
+
+    item { SectionTitle(title) }
+    items(hops, key = { it.hopNumber }) { hop ->
+        HopRow(hop)
     }
 }
 

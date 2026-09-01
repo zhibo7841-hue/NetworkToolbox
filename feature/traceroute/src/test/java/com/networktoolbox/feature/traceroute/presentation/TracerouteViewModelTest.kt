@@ -72,7 +72,7 @@ class TracerouteViewModelTest {
     @Test
     fun stopCancelsRunAndLeavesCancelledState() = runTest(dispatcher) {
         val engine = FakeEngine()
-        engine.progress = sampleProgress()
+        engine.progressUpdates = (1..3).map(::sampleProgress)
         val viewModel = viewModel(engine)
         viewModel.onTargetChanged("1.1.1.1")
 
@@ -83,8 +83,8 @@ class TracerouteViewModelTest {
         advanceUntilIdle()
 
         val cancelled = viewModel.uiState.value.status as TracerouteUiStatus.Cancelled
-        assertEquals(1, cancelled.hops.size)
-        assertEquals("192.0.2.1", cancelled.hops.single().address)
+        assertEquals(3, cancelled.hops.size)
+        assertEquals(listOf(1, 2, 3), cancelled.hops.map { it.hopNumber })
         assertTrue(engine.cancelled)
     }
 
@@ -144,6 +144,7 @@ class TracerouteViewModelTest {
         private val waitForRelease: Boolean = true,
     ) : TracerouteEngine {
         var progress: TracerouteProgress? = null
+        var progressUpdates: List<TracerouteProgress> = emptyList()
         var runCount = 0
         var cancelled = false
         private val releaseSignal = CompletableDeferred<Unit>()
@@ -155,7 +156,11 @@ class TracerouteViewModelTest {
             onProgress: suspend (TracerouteProgress) -> Unit,
         ): TracerouteResult {
             runCount++
-            progress?.let { onProgress(it) }
+            if (progressUpdates.isNotEmpty()) {
+                progressUpdates.forEach { onProgress(it) }
+            } else {
+                progress?.let { onProgress(it) }
+            }
             if (!waitForRelease) return result
             try {
                 releaseSignal.await()
@@ -171,12 +176,12 @@ class TracerouteViewModelTest {
         }
     }
 
-    private fun sampleProgress() = TracerouteProgress(
+    private fun sampleProgress(hopNumber: Int = 1) = TracerouteProgress(
         targetInput = "1.1.1.1",
         resolvedAddress = "1.1.1.1",
         hop = TracerouteHop(
-            hopNumber = 1,
-            address = "192.0.2.1",
+            hopNumber = hopNumber,
+            address = "192.0.2.$hopNumber",
             probes = listOf(TracerouteProbeResult(TracerouteProbeStatus.HOP, latencyMs = 10)),
             status = TracerouteHopStatus.RESPONDED,
         ),
