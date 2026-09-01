@@ -3,6 +3,8 @@ package com.networktoolbox.core.network.traceroute
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -115,21 +117,29 @@ class DefaultTracerouteEngineTest {
     @Test
     fun cancellationCancelsNativeWaitAndClosesSocket() = runBlocking {
         val probeStarted = CompletableDeferred<Unit>()
+        val result = CompletableDeferred<TracerouteResult>()
         val probe = FakeNativeProbe(
             waitForCancellation = true,
             onProbeStarted = { probeStarted.complete(Unit) },
         )
         val job = launch {
-            DefaultTracerouteEngine(
-                networkProvider = FakeNetworkProvider(FakeNetwork()),
-                nativeProbe = probe,
-            ).run(TracerouteRequest("1.1.1.1", maxHops = 1, probesPerHop = 1))
+            val outcome = runCatching {
+                DefaultTracerouteEngine(
+                    networkProvider = FakeNetworkProvider(FakeNetwork()),
+                    nativeProbe = probe,
+                ).run(TracerouteRequest("1.1.1.1", maxHops = 1, probesPerHop = 1))
+            }.onFailure { error ->
+                if (error !is CancellationException) {
+                    result.completeExceptionally(error)
+                }
+            }
+            outcome.getOrNull()?.let(result::complete)
         }
 
         probeStarted.await()
-        job.cancel()
-        job.join()
+        job.cancelAndJoin()
 
+        assertEquals(TracerouteStatus.CANCELLED, result.await().status)
         assertTrue(probe.cancelCalls.get() >= 1)
         assertEquals(1, probe.closeCalls.get())
     }

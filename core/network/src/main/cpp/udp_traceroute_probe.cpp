@@ -76,10 +76,30 @@ jobject newSocketResult(
     jmethodID constructor = environment->GetMethodID(
         resultClass,
         "<init>",
-        "(IIILjava/lang/String;I)V"
+        "(IIILjava/lang/String;Ljava/lang/Integer;)V"
     );
     if (constructor == nullptr) return nullptr;
     jstring operationString = nullableString(environment, operation);
+    jobject errnoObject = nullptr;
+    jclass integerClass = nullptr;
+    if (errorNumber >= 0) {
+        integerClass = environment->FindClass("java/lang/Integer");
+        if (integerClass == nullptr) {
+            if (operationString != nullptr) environment->DeleteLocalRef(operationString);
+            return nullptr;
+        }
+        jmethodID integerConstructor = environment->GetMethodID(
+            integerClass,
+            "<init>",
+            "(I)V"
+        );
+        if (integerConstructor == nullptr) {
+            if (operationString != nullptr) environment->DeleteLocalRef(operationString);
+            environment->DeleteLocalRef(integerClass);
+            return nullptr;
+        }
+        errnoObject = environment->NewObject(integerClass, integerConstructor, errorNumber);
+    }
     jobject result = environment->NewObject(
         resultClass,
         constructor,
@@ -87,9 +107,11 @@ jobject newSocketResult(
         cancelReadFd,
         cancelWriteFd,
         operationString,
-        errorNumber
+        errnoObject
     );
     if (operationString != nullptr) environment->DeleteLocalRef(operationString);
+    if (errnoObject != nullptr) environment->DeleteLocalRef(errnoObject);
+    if (integerClass != nullptr) environment->DeleteLocalRef(integerClass);
     return result;
 }
 

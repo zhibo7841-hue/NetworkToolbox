@@ -12,8 +12,9 @@ governed by [`PRODUCT_PLAN.md`](PRODUCT_PLAN.md).
 
 ## 1. Current implementation audit
 
-The current repository has no Traceroute implementation. The relevant existing
-capabilities are:
+At the time this baseline was first drafted, the repository had no Traceroute
+implementation. The current repository now also contains the isolated IPv4
+production Core documented in §36; the pre-existing capabilities remain:
 
 | Area | Current implementation | What it does not provide |
 | --- | --- | --- |
@@ -459,10 +460,10 @@ an IPv4-only production Core using that capability. It remains a
 device-qualified capability, not a portable Android guarantee.
 
 The project must not begin production Traceroute implementation from the
-temporary spike alone. A separate implementation task must define the pure
-protocol model, response matching, cancellation, parser behavior, unavailable
-states, and fallback behavior before code is retained. The app must not
-silently substitute raw ICMP, TCP connect, or `ping -t`.
+temporary spike alone. Task 044 supplied the separately approved production
+implementation with the required pure model, response matching, cancellation,
+parser behavior, and unavailable states. The app must not silently substitute
+raw ICMP, TCP connect, or `ping -t`.
 
 Do not ship app-owned raw ICMP, TCP-connect-as-traceroute, or `ping -t` as the
 default. App-owned UDP error queue may be considered only through a separately
@@ -773,7 +774,7 @@ it cannot be used to bypass the core architecture or parser tests.
 | Candidate | Feasibility | Phase 1 decision | Reason |
 | --- | --- | --- | --- |
 | App-owned raw ICMP | Device/policy dependent | No-Go | No stable non-Root third-party app contract |
-| App-owned UDP + ICMP receive | Device/policy dependent | **GO for IPv4 spike on Sony; not yet production** | App UID received real ICMP Time Exceeded via `IP_RECVERR`; portability and final-response behavior remain unproven |
+| App-owned UDP + ICMP receive | Device/policy dependent | **GO for device-qualified IPv4 Core on Sony** | App UID received real ICMP Time Exceeded via `IP_RECVERR`; production Core is bounded and remains non-portable without per-device validation |
 | Normal TCP connect | Destination-only | No-Go as traceroute | Does not expose intermediate hops |
 | `ping -t` orchestration | Command/output dependent | No-Go as default | Not a stable hop-result API and too easy to mislabel |
 | AOSP/OEM system `traceroute` adapter | Fails on Sony XQ-FS72 | No-Go on validated device | Toybox applet exists but socket creation returns `Operation not permitted` |
@@ -782,10 +783,11 @@ it cannot be used to bypass the core architecture or parser tests.
 **Gate result:** the Sony Android 16 system-command gate failed: the applet is
 present inside Toybox, but non-Root socket creation is rejected and no route
 can be observed through that command. The separate Task 044-A App-UID spike
-passed the bounded IPv4 UDP error-queue capability check. Do not implement or
-ship a system-command adapter for this device. The UDP result authorizes only a
-separately scoped production design/implementation task; it cannot be
-generalized to other devices without their own capability checks.
+passed the bounded IPv4 UDP error-queue capability check, and Task 044-B
+validated the separately scoped production Core on the same device. Do not
+implement or ship a system-command adapter for this device. The UDP result
+remains device-qualified and cannot be generalized to other devices without
+their own capability checks.
 
 ## 35. Scope confirmation
 
@@ -890,16 +892,17 @@ No `abiFilters` were present or added, so Gradle builds the project-supported
 ABIs by default. The Debug APK contains the following library slices from the
 same implementation:
 
-| ABI | Library |
-| --- | --- |
-| `arm64-v8a` | `libnetworktoolbox_traceroute.so` |
-| `armeabi-v7a` | `libnetworktoolbox_traceroute.so` |
-| `x86` | `libnetworktoolbox_traceroute.so` |
-| `x86_64` | `libnetworktoolbox_traceroute.so` |
+| ABI | Debug library bytes | Release library bytes |
+| --- | ---: | ---: |
+| `arm64-v8a` | 410,968 | 351,504 |
+| `armeabi-v7a` | 245,560 | 212,688 |
+| `x86` | 387,432 | 318,832 |
+| `x86_64` | 391,008 | 334,424 |
 
-The exact per-slice sizes and APK delta are recorded in the Task 044
-completion report after the final build artifact is hashed. Release native
-compilation is a required gate; no APK or tag is published by this task.
+The final post-acceptance artifacts were `app-debug.apk` (65,110,953 bytes)
+and `app-release.apk` (48,738,422 bytes). Their SHA-256 values are recorded
+in the Task 044-B acceptance record below; no APK or tag is published by this
+task.
 
 ### Test and integration boundary
 
@@ -912,7 +915,91 @@ device harness is permitted for the Sony gate and is removed after use. There
 is no Traceroute UI, History record, Reverse DNS, ASN/GeoIP, TCP fallback,
 automatic Diagnostic integration, or product version change in Task 044.
 
-## 37. References
+## 37. Task 044-B Sony Android 16 production Core acceptance
+
+Task 044-B performed a real-device validation of the formal production Core on
+2026-09-01. The temporary harness was debug-only, used a separate validation
+application id, and was removed after testing. The signed `com.networktoolbox`
+installation and its local data were not uninstalled or replaced.
+
+### Device and execution gate
+
+| Field | Observed value |
+| --- | --- |
+| ADB serial | `HQ657X0B9F` |
+| Manufacturer / model | Sony XQ-FS72 |
+| Android / API | Android 16 / API 36 |
+| Shell identity | UID 2000, SELinux `Enforcing` |
+| Validation app UID | 10422 |
+| Engine | `DefaultTracerouteEngine` + `AndroidNativeUdpTracerouteProbe` |
+| Request | 30 hops, 3 probes/hop, 1500 ms timeout, UDP port base 33434 |
+
+The engine completed hop processing on the validation app. Because the formal
+Core has no default-network fallback after `Network.bindSocket`, these results
+also confirm that binding the selected socket to the active Android `Network`
+did not fail. No Root, `CAP_NET_RAW`, `SOCK_RAW`, system traceroute command,
+`ProcessBuilder`, or TCP-as-traceroute fallback was used.
+
+### Results
+
+The following records are deliberately summarized; the full public route is
+not retained in this document.
+
+| Target | Status | Duration | Device evidence |
+| --- | --- | ---: | --- |
+| `1.1.1.1` | `REACHED` | 11.6 s | Reached at hop 12 with ICMP destination port-unreachable evidence; local gateways `10.0.1.1` and `10.0.0.1` were observed as intermediate hops |
+| `223.5.5.5` | `PARTIAL` | 109.1 s | Later hops continued after multiple timeout hops; no timeout was promoted to a false failure |
+| `119.29.29.29` | `PARTIAL` | 111.6 s | Structured partial result with the same initial network fingerprint |
+| `example.com` | `NETWORK_CHANGED` | 78.3 s | Resolved through the active `Network` to `198.18.13.240`, marked `fakeIpDetected=true`, and stopped without mixing results after the network fingerprint changed |
+
+The `1.1.1.1` run included a complete timeout hop followed by later
+responding hops and final destination evidence, validating timeout recovery.
+The hostname run validated active-network resolution, Fake-IP marking, and
+network-change isolation; it is not evidence that a hostname route completed.
+
+### Cancellation and repeat behavior
+
+After the outer cancellation-boundary fix, a direct `Job.cancelAndJoin()` test
+on the device returned `CANCELLED`; the native wait was interrupted and the
+job joined in approximately 1.2 seconds. The result is not a completed trace.
+
+Three immediate runs against `223.5.5.5` were intentionally recorded rather
+than normalized:
+
+| Run | Status | Duration | Note |
+| --- | --- | ---: | --- |
+| 1 | `FAILED` | 72 ms | Device returned structured `SENDTO errno 113` after three responding hops |
+| 2 | `PARTIAL` | 112.0 s | Completed the bounded 30-hop search |
+| 3 | `NETWORK_CHANGED` | 68.6 s | Active network fingerprint changed during the run |
+
+This sequence does not pass a “three identical stable runs” criterion because
+the device/network changed and one run encountered a transient send error. It
+does confirm that each run is isolated and returns a structured status rather
+than leaking a previous generation's hops.
+
+### Stability, cleanup, and production bug found during acceptance
+
+No `FATAL EXCEPTION`, `SIGSEGV`, `SIGABRT`, JNI fatal error, or validation-app
+ANR was found in the final log review. After completion, an app-UID `/proc`
+check reported only the three standard file descriptors; native socket and
+cancellation-pipe descriptors were closed by the Core cleanup path. The formal
+Core process remained alive as an ordinary cached app process and did not crash.
+
+The first formal run exposed a real JNI ABI defect before any route result:
+Kotlin's nullable `NativeSocketOpenResult.errno: Int?` has a boxed
+`java.lang.Integer` constructor parameter, while the native lookup used the
+primitive `I` descriptor. The production adapter now uses
+`Ljava/lang/Integer;` and passes a nullable boxed errno. The earlier spike did
+not expose this because it did not construct `NativeSocketOpenResult`; it used
+a smaller standalone JNI result path.
+
+**Acceptance decision:** the IPv4 production Core is device-observed and
+usable on Sony XQ-FS72 / Android 16 with the limitations above. The repeated
+run stability criterion remains open for a later stable-network retest. This
+does not authorize Traceroute UI, History, Diagnostic integration, IPv6, or a
+release.
+
+## 38. References
 
 - [Android `Network`](https://developer.android.com/reference/android/net/Network)
 - [Android `ProcessBuilder`](https://developer.android.com/reference/java/lang/ProcessBuilder)

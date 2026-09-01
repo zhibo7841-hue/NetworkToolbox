@@ -94,6 +94,16 @@ data class TracerouteResult(
             networkFingerprint = networkFingerprint,
             errorMessage = message,
         )
+
+        fun cancelled(request: TracerouteRequest): TracerouteResult = TracerouteResult(
+            targetInput = request.target,
+            resolvedAddress = null,
+            addressFamily = request.addressFamily,
+            hops = emptyList(),
+            status = TracerouteStatus.CANCELLED,
+            durationMs = null,
+            errorMessage = "Traceroute was cancelled.",
+        )
     }
 }
 

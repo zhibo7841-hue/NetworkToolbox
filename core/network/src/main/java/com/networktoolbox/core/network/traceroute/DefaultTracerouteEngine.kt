@@ -14,10 +14,16 @@ class DefaultTracerouteEngine(
     private val now: () -> Long = { System.currentTimeMillis() },
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : TracerouteEngine {
-    override suspend fun run(request: TracerouteRequest): TracerouteResult =
+    override suspend fun run(request: TracerouteRequest): TracerouteResult = try {
         withContext(dispatcher) {
             runInternal(request)
         }
+    } catch (_: CancellationException) {
+        // A cancelled dispatcher context can rethrow after runInternal has
+        // already performed native cleanup. Preserve the engine contract by
+        // returning a structured cancellation result at the outer boundary.
+        TracerouteResult.cancelled(request)
+    }
 
     private suspend fun runInternal(request: TracerouteRequest): TracerouteResult {
         val startedAt = now()
