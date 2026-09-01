@@ -999,7 +999,66 @@ run stability criterion remains open for a later stable-network retest. This
 does not authorize Traceroute UI, History, Diagnostic integration, IPv6, or a
 release.
 
-## 38. References
+## 38. Task 044-C stable-network repeated acceptance
+
+Task 044-C repeated the formal IPv4 Core validation on 2026-09-01 using a
+stable Wi-Fi connection on the Sony XQ-FS72. The temporary harness remained
+debug-only and was removed after the run; no production traceroute code was
+changed in this task.
+
+### Device and network snapshot
+
+| Field | Observed value |
+| --- | --- |
+| ADB serial | `HQ657X0B9F` |
+| Manufacturer / model | Sony XQ-FS72 |
+| Android / API | Android 16 / API 36 |
+| Active transport | Wi-Fi, `wlan0` |
+| Network fingerprint | `982658240525` for every before/after snapshot |
+| Local IPv4 | `10.0.1.206` |
+| IPv4 default gateway | `10.0.1.1` |
+| Configured DNS | `10.0.1.1` |
+| `NET_CAPABILITY_VALIDATED` | `true` for every snapshot |
+
+The five sequential runs used the formal defaults: target `1.1.1.1`, 30
+maximum hops, 3 probes per hop, 1500 ms timeout, IPv4, and destination port
+base 33434. The active fingerprint, interface, local address, gateway, route
+set, DNS, and validation state remained unchanged before and after every run.
+
+| Run | Status | Duration | Hops | Destination evidence | errno 113 |
+| ---: | --- | ---: | ---: | --- | --- |
+| 1 | `REACHED` | 16.2 s | 12 | Destination reached at hop 12 | No |
+| 2 | `REACHED` | 13.0 s | 12 | Destination reached at hop 12 | No |
+| 3 | `REACHED` | 11.7 s | 12 | Destination reached at hop 12 | No |
+| 4 | `REACHED` | 13.0 s | 12 | Destination reached at hop 12 | No |
+| 5 | `REACHED` | 11.6 s | 12 | Destination reached at hop 12 | No |
+
+No run returned `FAILED`, `PERMISSION_DENIED`, `UNSUPPORTED`,
+`NETWORK_BIND_FAILED`, or `NETWORK_CHANGED`. No errno 113 reappeared, so no
+production recovery logic or errno semantics were changed. All five runs
+completed through the formal `Network.bindSocket` path; no Root,
+`CAP_NET_RAW`, raw socket, system traceroute command, or `ProcessBuilder` was
+used.
+
+### Cancellation and process safety
+
+A separate formal-engine cancellation run returned structured `CANCELLED`.
+The cancellation completed in approximately 1.13 s after the cancel request.
+The validation process reported 3 file descriptors before the run and 3 after
+the cancelled run, representing the standard process descriptors after
+native cleanup. Logcat and `dumpsys activity exit-info` showed no native crash,
+Java fatal exception, `RejectedExecutionException`, or ANR.
+
+### Acceptance decision
+
+The stable-network repeated acceptance criterion passed: all five sequential
+`1.1.1.1` runs used one unchanged Wi-Fi fingerprint and returned valid
+`REACHED` results without fatal status, errno 113, crash, or ANR. The prior
+known unstable `223.5.5.5` sequence remains historical evidence in the Task
+044-B section and was not silently normalized. This task does not authorize
+Traceroute UI, History, Diagnostic integration, IPv6, or a release.
+
+## 39. References
 
 - [Android `Network`](https://developer.android.com/reference/android/net/Network)
 - [Android `ProcessBuilder`](https://developer.android.com/reference/java/lang/ProcessBuilder)
