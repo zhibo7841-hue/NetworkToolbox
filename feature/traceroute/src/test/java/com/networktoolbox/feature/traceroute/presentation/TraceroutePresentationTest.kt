@@ -9,6 +9,7 @@ import com.networktoolbox.core.network.traceroute.TracerouteResult
 import com.networktoolbox.core.network.traceroute.TracerouteStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,6 +37,37 @@ class TraceroutePresentationTest {
     }
 
     @Test
+    fun partialSummaryCountsRespondingHopsInsteadOfAllProbedHops() {
+        val hops = listOf(
+            responseHop(1),
+            responseHop(2),
+            responseHop(3),
+            responseHop(4),
+        ) + (5..30).map(::timeoutHop)
+
+        val presentation = TraceroutePresentationMapper.from(
+            result(TracerouteStatus.PARTIAL, hops = hops),
+        )
+        val statistics = TracerouteHopStatisticsCalculator.from(hops)
+
+        assertEquals(30, statistics.totalProbedHops)
+        assertEquals(4, statistics.respondedHopCount)
+        assertEquals(26, statistics.timeoutOnlyHopCount)
+        assertTrue(presentation.summary.contains("完成 30 跳探测"))
+        assertTrue(presentation.summary.contains("4 跳有响应"))
+        assertFalse(presentation.summary.contains("30 跳响应"))
+    }
+
+    @Test
+    fun hopLabelsOnlyDescribeSpecialProbeOutcomes() {
+        assertNull(TraceroutePresentationMapper.hopStatusLabel(responseHop(1)))
+        assertEquals("部分响应", TraceroutePresentationMapper.hopStatusLabel(partialHop(2)))
+        assertEquals("无响应", TraceroutePresentationMapper.hopStatusLabel(timeoutHop(3)))
+        assertEquals("目标", TraceroutePresentationMapper.hopStatusLabel(destinationHop(4)))
+        assertEquals("—", TraceroutePresentationMapper.hopAddress(timeoutHop(3)))
+    }
+
+    @Test
     fun trailingTimeoutIsNotReportedAsRouterFailure() {
         val presentation = TraceroutePresentationMapper.from(
             result(TracerouteStatus.PARTIAL, hops = listOf(responseHop(1), timeoutHop(2))),
@@ -55,6 +87,14 @@ class TraceroutePresentationTest {
     }
 
     @Test
+    fun fakeIpNoticeIsAvailableAsSoonAsResolvedAddressIsKnown() {
+        val notice = TraceroutePresentationMapper.fakeIpNotice("198.18.0.9")
+
+        assertTrue(notice.orEmpty().contains("可能使用 Fake-IP"))
+        assertFalse(notice.orEmpty().contains("OpenClash"))
+    }
+
+    @Test
     fun networkChangeAndCancellationHaveSeparateUserStates() {
         val changed = TraceroutePresentationMapper.from(result(TracerouteStatus.NETWORK_CHANGED))
         val cancelled = TraceroutePresentationMapper.from(result(TracerouteStatus.CANCELLED))
@@ -71,6 +111,17 @@ class TraceroutePresentationTest {
         )
 
         assertTrue(presentation.summary.contains("无法完成"))
+        assertFalse(presentation.summary.contains("errno"))
+    }
+
+    @Test
+    fun genericLocalFailureUsesIncompleteWording() {
+        val presentation = TraceroutePresentationMapper.from(
+            result(TracerouteStatus.FAILED, errorMessage = "Traceroute operation failed at SENDTO (errno 113)."),
+        )
+
+        assertEquals("路由追踪未完成", presentation.heading)
+        assertTrue(presentation.explanation.orEmpty().contains("本次追踪未能完成"))
         assertFalse(presentation.summary.contains("errno"))
     }
 
@@ -125,5 +176,23 @@ class TraceroutePresentationTest {
         address = null,
         probes = listOf(TracerouteProbeResult(TracerouteProbeStatus.TIMEOUT)),
         status = TracerouteHopStatus.TIMEOUT,
+    )
+
+    private fun partialHop(number: Int) = TracerouteHop(
+        hopNumber = number,
+        address = "192.0.2.$number",
+        probes = listOf(
+            TracerouteProbeResult(TracerouteProbeStatus.HOP, latencyMs = 18),
+            TracerouteProbeResult(TracerouteProbeStatus.TIMEOUT),
+            TracerouteProbeResult(TracerouteProbeStatus.HOP, latencyMs = 21),
+        ),
+        status = TracerouteHopStatus.RESPONDED,
+    )
+
+    private fun destinationHop(number: Int) = TracerouteHop(
+        hopNumber = number,
+        address = "1.1.1.1",
+        probes = listOf(TracerouteProbeResult(TracerouteProbeStatus.DESTINATION_REACHED, latencyMs = 18)),
+        status = TracerouteHopStatus.DESTINATION_REACHED,
     )
 }

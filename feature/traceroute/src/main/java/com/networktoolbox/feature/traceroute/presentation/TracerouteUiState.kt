@@ -23,7 +23,12 @@ sealed interface TracerouteUiStatus {
         val presentation: TracerouteResultPresentation,
     ) : TracerouteUiStatus
 
-    data class Cancelled(val target: String) : TracerouteUiStatus
+    data class Cancelled(
+        val target: String,
+        val resolvedAddress: String? = null,
+        val hops: List<TracerouteHop> = emptyList(),
+        val elapsedMs: Long = 0L,
+    ) : TracerouteUiStatus
 
     data class Error(val message: String) : TracerouteUiStatus
 }

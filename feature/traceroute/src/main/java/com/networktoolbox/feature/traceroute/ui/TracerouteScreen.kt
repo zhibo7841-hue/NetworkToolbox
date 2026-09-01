@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.network.traceroute.TracerouteHop
-import com.networktoolbox.core.network.traceroute.TracerouteHopStatus
 import com.networktoolbox.core.network.traceroute.TracerouteProbeResult
 import com.networktoolbox.core.network.traceroute.TracerouteResult
 import com.networktoolbox.core.network.traceroute.TracerouteStatus
@@ -132,9 +131,15 @@ fun TracerouteScreen(
                 is TracerouteUiStatus.Cancelled -> item {
                     MessageCard(
                         title = "追踪已停止",
-                        message = "本次路由追踪已取消，可以重新开始。",
+                        message = TraceroutePresentationMapper.cancelledSummary(status.hops.size),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (status.hops.isNotEmpty()) {
+                        SectionTitle("已获取路径")
+                        status.hops.forEach { hop ->
+                            HopRow(hop)
+                        }
+                    }
                 }
 
                 is TracerouteUiStatus.Error -> item {
@@ -204,6 +209,13 @@ private fun RunningCard(status: TracerouteUiStatus.Running, onStop: () -> Unit) 
             status.resolvedAddress?.let {
                 Text(
                     "解析地址：$it",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TraceroutePresentationMapper.fakeIpNotice(status.resolvedAddress)?.let {
+                Text(
+                    "提示：$it",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -300,18 +312,21 @@ private fun HopRow(hop: TracerouteHop) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 hop.hopNumber.toString(),
-                modifier = Modifier.width(32.dp),
+                modifier = Modifier.width(28.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(hop.address ?: "*", style = MaterialTheme.typography.bodyLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(TraceroutePresentationMapper.hopAddress(hop), style = MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     probeSlots(hop).forEach { probe ->
                         Text(
                             probe?.let {
@@ -323,15 +338,13 @@ private fun HopRow(hop: TracerouteHop) {
                     }
                 }
             }
-            Text(
-                when {
-                    hop.address == null -> "无响应"
-                    hop.status == TracerouteHopStatus.DESTINATION_REACHED -> "目标"
-                    else -> "响应"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            TraceroutePresentationMapper.hopStatusLabel(hop)?.let { label ->
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

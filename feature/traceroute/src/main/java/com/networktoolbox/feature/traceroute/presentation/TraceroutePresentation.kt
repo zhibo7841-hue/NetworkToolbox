@@ -4,6 +4,25 @@ import com.networktoolbox.core.network.traceroute.TracerouteHopStatus
 import com.networktoolbox.core.network.traceroute.TracerouteProbeStatus
 import com.networktoolbox.core.network.traceroute.TracerouteResult
 import com.networktoolbox.core.network.traceroute.TracerouteStatus
+import com.networktoolbox.core.network.traceroute.TracerouteFakeIpDetector
+
+data class TracerouteHopStatistics(
+    val totalProbedHops: Int,
+    val respondedHopCount: Int,
+    val timeoutOnlyHopCount: Int,
+)
+
+object TracerouteHopStatisticsCalculator {
+    fun from(hops: List<com.networktoolbox.core.network.traceroute.TracerouteHop>): TracerouteHopStatistics =
+        TracerouteHopStatistics(
+            totalProbedHops = hops.size,
+            respondedHopCount = hops.count { hop ->
+                hop.status == TracerouteHopStatus.RESPONDED ||
+                    hop.status == TracerouteHopStatus.DESTINATION_REACHED
+            },
+            timeoutOnlyHopCount = hops.count { it.status == TracerouteHopStatus.TIMEOUT },
+        )
+}
 
 data class TracerouteResultPresentation(
     val heading: String,
@@ -17,8 +36,7 @@ object TraceroutePresentationMapper {
     fun from(result: TracerouteResult): TracerouteResultPresentation {
         val timeoutExplanation = result.hops.intermediateTimeoutExplanation()
         val notice = when {
-            result.fakeIpDetected ->
-                "检测到特殊用途地址 ${result.resolvedAddress.orEmpty()}，可能与 DNS 的 Fake-IP 模式有关。"
+            result.fakeIpDetected -> fakeIpNotice(result.resolvedAddress, detected = true)
 
             result.status == TracerouteStatus.NETWORK_CHANGED ->
                 "检测过程中网络发生变化，部分结果可能来自不同网络环境。建议网络稳定后重新执行。"
@@ -39,7 +57,7 @@ object TraceroutePresentationMapper {
             TracerouteStatus.PARTIAL -> TracerouteResultPresentation(
                 heading = "已获取部分路径",
                 statusLabel = "未确认到达",
-                summary = "已获取 ${result.hops.size} 跳响应，但尚未确认到达目标。",
+                summary = partialSummary(result.hops),
                 explanation = timeoutExplanation
                     ?: "部分节点没有响应，剩余路径暂时无法确认；这不一定表示网络故障。",
                 notice = notice,
@@ -62,10 +80,14 @@ object TraceroutePresentationMapper {
             )
 
             TracerouteStatus.FAILED -> TracerouteResultPresentation(
-                heading = "路由追踪失败",
-                statusLabel = "无法完成",
+                heading = if (isGenericLocalFailure(result.errorMessage)) "路由追踪未完成" else "路由追踪失败",
+                statusLabel = if (isGenericLocalFailure(result.errorMessage)) "未完成" else "无法完成",
                 summary = userErrorMessage(result.errorMessage),
-                explanation = "请检查目标地址、当前网络连接或系统对该探测方式的支持情况。",
+                explanation = if (isGenericLocalFailure(result.errorMessage)) {
+                    "本次追踪未能完成，请稍后重试。"
+                } else {
+                    "请检查目标地址、当前网络连接或系统对该探测方式的支持情况。"
+                },
                 notice = notice,
             )
 
@@ -77,6 +99,36 @@ object TraceroutePresentationMapper {
             )
         }
     }
+
+    fun fakeIpNotice(resolvedAddress: String?, detected: Boolean = false): String? {
+        if (!detected && !resolvedAddress.orEmpty().let(TracerouteFakeIpDetector::isFakeIp)) {
+            return null
+        }
+        val address = resolvedAddress
+            ?.takeIf(TracerouteFakeIpDetector::isFakeIp)
+            ?.let { " $it" }
+            .orEmpty()
+        return "检测到特殊用途地址$address，当前网络可能使用 Fake-IP。路由追踪结果可能不代表目标服务器的真实公网路径。"
+    }
+
+    fun cancelledSummary(hopCount: Int): String = if (hopCount > 0) {
+        "本次路由追踪已取消，已获取 $hopCount 跳。"
+    } else {
+        "本次路由追踪已取消，可以重新开始。"
+    }
+
+    fun hopStatusLabel(hop: com.networktoolbox.core.network.traceroute.TracerouteHop): String? {
+        val probes = hop.probes
+        return when {
+            hop.status == TracerouteHopStatus.DESTINATION_REACHED -> "目标"
+            probes.isEmpty() || probes.all { it.status == TracerouteProbeStatus.TIMEOUT } -> "无响应"
+            probes.any { it.status == TracerouteProbeStatus.TIMEOUT } -> "部分响应"
+            else -> null
+        }
+    }
+
+    fun hopAddress(hop: com.networktoolbox.core.network.traceroute.TracerouteHop): String =
+        hop.address ?: "—"
 
     fun inputErrorMessage(raw: String): String = when {
         raw.contains("must not be empty", ignoreCase = true) -> "请输入 IPv4 地址或域名。"
@@ -99,6 +151,27 @@ object TraceroutePresentationMapper {
             error.contains("unsupported", ignoreCase = true) -> "当前设备暂不支持此路由追踪方式。"
             else -> "无法完成路由追踪，请稍后重试。"
         }
+    }
+
+    private fun partialSummary(hops: List<com.networktoolbox.core.network.traceroute.TracerouteHop>): String {
+        val stats = TracerouteHopStatisticsCalculator.from(hops)
+        return if (stats.totalProbedHops == 0) {
+            "尚未获取有效路径，无法确认到达目标。"
+        } else {
+            "已完成 ${stats.totalProbedHops} 跳探测，其中 ${stats.respondedHopCount} 跳有响应，但尚未确认到达目标。"
+        }
+    }
+
+    private fun isGenericLocalFailure(raw: String?): Boolean {
+        val error = raw.orEmpty()
+        return (
+            error.contains("traceroute operation failed", ignoreCase = true) ||
+                error.contains("local_error", ignoreCase = true) ||
+                error.contains("local error", ignoreCase = true)
+            ) &&
+            !error.contains("bind", ignoreCase = true) &&
+            !error.contains("permission", ignoreCase = true) &&
+            !error.contains("unsupported", ignoreCase = true)
     }
 
     private fun List<com.networktoolbox.core.network.traceroute.TracerouteHop>.intermediateTimeoutExplanation(): String? {

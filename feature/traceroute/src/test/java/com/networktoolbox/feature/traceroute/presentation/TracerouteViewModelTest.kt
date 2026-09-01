@@ -72,6 +72,7 @@ class TracerouteViewModelTest {
     @Test
     fun stopCancelsRunAndLeavesCancelledState() = runTest(dispatcher) {
         val engine = FakeEngine()
+        engine.progress = sampleProgress()
         val viewModel = viewModel(engine)
         viewModel.onTargetChanged("1.1.1.1")
 
@@ -81,8 +82,26 @@ class TracerouteViewModelTest {
         engine.release()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.status is TracerouteUiStatus.Cancelled)
+        val cancelled = viewModel.uiState.value.status as TracerouteUiStatus.Cancelled
+        assertEquals(1, cancelled.hops.size)
+        assertEquals("192.0.2.1", cancelled.hops.single().address)
         assertTrue(engine.cancelled)
+    }
+
+    @Test
+    fun stopBeforeFirstHopLeavesPathEmpty() = runTest(dispatcher) {
+        val engine = FakeEngine()
+        val viewModel = viewModel(engine)
+        viewModel.onTargetChanged("1.1.1.1")
+
+        viewModel.start()
+        runCurrent()
+        viewModel.stop()
+        engine.release()
+        advanceUntilIdle()
+
+        val cancelled = viewModel.uiState.value.status as TracerouteUiStatus.Cancelled
+        assertTrue(cancelled.hops.isEmpty())
     }
 
     @Test

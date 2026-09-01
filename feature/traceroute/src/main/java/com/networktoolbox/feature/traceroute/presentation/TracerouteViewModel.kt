@@ -72,7 +72,12 @@ class TracerouteViewModel @Inject constructor(
                 _uiState.value = when (result.status) {
                     TracerouteStatus.CANCELLED -> TracerouteUiState(
                         targetInput = target,
-                        status = TracerouteUiStatus.Cancelled(target),
+                        status = TracerouteUiStatus.Cancelled(
+                            target = target,
+                            resolvedAddress = result.resolvedAddress,
+                            hops = result.hops,
+                            elapsedMs = result.durationMs ?: 0L,
+                        ),
                     )
 
                     else -> TracerouteUiState(
@@ -106,7 +111,12 @@ class TracerouteViewModel @Inject constructor(
         activeJob = null
         _uiState.value = TracerouteUiState(
             targetInput = running.target,
-            status = TracerouteUiStatus.Cancelled(running.target),
+            status = TracerouteUiStatus.Cancelled(
+                target = running.target,
+                resolvedAddress = running.resolvedAddress,
+                hops = running.hops,
+                elapsedMs = running.elapsedMs,
+            ),
         )
     }
 
