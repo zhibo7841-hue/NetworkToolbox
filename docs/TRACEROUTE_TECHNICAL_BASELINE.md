@@ -79,6 +79,13 @@ also suppress or rewrite the expected responses.
 
 **Decision:** app-owned UDP traceroute is not a reliable Phase 1 fallback.
 
+The Task 044-A App-UID spike below is a device-specific refinement of this
+general limitation. It does not make ordinary Android UDP error-queue support
+portable across OEMs, but it did establish a working IPv4 capability on the
+validated Sony device. A production implementation would still require a
+separate authorization, protocol design, parser tests, and device fallback
+behavior.
+
 ## 5. TCP traceroute feasibility
 
 TCP traceroute uses controlled TCP probes, commonly SYNs to a destination port
@@ -281,6 +288,66 @@ to fail at socket creation. They are not a production feature and must not be
 treated as evidence for another device until output and exit semantics are
 recorded.
 
+### UDP Error Queue App-UID Spike (Task 044-A)
+
+Task 044-A ran a temporary debug-only Android harness on the same Sony Xperia
+1 VII / XQ-FS72 running Android 16 (API 36). The harness was launched as the
+installed application, not through `adb shell`; `getuid()` and `geteuid()`
+both reported application UID `10420`. It used a small NDK/JNI probe only for
+this local capability check and was removed after validation. No native code,
+NDK configuration, activity, permission, or dependency from the spike remains
+in the project.
+
+The bounded probe used IPv4 `AF_INET`, `SOCK_DGRAM`, `IPPROTO_UDP`, one UDP
+datagram per TTL, `IP_TTL` for TTL 1 through 8, `IP_RECVERR`, `poll(POLLERR |
+POLLIN)`, and `recvmsg(MSG_ERRQUEUE)`. It did not use `SOCK_RAW`,
+`CAP_NET_RAW`, Root, Toybox, `ProcessBuilder`, or a third-party packet
+library. The payload was seven bytes and the destination port was in the
+standard high-UDP traceroute range. Targets were `1.1.1.1`, `223.5.5.5`, and
+`119.29.29.29`; no mass or repeated traffic test was performed.
+
+Observed App-UID results:
+
+| Operation | Result |
+| --- | --- |
+| `socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)` | OK |
+| `setsockopt(IP_TTL)` for TTL 1–8 | OK |
+| `setsockopt(IP_RECVERR)` | OK |
+| `sendto` | OK, 7 bytes for each attempted TTL |
+| `poll` | `POLLERR` was delivered for error-queue responses; bounded timeouts were returned where no response arrived |
+| `recvmsg(MSG_ERRQUEUE)` | OK for delivered extended errors |
+| `sock_extended_err.ee_origin` | `2`, `SO_EE_ORIGIN_ICMP` |
+| ICMP response | `type=11`, `code=0`, ICMP Time Exceeded |
+| `SO_EE_OFFENDER` | First observed responders were the local private hops `10.0.1.1` and `10.0.0.1`; later public responders were also observed |
+| latency | Approximately 3–83 ms across the bounded runs |
+| timeout | Several individual TTLs timed out, without failing the socket or app |
+| destination reached | Not observed within the configured maximum TTL 8 for these runs |
+| normal close | Every probe closed its socket and reported `SOCKET CLOSED` |
+| selected `Network.bindSocket(fd)` | OK for an application-created UDP descriptor on the active network |
+
+The device remained SELinux `Enforcing`, and no Root or `CAP_NET_RAW` was
+used. This proves that this particular non-Root application UID can receive
+some IPv4 ICMP Time Exceeded errors through the Linux UDP error queue. It does
+not prove that every intermediate router responds, that every destination will
+produce a final port-unreachable response, or that another Android OEM will
+permit the same behavior. A future implementation must treat timeout and
+unsupported-socket outcomes as first-class results.
+
+IPv6 UDP error-queue probing was **NOT TESTED** in this spike. The active
+Wi-Fi path did not expose a usable public IPv6 default route for a bounded
+application test, while the prior system-command validation had already shown
+that the device-specific IPv6 route situation required separate handling. This
+does not change the IPv4 result or authorize silent IPv4 fallback for a future
+IPv6 request.
+
+**Task 044-A gate result:** app-owned UDP error queue is **GO for an IPv4
+technical candidate on Sony XQ-FS72 / Android 16**, subject to a separate
+production design and implementation task. The system-command approach
+remains **NO-GO** on this device. The spike intentionally did not test a
+mid-poll cancellation race; its resource-close behavior was verified at the
+end of each bounded probe, and a production coroutine adapter must close the
+socket on cancellation.
+
 ## 9. IPv4 policy
 
 IPv4 remains the only protocol that was a plausible Phase 1 default before the
@@ -385,16 +452,21 @@ architecture is not approved for the validated device.
 The proposed system-command method is **not approved** for Sony XQ-FS72 /
 Android 16. Although the Toybox applets exist, both IPv4 and IPv6 fail at socket
 creation for the non-Root ADB shell. No real hop output or parser fixture was
-obtained.
+obtained through that system-command path. The App-UID UDP error-queue spike
+later produced real IPv4 intermediate ICMP responses, so app-owned UDP is now
+a validated device-specific technical candidate, not a portable Android
+guarantee.
 
-The project must not begin production Traceroute implementation from this
-candidate. A new technical/product decision is required before selecting a
-different platform approach. The app must not silently substitute raw ICMP,
-app-owned UDP, TCP connect, or `ping -t`.
+The project must not begin production Traceroute implementation from the
+temporary spike alone. A separate implementation task must define the pure
+protocol model, response matching, cancellation, parser behavior, unavailable
+states, and fallback behavior before code is retained. The app must not
+silently substitute raw ICMP, TCP connect, or `ping -t`.
 
-Do not ship app-owned raw ICMP/UDP, TCP-connect-as-traceroute, or `ping -t` as
-the default. On the validated device, Phase 1 should remain unavailable until
-a separately approved platform solution exists.
+Do not ship app-owned raw ICMP, TCP-connect-as-traceroute, or `ping -t` as the
+default. App-owned UDP error queue may be considered only through a separately
+approved implementation that preserves explicit capability and timeout
+semantics.
 
 ## 16. Process invocation and input safety
 
@@ -700,17 +772,19 @@ it cannot be used to bypass the core architecture or parser tests.
 | Candidate | Feasibility | Phase 1 decision | Reason |
 | --- | --- | --- | --- |
 | App-owned raw ICMP | Device/policy dependent | No-Go | No stable non-Root third-party app contract |
-| App-owned UDP + ICMP receive | Device/policy dependent | No-Go | Cannot reliably receive/match intermediate ICMP responses |
+| App-owned UDP + ICMP receive | Device/policy dependent | **GO for IPv4 spike on Sony; not yet production** | App UID received real ICMP Time Exceeded via `IP_RECVERR`; portability and final-response behavior remain unproven |
 | Normal TCP connect | Destination-only | No-Go as traceroute | Does not expose intermediate hops |
 | `ping -t` orchestration | Command/output dependent | No-Go as default | Not a stable hop-result API and too easy to mislabel |
 | AOSP/OEM system `traceroute` adapter | Fails on Sony XQ-FS72 | No-Go on validated device | Toybox applet exists but socket creation returns `Operation not permitted` |
 | Third-party packet library | Does not remove platform limits | No-Go for now | Extra dependency without a reliable capability gain |
 
-**Gate result:** the Sony Android 16 gate failed. The applet is present inside
-Toybox, but non-Root socket creation is rejected and no route can be observed.
-Do not implement or ship a system-command adapter for this device. Any later
-cross-OEM investigation must be a separately authorized technical task; it
-cannot promote the Sony result to GO.
+**Gate result:** the Sony Android 16 system-command gate failed: the applet is
+present inside Toybox, but non-Root socket creation is rejected and no route
+can be observed through that command. The separate Task 044-A App-UID spike
+passed the bounded IPv4 UDP error-queue capability check. Do not implement or
+ship a system-command adapter for this device. The UDP result authorizes only a
+separately scoped production design/implementation task; it cannot be
+generalized to other devices without their own capability checks.
 
 ## 35. Scope confirmation
 
@@ -725,10 +799,11 @@ This baseline does not authorize:
 - LAN Scanner changes;
 - version changes, tags, releases, or APK uploads.
 
-No implementation task is authorized by this baseline after the failed gate.
-A future task must first resolve and explicitly approve an alternative
-technical approach; it must not add a binary, Root flow, raw-socket path, or
-third-party library implicitly.
+No production implementation task is authorized by this baseline. A future
+task may explicitly evaluate the App-UID UDP error-queue candidate, but it must
+not add Root flow, `SOCK_RAW`, a native traceroute binary, `ProcessBuilder`, or a
+third-party library implicitly. The temporary spike itself is not a product
+feature and has been removed.
 
 ## 36. References
 
