@@ -55,6 +55,29 @@ class DefaultTracerouteEngineTest {
     }
 
     @Test
+    fun reportsEachCompletedHopThroughProgressCallback() = runBlocking {
+        val probe = FakeNativeProbe(
+            NativeProbeOutcome(NativeTracerouteStatusCode.HOP, responderAddress = "192.0.2.1"),
+            NativeProbeOutcome(NativeTracerouteStatusCode.TIMEOUT),
+            NativeProbeOutcome(
+                NativeTracerouteStatusCode.DESTINATION_REACHED,
+                responderAddress = "1.1.1.1",
+                latencyMs = 12,
+            ),
+        )
+        val progress = mutableListOf<TracerouteProgress>()
+
+        val result = engineWith(probe).run(
+            TracerouteRequest(target = "1.1.1.1", maxHops = 3, probesPerHop = 1),
+        ) { progress += it }
+
+        assertEquals(TracerouteStatus.REACHED, result.status)
+        assertEquals(listOf(1, 2, 3), progress.map { it.hop.hopNumber })
+        assertEquals(result.hops, progress.map { it.hop })
+        assertTrue(progress.all { it.targetInput == "1.1.1.1" })
+    }
+
+    @Test
     fun hostnameIsResolvedOutsideNativeAndFakeIpIsFlagged() = runBlocking {
         val network = FakeNetwork(resolvedAddresses = listOf("198.18.0.10", "192.0.2.10"))
         val probe = FakeNativeProbe(

@@ -52,6 +52,8 @@ import com.networktoolbox.feature.report.presentation.ReportViewModel
 import com.networktoolbox.feature.report.ui.ReportScreen
 import com.networktoolbox.feature.subnet.presentation.SubnetViewModel
 import com.networktoolbox.feature.subnet.ui.SubnetScreen
+import com.networktoolbox.feature.traceroute.presentation.TracerouteViewModel
+import com.networktoolbox.feature.traceroute.ui.TracerouteScreen
 import com.networktoolbox.ui.theme.NetworkToolboxTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -65,6 +67,7 @@ class MainActivity : ComponentActivity() {
     private val reportViewModel: ReportViewModel by viewModels()
     private val subnetViewModel: SubnetViewModel by viewModels()
     private val lanScannerViewModel: LanScannerViewModel by viewModels()
+    private val tracerouteViewModel: TracerouteViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +81,7 @@ class MainActivity : ComponentActivity() {
             val reportUiState by reportViewModel.uiState.collectAsState()
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
+            val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
             var topLevelDestination by rememberSaveable {
                 mutableStateOf(TopLevelDestination.HOME)
             }
@@ -101,6 +105,9 @@ class MainActivity : ComponentActivity() {
                 if (toolScreen == ToolScreen.LAN_SCAN && screen != ToolScreen.LAN_SCAN) {
                     lanScannerViewModel.stopScan()
                 }
+                if (toolScreen == ToolScreen.TRACEROUTE && screen != ToolScreen.TRACEROUTE) {
+                    tracerouteViewModel.stop()
+                }
                 restoredDiagnosticReport = null
                 topLevelDestination = TopLevelDestination.TOOLS
                 toolScreen = screen
@@ -114,6 +121,7 @@ class MainActivity : ComponentActivity() {
                     reportViewModel.stopCheck()
                 }
                 lanScannerViewModel.stopScan()
+                tracerouteViewModel.stop()
                 restoredDiagnosticReport = null
                 topLevelDestination = destination
                 toolScreen = ToolScreen.NONE
@@ -172,6 +180,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenPing = { openTool(ToolScreen.PING) },
                                     onOpenDns = { openTool(ToolScreen.DNS) },
                                     onOpenTcp = { openTool(ToolScreen.TCP) },
+                                    onOpenTraceroute = { openTool(ToolScreen.TRACEROUTE) },
                                     onOpenSubnet = { openTool(ToolScreen.SUBNET) },
                                     onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
@@ -212,6 +221,13 @@ class MainActivity : ComponentActivity() {
                                 onHostChanged = tcpViewModel::onHostChanged,
                                 onPortChanged = tcpViewModel::onPortChanged,
                                 onCheck = tcpViewModel::check,
+                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                            )
+                            ToolScreen.TRACEROUTE -> TracerouteScreen(
+                                uiState = tracerouteUiState,
+                                onTargetChanged = tracerouteViewModel::onTargetChanged,
+                                onStart = tracerouteViewModel::start,
+                                onStop = tracerouteViewModel::stop,
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                             )
                             ToolScreen.REPORT -> ReportScreen(
@@ -269,6 +285,7 @@ private enum class ToolScreen {
     PING,
     DNS,
     TCP,
+    TRACEROUTE,
     REPORT,
     HISTORY,
     LAN_SCAN,

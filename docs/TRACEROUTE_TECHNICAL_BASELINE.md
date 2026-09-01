@@ -1058,7 +1058,39 @@ known unstable `223.5.5.5` sequence remains historical evidence in the Task
 044-B section and was not silently normalized. This task does not authorize
 Traceroute UI, History, Diagnostic integration, IPv6, or a release.
 
-## 39. References
+## 39. Task 045 UI and presentation integration
+
+Task 045 added the standalone Traceroute Phase 1 presentation without
+changing the validated IPv4 UDP/native probing semantics. The UI is exposed
+from the Tools screen and uses the formal chain
+`TracerouteScreen -> TracerouteViewModel -> RunTracerouteUseCase ->
+TracerouteEngine`.
+
+The Core now has a compatibility progress overload that reports one
+`TracerouteProgress` after each completed hop. The original one-shot
+`run(request)` API remains available, and the callback does not alter the
+existing destination-port sequence, TTL handling, three-probe default,
+timeout policy, network fingerprint checks, or final status calculation.
+
+Presentation behavior is intentionally conservative:
+
+- `REACHED` is shown as a completed path, not proof of general Internet
+  health.
+- `PARTIAL` remains neutral and distinguishes intermediate non-response from
+  trailing unconfirmed hops.
+- `CANCELLED` and `NETWORK_CHANGED` are separate user-visible outcomes.
+- native errno/ICMP details are not shown in ordinary result text.
+- special-use `198.18.0.0/15` resolution is a notice that may indicate a
+  Fake-IP environment; it is not classified as a failure.
+
+No Traceroute History record, PTR/Reverse DNS, ASN/GeoIP, IPv6 mode,
+advanced settings, permission, or new dependency was added. Automated
+Presentation and ViewModel tests cover localization, timeout semantics,
+Fake-IP/network-change notices, progress updates, cancellation, and input
+validation. Real-device UI validation is recorded separately in the Task 045
+completion report.
+
+## 40. References
 
 - [Android `Network`](https://developer.android.com/reference/android/net/Network)
 - [Android `ProcessBuilder`](https://developer.android.com/reference/java/lang/ProcessBuilder)

@@ -2,6 +2,12 @@ package com.networktoolbox.core.network.traceroute
 
 interface TracerouteEngine {
     suspend fun run(request: TracerouteRequest): TracerouteResult
+
+    /** Reports each completed hop while preserving the one-shot contract. */
+    suspend fun run(
+        request: TracerouteRequest,
+        onProgress: suspend (TracerouteProgress) -> Unit,
+    ): TracerouteResult = run(request)
 }
 
 interface UdpTracerouteNativeProbe {

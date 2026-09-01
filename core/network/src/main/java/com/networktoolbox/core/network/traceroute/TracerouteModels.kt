@@ -67,6 +67,13 @@ data class TracerouteHop(
     val latencies: List<Long> get() = probes.mapNotNull(TracerouteProbeResult::latencyMs)
 }
 
+data class TracerouteProgress(
+    val targetInput: String,
+    val resolvedAddress: String?,
+    val hop: TracerouteHop,
+    val elapsedMs: Long,
+)
+
 data class TracerouteResult(
     val targetInput: String,
     val resolvedAddress: String?,

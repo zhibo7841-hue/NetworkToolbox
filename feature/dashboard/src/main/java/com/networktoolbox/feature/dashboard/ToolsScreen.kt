@@ -29,6 +29,7 @@ fun ToolsScreen(
     onOpenPing: () -> Unit,
     onOpenDns: () -> Unit,
     onOpenTcp: () -> Unit,
+    onOpenTraceroute: () -> Unit,
     onOpenSubnet: () -> Unit,
     onOpenLanScan: () -> Unit,
     onOpenReport: () -> Unit,
@@ -59,6 +60,7 @@ fun ToolsScreen(
                     ToolItem(Icons.Outlined.WifiTethering, "Ping", "测试目标是否可达", onOpenPing),
                     ToolItem(Icons.Outlined.Dns, "DNS Lookup", "检查域名解析", onOpenDns),
                     ToolItem(Icons.Outlined.Lan, "TCP Port Check", "检查服务端口", onOpenTcp),
+                    ToolItem(Icons.Outlined.AccountTree, "Traceroute", "查看网络路径", onOpenTraceroute),
                 ),
             )
             ToolSection(

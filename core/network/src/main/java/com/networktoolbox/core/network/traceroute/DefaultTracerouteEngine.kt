@@ -14,9 +14,15 @@ class DefaultTracerouteEngine(
     private val now: () -> Long = { System.currentTimeMillis() },
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : TracerouteEngine {
-    override suspend fun run(request: TracerouteRequest): TracerouteResult = try {
+    override suspend fun run(request: TracerouteRequest): TracerouteResult =
+        run(request, onProgress = {})
+
+    override suspend fun run(
+        request: TracerouteRequest,
+        onProgress: suspend (TracerouteProgress) -> Unit,
+    ): TracerouteResult = try {
         withContext(dispatcher) {
-            runInternal(request)
+            runInternal(request, onProgress)
         }
     } catch (_: CancellationException) {
         // A cancelled dispatcher context can rethrow after runInternal has
@@ -25,7 +31,10 @@ class DefaultTracerouteEngine(
         TracerouteResult.cancelled(request)
     }
 
-    private suspend fun runInternal(request: TracerouteRequest): TracerouteResult {
+    private suspend fun runInternal(
+        request: TracerouteRequest,
+        onProgress: suspend (TracerouteProgress) -> Unit,
+    ): TracerouteResult {
         val startedAt = now()
         TracerouteValidation.validate(request)?.let { message ->
             return TracerouteResult.failed(request, message, durationMs = elapsed(startedAt))
@@ -133,7 +142,7 @@ class DefaultTracerouteEngine(
                     }
                 }
 
-                hops += TracerouteHop(
+                val hop = TracerouteHop(
                     hopNumber = hopNumber,
                     address = probes.firstNotNullOfOrNull(TracerouteProbeResult::responderAddress),
                     probes = probes.toList(),
@@ -146,6 +155,15 @@ class DefaultTracerouteEngine(
 
                         else -> TracerouteHopStatus.TIMEOUT
                     },
+                )
+                hops += hop
+                onProgress(
+                    TracerouteProgress(
+                        targetInput = request.target,
+                        resolvedAddress = resolution.address,
+                        hop = hop,
+                        elapsedMs = elapsed(startedAt),
+                    ),
                 )
                 if (reached) break@outer
             }
