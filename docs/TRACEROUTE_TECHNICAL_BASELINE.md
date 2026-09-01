@@ -140,12 +140,19 @@ fallback. It may be included in a future capability experiment only.
 
 Reference: [AOSP Toybox ping source](https://android.googlesource.com/platform/external/toybox/+/40d21c59f76a9388b0ebb5c4c706732c2d034a67/toys/net/ping.c).
 
-## 8. Sony Xperia 1 VII / Android 16 test status
+## 8. Sony Xperia 1 VII / Android 16 Real Device Validation
 
-The current host was checked with `adb devices`; no device was attached. No
-Sony Xperia 1 VII command, permission, route, or output result has therefore
-been obtained in this task. The following items remain **unverified**, not
-failed and not successful:
+Task 043 attempted the required device gate with `adb devices`. The actual
+output was:
+
+```text
+List of devices attached
+```
+
+No Sony Xperia 1 VII was attached or authorized. Consequently, no real-device
+result was obtained for command presence, permissions, routes, output, or
+process behavior. The following items remain **unverified**, not failed and
+not successful:
 
 - whether `/system/bin/traceroute` exists;
 - whether `/system/bin/traceroute6` exists;
@@ -153,7 +160,42 @@ failed and not successful:
 - whether IPv4 and IPv6 output is parseable;
 - whether VPN and Private DNS behavior are usable;
 - whether the OEM command accepts the AOSP options;
-- whether cancellation and timeout leave no child process behind.
+- whether cancellation and timeout leave no child process behind;
+- whether `ProcessBuilder` can invoke the command from the app-facing UID;
+- whether stdout/stderr and exit-code behavior are suitable for a parser.
+
+Device identity is therefore **not obtained** for this validation run:
+
+| Field | Result |
+| --- | --- |
+| Manufacturer | NOT OBTAINED |
+| Model | NOT OBTAINED |
+| Android version | NOT OBTAINED |
+| API level | NOT OBTAINED |
+| Wi-Fi | NOT TESTED |
+| OpenClash Wi-Fi | NOT TESTED |
+| Mobile network | NOT TESTED |
+| IPv6 connectivity | NOT TESTED |
+
+Traceroute command results are also **NOT TESTED**:
+
+| Check | Result |
+| --- | --- |
+| `traceroute` presence/path | NOT TESTED |
+| `traceroute6` or `-6` | NOT TESTED |
+| `tracepath` | NOT TESTED |
+| Toybox command list | NOT TESTED |
+| Help/parameter output | NOT TESTED |
+| IPv4 `1.1.1.1` | NOT TESTED |
+| IPv4 `223.5.5.5` / `119.29.29.29` | NOT TESTED |
+| Domain resolution behavior | NOT TESTED |
+| Fake-IP behavior | NOT TESTED |
+| Stop/process destruction | NOT TESTED |
+| Parser format | NOT OBSERVED |
+
+The Task 042 recommendation therefore remains conditional. This run neither
+promotes nor rejects the system-command approach. A connected, authorized
+Sony Xperia 1 VII is required before making the final GO/NO-GO decision.
 
 The first real-device test should capture command presence, `--help` or
 equivalent output, IPv4/IPv6 runs, a domain run, a timeout case, a cancellation
