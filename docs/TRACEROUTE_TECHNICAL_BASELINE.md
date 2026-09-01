@@ -5,7 +5,8 @@
 **Date:** 2026-08-31
 
 This document is a feasibility and design baseline for Traceroute Phase 1. It
-does not add a Traceroute screen, production Kotlin code, a new permission, a
+does not add a Traceroute screen or user-facing feature. The Task 044 section
+records the isolated production Core implementation, without adding a new permission,
 dependency, a version change, a tag, or a release. The product scope remains
 governed by [`PRODUCT_PLAN.md`](PRODUCT_PLAN.md).
 
