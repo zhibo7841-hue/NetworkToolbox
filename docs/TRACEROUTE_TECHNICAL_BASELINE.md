@@ -142,66 +142,130 @@ Reference: [AOSP Toybox ping source](https://android.googlesource.com/platform/e
 
 ## 8. Sony Xperia 1 VII / Android 16 Real Device Validation
 
-Task 043 attempted the required device gate with `adb devices`. The actual
-output was:
+Task 043-R completed the required device gate on 2026-09-01. The actual
+`adb devices` output was:
 
 ```text
 List of devices attached
+HQ657X0B9F	device
 ```
 
-No Sony Xperia 1 VII was attached or authorized. Consequently, no real-device
-result was obtained for command presence, permissions, routes, output, or
-process behavior. The following items remain **unverified**, not failed and
-not successful:
-
-- whether `/system/bin/traceroute` exists;
-- whether `/system/bin/traceroute6` exists;
-- whether either command is executable by the app UID;
-- whether IPv4 and IPv6 output is parseable;
-- whether VPN and Private DNS behavior are usable;
-- whether the OEM command accepts the AOSP options;
-- whether cancellation and timeout leave no child process behind;
-- whether `ProcessBuilder` can invoke the command from the app-facing UID;
-- whether stdout/stderr and exit-code behavior are suitable for a parser.
-
-Device identity is therefore **not obtained** for this validation run:
+The device identity was:
 
 | Field | Result |
 | --- | --- |
-| Manufacturer | NOT OBTAINED |
-| Model | NOT OBTAINED |
-| Android version | NOT OBTAINED |
-| API level | NOT OBTAINED |
-| Wi-Fi | NOT TESTED |
-| OpenClash Wi-Fi | NOT TESTED |
-| Mobile network | NOT TESTED |
-| IPv6 connectivity | NOT TESTED |
+| Manufacturer | Sony |
+| Model | XQ-FS72 |
+| Android version | 16 |
+| API level | 36 |
 
-Traceroute command results are also **NOT TESTED**:
+The ADB shell used for validation was not Root:
+
+```text
+uid=2000(shell) gid=2000(shell) context=u:r:shell:s0
+getenforce: Enforcing
+```
+
+### Command availability
+
+There is no standalone executable or symlink at the expected paths:
 
 | Check | Result |
 | --- | --- |
-| `traceroute` presence/path | NOT TESTED |
-| `traceroute6` or `-6` | NOT TESTED |
-| `tracepath` | NOT TESTED |
-| Toybox command list | NOT TESTED |
-| Help/parameter output | NOT TESTED |
-| IPv4 `1.1.1.1` | NOT TESTED |
-| IPv4 `223.5.5.5` / `119.29.29.29` | NOT TESTED |
-| Domain resolution behavior | NOT TESTED |
-| Fake-IP behavior | NOT TESTED |
-| Stop/process destruction | NOT TESTED |
-| Parser format | NOT OBSERVED |
+| `command -v traceroute` | No result, exit 1 |
+| `command -v traceroute6` | No result, exit 1 |
+| `command -v tracepath` | No result, exit 1 |
+| `/system/bin/traceroute` | Missing, exit 1 |
+| `/system/bin/traceroute6` | Missing, exit 1 |
+| `/system/bin/tracepath` | Missing, exit 1 |
+| `/system/bin/toybox` | Present and executable |
 
-The Task 042 recommendation therefore remains conditional. This run neither
-promotes nor rejects the system-command approach. A connected, authorized
-Sony Xperia 1 VII is required before making the final GO/NO-GO decision.
+The real Toybox command list contains both `traceroute` and `traceroute6`.
+`toybox traceroute --help` executed successfully and reported Toybox
+`0.8.12-android`. The observed options were:
 
-The first real-device test should capture command presence, `--help` or
-equivalent output, IPv4/IPv6 runs, a domain run, a timeout case, a cancellation
-case, and the exit code/stdout/stderr. It must not use `su`.
+- `-4` / `-6` for address-family selection;
+- `-m` for maximum TTL, range 1–255;
+- `-q` for probes per TTL, range 1–255, default 3;
+- `-w` for wait seconds, range 0–86400, default 3;
+- `-n` for numeric output;
+- `-i` for interface;
+- `-p` for the base UDP port;
+- IPv4-only `-U` UDP datagrams and `-I` ICMP Echo;
+- IPv4-only `-f`, `-F`, `-g`, and `-z` options.
 
-Suggested non-Root shell checks after the device is connected:
+The direct commands `traceroute`, `traceroute6`, and `tracepath` were not
+available through the shell PATH. The usable applet entry point was
+`/system/bin/toybox traceroute` or `/system/bin/toybox traceroute6`.
+
+### IPv4 command tests
+
+The following bounded commands were run as the non-Root ADB shell user, with
+`-m 3 -q 1 -w 1 -n`:
+
+| Target/variant | Exit code | stdout | stderr |
+| --- | ---: | --- | --- |
+| `toybox traceroute -4 1.1.1.1` | 1 | Empty | `traceroute: socket 3 1: Operation not permitted` |
+| `toybox traceroute -4 223.5.5.5` | 1 | Empty | `traceroute: socket 3 1: Operation not permitted` |
+| `toybox traceroute -4 119.29.29.29` | 1 | Empty | `traceroute: socket 3 1: Operation not permitted` |
+| `toybox traceroute -4 -U 1.1.1.1` | 1 | Empty | `traceroute: socket 3 1: Operation not permitted` |
+| `toybox traceroute -4 -I 1.1.1.1` | 1 | Empty | `traceroute: socket 3 1: Operation not permitted` |
+
+No command reached the first hop, produced a timeout marker, or produced a
+destination response. The failure occurs while creating the socket, before a
+route can be observed. No large or repeated traffic test was performed.
+
+### IPv6 command and route tests
+
+`toybox traceroute6 --help` was available through the multicall binary, but
+`toybox traceroute6 -6 -n -m 3 -q 1 -w 1 2606:4700:4700::1111` exited 1 with:
+
+```text
+traceroute6: socket 3 3a: Operation not permitted
+```
+
+The device exposed global IPv6 addresses on cellular interfaces, but the
+ordinary `ip -6 route` table had no default route. The all-tables view showed
+cellular-specific IPv6 defaults, while Wi-Fi had only link-local IPv6. A
+usable end-to-end public IPv6 traceroute was therefore not established.
+
+### Network scenarios not run
+
+The command failed before network probing, so comparative trace results are
+not available:
+
+| Scenario | Result |
+| --- | --- |
+| Current Wi-Fi | NOT TESTED as a successful traceroute |
+| OpenClash Wi-Fi | NOT TESTED |
+| Mobile data | NOT TESTED as a successful traceroute |
+| Domain `example.com` | NOT TESTED because IPv4 prerequisite failed |
+| Fake-IP observation | NOT TESTED |
+| ProcessBuilder from an app UID | NOT TESTED directly; no spike was justified after the shell-level socket failure |
+| `destroy()` / `destroyForcibly()` | NOT TESTED because no traceroute process reached a running trace |
+| Sony output fixture | No hop fixture available |
+
+The shell-level failure is sufficient to reject the system-command approach for
+this device's non-Root Phase 1 path. A separate app-UID spike would not add
+useful evidence when the same Toybox applet cannot create its socket even from
+the less restricted ADB shell context.
+
+### Final device-specific decision
+
+For Sony XQ-FS72 / Android 16:
+
+- IPv4 Traceroute Phase 1: **NO-GO** for the system-command approach;
+- IPv6 Traceroute Phase 1: **NO-GO** for the system-command approach on this
+  device;
+- System traceroute adapter: **NO-GO** on the validated device;
+- ProcessBuilder: **NO-GO** as a Phase 1 strategy on this device.
+
+This is a device capability result, not proof that every Android OEM behaves
+identically. It does mean Task 042's system-command recommendation cannot be
+promoted to a supported Sony Android 16 product path.
+
+For a future device or separately approved OEM investigation, the following
+non-Root shell checks remain useful:
 
 ```text
 adb shell command -v traceroute
@@ -211,15 +275,19 @@ adb shell /system/bin/traceroute -4 -m 3 -q 1 -w 1 1.1.1.1
 adb shell /system/bin/traceroute6 -6 -m 3 -q 1 -w 1 2606:4700:4700::1111
 ```
 
-These commands are validation probes only; they are not a production feature
-and must not be treated as evidence until output and exit semantics are
+These commands are validation probes only; on the Sony device validated here,
+the standalone paths are known to be missing and the Toybox applets are known
+to fail at socket creation. They are not a production feature and must not be
+treated as evidence for another device until output and exit semantics are
 recorded.
 
 ## 9. IPv4 policy
 
-IPv4 is the only protocol that should be considered a likely Phase 1 default.
-The first implementation should use `/system/bin/traceroute` with an explicit
-IPv4 option when the target is an IPv4 literal or the user selects IPv4.
+IPv4 remains the only protocol that was a plausible Phase 1 default before the
+device gate. On a different device, a separately approved implementation could
+use a verified system traceroute command with an explicit IPv4 option when the
+target is an IPv4 literal or the user selects IPv4. The Sony device validated
+in this task is not such a device.
 
 IPv4 results must distinguish an observed intermediate address from a timeout.
 An intermediate hop may not respond while later hops continue to respond. That
@@ -228,10 +296,11 @@ router.
 
 ## 10. IPv6 policy
 
-IPv6 should be exposed as **conditional** in Phase 1. It requires both a
-usable IPv6 route and a verified IPv6-capable command/parser path. An IPv6
-link-local address is not a usable public traceroute target without a scope or
-interface, and NetworkToolbox must not silently strip that scope.
+IPv6 would remain **conditional** even on a device that passes the IPv4 gate. It
+requires both a usable IPv6 route and a verified IPv6-capable command/parser
+path. An IPv6 link-local address is not a usable public traceroute target
+without a scope or interface, and NetworkToolbox must not silently strip that
+scope.
 
 If `traceroute6` is absent, rejected, or produces an unverified format, the
 result should say that IPv6 traceroute is unavailable on this device. It must
@@ -281,10 +350,11 @@ would create global side effects and is not recommended for the first design.
 
 Reference: [Android `Network` API](https://developer.android.com/reference/android/net/Network).
 
-## 14. Recommended Phase 1 architecture
+## 14. Candidate Phase 1 architecture
 
-The recommended architecture is a **conditional system-command adapter** with a
-pure Kotlin parser and an explicit unavailable result:
+Before the real-device gate, the smallest candidate architecture was a
+**conditional system-command adapter** with a pure Kotlin parser and an explicit
+unavailable result:
 
 ```text
 TracerouteUseCase
@@ -302,26 +372,29 @@ TracerouteOutputParser   -- pure Kotlin
 TracerouteResult
 ```
 
-The core must not import Android `Context`, `Network`, `NsdManager`, or
-Compose. The data adapter owns command capability detection, process lifecycle,
-network snapshot integration, and platform exception mapping. The parser owns
-only deterministic text-to-model conversion.
+The core must not import Android `Context`, `Network`, `NsdManager`, or Compose.
+The data adapter would own command capability detection, process lifecycle,
+network snapshot integration, and platform exception mapping. The parser would
+own only deterministic text-to-model conversion.
 
-## 15. Final protocol recommendation
+The Sony validation below failed before any hop output was produced, so this
+architecture is not approved for the validated device.
 
-The Phase 1 primary method should be:
+## 15. Final protocol recommendation after Sony validation
 
-> A validated `/system/bin/traceroute` process adapter for IPv4, with a
-> separate, conditional `/system/bin/traceroute6` adapter for IPv6.
+The proposed system-command method is **not approved** for Sony XQ-FS72 /
+Android 16. Although the Toybox applets exist, both IPv4 and IPv6 fail at socket
+creation for the non-Root ADB shell. No real hop output or parser fixture was
+obtained.
 
-This is a **CONDITIONAL GO**, not an unconditional support promise. It is the
-smallest non-Root approach that can expose actual per-hop output without
-writing a raw-socket implementation inside the app. It also allows the project
-to fail closed on OEM images where the command is missing or unusable.
+The project must not begin production Traceroute implementation from this
+candidate. A new technical/product decision is required before selecting a
+different platform approach. The app must not silently substitute raw ICMP,
+app-owned UDP, TCP connect, or `ping -t`.
 
 Do not ship app-owned raw ICMP/UDP, TCP-connect-as-traceroute, or `ping -t` as
-the default. If the Sony validation fails, Phase 1 should remain unavailable
-on that device until a separately approved platform solution exists.
+the default. On the validated device, Phase 1 should remain unavailable until
+a separately approved platform solution exists.
 
 ## 16. Process invocation and input safety
 
@@ -630,16 +703,14 @@ it cannot be used to bypass the core architecture or parser tests.
 | App-owned UDP + ICMP receive | Device/policy dependent | No-Go | Cannot reliably receive/match intermediate ICMP responses |
 | Normal TCP connect | Destination-only | No-Go as traceroute | Does not expose intermediate hops |
 | `ping -t` orchestration | Command/output dependent | No-Go as default | Not a stable hop-result API and too easy to mislabel |
-| AOSP/OEM system `traceroute` adapter | Conditional | Conditional Go | Smallest practical non-Root route to real hop output |
+| AOSP/OEM system `traceroute` adapter | Fails on Sony XQ-FS72 | No-Go on validated device | Toybox applet exists but socket creation returns `Operation not permitted` |
 | Third-party packet library | Does not remove platform limits | No-Go for now | Extra dependency without a reliable capability gain |
 
-**Recommended gate:** proceed to implementation only after a Sony Android 16
-device confirms that `/system/bin/traceroute` is present, executable by the
-app-facing context, produces a parseable IPv4 trace, and can be terminated
-cleanly. Treat IPv6 as conditional until `traceroute6` is independently
-validated. If the gate fails, ship an explicit “Traceroute unavailable on this
-device” state rather than a simulated or partial implementation presented as a
-complete trace.
+**Gate result:** the Sony Android 16 gate failed. The applet is present inside
+Toybox, but non-Root socket creation is rejected and no route can be observed.
+Do not implement or ship a system-command adapter for this device. Any later
+cross-OEM investigation must be a separately authorized technical task; it
+cannot promote the Sony result to GO.
 
 ## 35. Scope confirmation
 
@@ -654,9 +725,10 @@ This baseline does not authorize:
 - LAN Scanner changes;
 - version changes, tags, releases, or APK uploads.
 
-The next implementation task, if separately authorized, should implement the
-pure models/parser and a fake process runner first, then add the guarded
-Android system-command adapter only after the real-device capability gate.
+No implementation task is authorized by this baseline after the failed gate.
+A future task must first resolve and explicitly approve an alternative
+technical approach; it must not add a binary, Root flow, raw-socket path, or
+third-party library implicitly.
 
 ## 36. References
 
