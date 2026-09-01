@@ -154,10 +154,11 @@ Potential follow-up capabilities include:
 - Wake-on-LAN.
 - mDNS.
 
-### V0.3.0 — Released
+### V0.3.0 — Ready for Release
 
-The confirmed v0.3.0 release goal is **LAN Device Identification Phase 1** and
-**Traceroute Phase 1**.
+The confirmed v0.3.0 release candidate covers **LAN Device Identification
+Phase 1** and **Traceroute Phase 1**. The release candidate has passed its
+regression gate and is ready for the GitHub Release publication step.
 
 - LAN device identification will enrich already discovered LAN hosts with
   evidence-backed Hostname / Reverse DNS, mDNS / Bonjour, and UPnP / SSDP

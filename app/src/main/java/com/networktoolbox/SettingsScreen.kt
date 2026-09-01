@@ -52,7 +52,10 @@ fun SettingsScreen(
             SettingsCard(title = "关于") {
                 Text("NetworkToolbox", style = MaterialTheme.typography.titleMedium)
                 Text("Open Source Network Analyzer")
-                Text("Version 0.1.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    AppVersionInfo.formatVersionName(BuildConfig.VERSION_NAME),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             SettingsCard(title = "数据管理") {
