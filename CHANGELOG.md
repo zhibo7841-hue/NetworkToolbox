@@ -30,6 +30,7 @@
 - Android 16 mDNS late-callback crashes.
 - UPnP Description HTTP/XML compatibility and safety handling on Android 16.
 - LAN Scanner and Traceroute state and presentation issues.
+- Settings/About showing a stale hard-coded application version.
 
 ### Current limitations
 
