@@ -173,6 +173,22 @@ MAC/OUI lookup, cloud identification, Wake-on-LAN, deep fingerprinting,
 Traceroute maps, GeoIP, ASN data, and MTR are not part of v0.3.0 Phase 1. See
 `docs/V0.3_PLAN.md` for the approved development phases and release gates.
 
+### V0.4.0 — Planning
+
+The confirmed v0.4.0 product direction is **Automatic Diagnostics Phase 2**
+and **Diagnostic Report Phase 1**. This version will strengthen the evidence-
+driven diagnostic workflow before considering unrelated tool expansion.
+
+The formal v0.4.0 baseline is documented in `docs/V0.4_PLAN.md` and
+`docs/AUTOMATIC_DIAGNOSTICS_V2_DESIGN.md`. The planned experience will combine
+local network observations, focused existing probes, conservative rule-based
+interpretation, understandable recommendations, and an inspectable local
+report.
+
+v0.4.0 does not include automatic network repair, cloud AI diagnosis, account
+requirements, report upload, Wi-Fi Analyzer, Wake-on-LAN, SSL/TLS inspection,
+WHOIS, iPerf, IPv6 Traceroute, Traceroute History, MAC/OUI, ASN, GeoIP, or MTR.
+
 ### V1.0
 
 Release scope and readiness criteria are not yet defined. The future directions listed above are not commitments for this release.

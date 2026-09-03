@@ -119,3 +119,28 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Scope: This decision authorizes the Core only. IPv6, UI, History, automatic
   Diagnostic integration, reverse DNS, maps, ASN/GeoIP, and background tracing
   remain outside this task and require separate decisions.
+
+## Decision: v0.4.0 Automatic Diagnostics and Diagnostic Report direction
+
+- Date: 2026-09-04
+- Status: Accepted
+- Decision: The confirmed v0.4.0 mainline is Automatic Diagnostics Phase 2 plus
+  Diagnostic Report Phase 1.
+- Principles: The design is local-first, rule-driven, evidence-driven, and
+  conservative. It must not depend on cloud AI, require an account, upload
+  network data, or automatically modify Android network configuration.
+- Evidence boundary: The product must distinguish confirmed facts, supported
+  interpretations, uncertainty, possible causes, and recommendations. When
+  evidence is insufficient, it must say that the issue was not confirmed rather
+  than assert a deterministic fault.
+- Product boundary: v0.4.0 improves the existing Network Information, Ping,
+  DNS, TCP, Traceroute, and Diagnostic capabilities. It does not authorize
+  Wi-Fi Analyzer, Wake-on-LAN, SSL/TLS, WHOIS, iPerf, IPv6 Traceroute,
+  Traceroute History, MAC/OUI, ASN, GeoIP, MTR, cloud analysis, automatic
+  repair, or a new unrelated tool.
+- Report boundary: Diagnostic Report Phase 1 is an in-app, locally generated
+  report that can be copied or shared as text. PDF generation, online reports,
+  cloud synchronization, and automatic history expansion require separate
+  approval.
+- Consequence: Detailed rules belong in the automatic-diagnostics design
+  baseline and later implementation tasks, not in this decision record.
