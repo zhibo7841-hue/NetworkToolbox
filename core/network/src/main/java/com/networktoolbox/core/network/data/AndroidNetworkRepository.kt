@@ -102,6 +102,12 @@ class AndroidNetworkRepository(context: Context) : NetworkRepository {
                     interfaceName = properties?.interfaceName,
                     privateDnsActive = properties?.isPrivateDnsActive,
                     privateDnsServerName = properties?.privateDnsServerName,
+                    captivePortal = capabilities?.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL,
+                    ),
+                    // NET_CAPABILITY_PARTIAL_CONNECTIVITY is not part of the public
+                    // android-36 SDK surface, so do not guess or use a hidden constant.
+                    partialConnectivity = null,
                     wifiName = wifiInfo?.ssid
                         ?.takeUnless { it.isBlank() || it == WifiManager.UNKNOWN_SSID }
                         ?.trim('"'),

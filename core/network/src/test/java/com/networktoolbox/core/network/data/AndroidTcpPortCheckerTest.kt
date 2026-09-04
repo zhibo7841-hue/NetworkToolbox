@@ -1,8 +1,11 @@
 package com.networktoolbox.core.network.data
 
 import com.networktoolbox.core.network.tcp.TcpPortChecker
+import com.networktoolbox.core.common.diagnostic.DiagnosticTcpOutcome
 import java.io.IOException
 import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -25,6 +28,7 @@ class AndroidTcpPortCheckerTest {
         assertEquals(443, result.port)
         assertNotNull(result.latencyMs)
         assertNull(result.errorMessage)
+        assertEquals(DiagnosticTcpOutcome.CONNECT_SUCCESS, result.outcome)
         assertEquals("127.0.0.1", connector.receivedHost)
         assertEquals(443, connector.receivedPort)
         assertEquals(1_250, connector.receivedTimeoutMs)
@@ -41,6 +45,7 @@ class AndroidTcpPortCheckerTest {
         assertFalse(result.success)
         assertNull(result.latencyMs)
         assertEquals("Connection refused", result.errorMessage)
+        assertEquals(DiagnosticTcpOutcome.CONNECTION_REFUSED, result.outcome)
     }
 
     @Test
@@ -54,6 +59,7 @@ class AndroidTcpPortCheckerTest {
         assertFalse(result.success)
         assertNull(result.latencyMs)
         assertEquals("Timeout", result.errorMessage)
+        assertEquals(DiagnosticTcpOutcome.TIMEOUT, result.outcome)
     }
 
     @Test
@@ -66,6 +72,31 @@ class AndroidTcpPortCheckerTest {
 
         assertFalse(result.success)
         assertEquals("Unknown error", result.errorMessage)
+        assertEquals(DiagnosticTcpOutcome.UNKNOWN, result.outcome)
+    }
+
+    @Test
+    fun noRouteIsClassifiedAsNoRoute() = runBlocking {
+        val checker = AndroidTcpPortChecker(
+            FakeTcpConnection { _, _, _ -> throw NoRouteToHostException("No route") },
+        )
+
+        val result = checker.check("192.0.2.10", port = 443)
+
+        assertEquals("No route to host", result.errorMessage)
+        assertEquals(DiagnosticTcpOutcome.NO_ROUTE, result.outcome)
+    }
+
+    @Test
+    fun networkUnreachableIsClassifiedWithoutGuessingOtherSocketErrors() = runBlocking {
+        val checker = AndroidTcpPortChecker(
+            FakeTcpConnection { _, _, _ -> throw SocketException("Network is unreachable") },
+        )
+
+        val result = checker.check("192.0.2.10", port = 443)
+
+        assertEquals("Network unreachable", result.errorMessage)
+        assertEquals(DiagnosticTcpOutcome.NETWORK_UNREACHABLE, result.outcome)
     }
 
     @Test

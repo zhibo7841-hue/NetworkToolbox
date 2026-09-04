@@ -26,6 +26,8 @@ class NetworkContextTest {
         assertNull(context.interfaceName)
         assertNull(context.privateDnsActive)
         assertNull(context.privateDnsServerName)
+        assertNull(context.captivePortal)
+        assertNull(context.partialConnectivity)
     }
 
     @Test

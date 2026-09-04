@@ -464,10 +464,11 @@ Recommendations are:
 3. 完成门户认证后重新检测。
 
 Captive Portal is not evidence that a router is damaged or that a DNS provider
-is broken. The current `NetworkContext` exposes validated/network state but
-does not yet provide a dedicated captive-portal field; Task 050 must audit the
-API mapping and availability on supported Android versions before implementation.
-This design task does not change the repository or add a capability field.
+is broken. Task 050 maps the public Android captive-portal capability to a
+nullable `NetworkContext.captivePortal` observation. Android's current public
+compile SDK does not expose a partial-connectivity capability constant, so
+`NetworkContext.partialConnectivity` remains nullable/unknown rather than
+using a hidden or guessed value.
 
 ## 7. Evidence model
 
@@ -924,18 +925,21 @@ current Android network's system DNS path. The same target is used for the
 subsequent domain-path check when usable addresses are returned.
 
 This is a record of the current baseline, not a claim that a third party is a
-NetworkToolbox service or that it is always reachable. Before Task 050 fixes
-the implementation contract, the following must be verified:
+NetworkToolbox service or that it is always reachable. Task 050 verified the
+following implementation constraints:
 
-- the name is expected to remain available for the release lifetime;
+- the name is a reserved documentation/example domain maintained by IANA and
+  specified by RFC 2606, so it is suitable as a stable DNS name-resolution
+  probe but not as an application or HTTP availability target;
 - the check does not require a NetworkToolbox-owned server;
 - a valid A response with AAAA `NO_RECORDS` remains a successful DNS health
   result;
 - NXDOMAIN is still a valid DNS response about the queried name, not a global
   DNS failure.
 
-Status: **TO BE VERIFIED IN TASK 050**. This task does not change the DNS
-engine, target list, or query behavior.
+Status: **VERIFIED IN TASK 050**. The orchestrator keeps the current system
+DNS path, A + AAAA request, and centralized target configuration; it does not
+add a NetworkToolbox DNS or HTTP service dependency.
 
 ## 14. Architecture and reuse strategy
 
@@ -1540,7 +1544,8 @@ models compiling. Add serialization fixtures only.
 Extract a bounded orchestrator around the existing Network Repository, Ping v2,
 DNS v2, and TCP adapters. Preserve current timeout, gateway, multi-target,
 cellular, cancellation, and network-change semantics. Add fake-driven stage
-tests.
+tests. **Completed:** the implementation is kept parallel to the legacy
+pipeline and emits evidence/checks only; rule evaluation remains Task 051.
 
 ### Task 051 — Conservative rule engine
 

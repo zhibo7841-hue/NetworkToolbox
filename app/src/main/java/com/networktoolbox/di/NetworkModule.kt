@@ -57,6 +57,10 @@ import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticPipeline
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticAnalyzerV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticPipeline
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticProbeTargets
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DefaultDiagnosticNetworkFingerprintProvider
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DefaultDiagnosticOrchestrator
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticNetworkFingerprintProvider
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticOrchestrator
 import com.networktoolbox.feature.report.domain.DnsUseCase as ReportDnsUseCase
 import com.networktoolbox.feature.report.domain.PingUseCase as ReportPingUseCase
 import com.networktoolbox.feature.report.domain.TcpUseCase as ReportTcpUseCase
@@ -252,6 +256,29 @@ object NetworkModule {
         dnsQueryEngine = dnsQueryEngine,
         tcpPortChecker = tcpPortChecker,
         probeTargets = probeTargets,
+    )
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticNetworkFingerprintProvider(): DiagnosticNetworkFingerprintProvider =
+        DefaultDiagnosticNetworkFingerprintProvider()
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticOrchestrator(
+        networkRepository: NetworkRepository,
+        pingSessionEngine: PingSessionEngine,
+        dnsQueryEngine: DnsQueryEngine,
+        tcpPortChecker: TcpPortChecker,
+        probeTargets: DiagnosticProbeTargets,
+        fingerprintProvider: DiagnosticNetworkFingerprintProvider,
+    ): DiagnosticOrchestrator = DefaultDiagnosticOrchestrator(
+        networkRepository = networkRepository,
+        pingSessionEngine = pingSessionEngine,
+        dnsQueryEngine = dnsQueryEngine,
+        tcpPortChecker = tcpPortChecker,
+        probeTargets = probeTargets,
+        fingerprintProvider = fingerprintProvider,
     )
 
     @Provides

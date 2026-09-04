@@ -73,6 +73,7 @@ enum class DiagnosticTcpOutcome {
 
 enum class DiagnosticDnsOutcome {
     SUCCESS,
+    PARTIAL,
     NO_RECORDS,
     NXDOMAIN,
     TIMEOUT,

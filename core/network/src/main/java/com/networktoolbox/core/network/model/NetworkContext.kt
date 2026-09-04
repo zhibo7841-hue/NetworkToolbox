@@ -23,6 +23,10 @@ data class NetworkContext(
     val privateDnsActive: Boolean? = null,
     /** The Private DNS hostname in strict mode, when reported by Android. */
     val privateDnsServerName: String? = null,
+    /** Whether Android reports that this network may require captive-portal login. */
+    val captivePortal: Boolean? = null,
+    /** Whether Android reports partial connectivity for this network. */
+    val partialConnectivity: Boolean? = null,
 ) {
     companion object {
         fun unknown(): NetworkContext = NetworkContext(
@@ -41,6 +45,8 @@ data class NetworkContext(
             interfaceName = null,
             privateDnsActive = null,
             privateDnsServerName = null,
+            captivePortal = null,
+            partialConnectivity = null,
         )
 
         fun noActiveNetwork(): NetworkContext = NetworkContext(
@@ -59,6 +65,8 @@ data class NetworkContext(
             interfaceName = null,
             privateDnsActive = null,
             privateDnsServerName = null,
+            captivePortal = null,
+            partialConnectivity = null,
         )
     }
 }

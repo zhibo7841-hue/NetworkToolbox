@@ -26,6 +26,8 @@ class NetworkContextMapperTest {
                 interfaceName = "wlan0",
                 privateDnsActive = true,
                 privateDnsServerName = "dns.example",
+                captivePortal = false,
+                partialConnectivity = true,
             ),
         )
 
@@ -44,5 +46,7 @@ class NetworkContextMapperTest {
         assertEquals("wlan0", result.interfaceName)
         assertEquals(true, result.privateDnsActive)
         assertEquals("dns.example", result.privateDnsServerName)
+        assertEquals(false, result.captivePortal)
+        assertEquals(true, result.partialConnectivity)
     }
 }

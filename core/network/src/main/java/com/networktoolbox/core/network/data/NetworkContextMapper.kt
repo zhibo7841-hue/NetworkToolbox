@@ -19,6 +19,8 @@ internal data class NetworkContextSnapshot(
     val interfaceName: String? = null,
     val privateDnsActive: Boolean? = null,
     val privateDnsServerName: String? = null,
+    val captivePortal: Boolean? = null,
+    val partialConnectivity: Boolean? = null,
 )
 
 internal object NetworkContextMapper {
@@ -38,5 +40,7 @@ internal object NetworkContextMapper {
         interfaceName = snapshot.interfaceName,
         privateDnsActive = snapshot.privateDnsActive,
         privateDnsServerName = snapshot.privateDnsServerName,
+        captivePortal = snapshot.captivePortal,
+        partialConnectivity = snapshot.partialConnectivity,
     )
 }

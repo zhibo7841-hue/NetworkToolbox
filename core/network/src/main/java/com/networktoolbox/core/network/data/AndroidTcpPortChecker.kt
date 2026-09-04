@@ -1,11 +1,14 @@
 package com.networktoolbox.core.network.data
 
+import com.networktoolbox.core.common.diagnostic.DiagnosticTcpOutcome
 import com.networktoolbox.core.network.tcp.TcpPortChecker
 import com.networktoolbox.core.network.tcp.TcpProbeResult
 import java.io.IOException
 import java.net.ConnectException
 import java.net.InetSocketAddress
+import java.net.NoRouteToHostException
 import java.net.Socket
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -49,37 +52,58 @@ class AndroidTcpPortChecker(
                 success = true,
                 latencyMs = elapsedMillis(startedAt),
                 errorMessage = null,
+                outcome = DiagnosticTcpOutcome.CONNECT_SUCCESS,
             )
         } catch (error: CancellationException) {
             throw error
         } catch (_: SocketTimeoutException) {
-            failed(normalizedHost, port, TIMEOUT)
+            failed(normalizedHost, port, TIMEOUT, DiagnosticTcpOutcome.TIMEOUT)
         } catch (_: ConnectException) {
-            failed(normalizedHost, port, CONNECTION_REFUSED)
-        } catch (error: IOException) {
-            failed(normalizedHost, port, classifyIOException(error))
+            failed(normalizedHost, port, CONNECTION_REFUSED, DiagnosticTcpOutcome.CONNECTION_REFUSED)
+        } catch (_: NoRouteToHostException) {
+            failed(normalizedHost, port, NO_ROUTE, DiagnosticTcpOutcome.NO_ROUTE)
+        } catch (error: SocketException) {
+            val outcome = classifySocketException(error)
+            failed(normalizedHost, port, errorMessageFor(outcome), outcome)
+        } catch (_: IOException) {
+            failed(normalizedHost, port, UNKNOWN_ERROR, DiagnosticTcpOutcome.UNKNOWN)
         } catch (_: SecurityException) {
-            failed(normalizedHost, port, UNKNOWN_ERROR)
+            failed(normalizedHost, port, UNKNOWN_ERROR, DiagnosticTcpOutcome.UNKNOWN)
         } catch (_: RuntimeException) {
-            failed(normalizedHost, port, UNKNOWN_ERROR)
+            failed(normalizedHost, port, UNKNOWN_ERROR, DiagnosticTcpOutcome.UNKNOWN)
         }
     }
 
-    private fun classifyIOException(error: IOException): String {
-        val message = error.message.orEmpty().lowercase(Locale.ROOT)
-        return when {
-            message.contains("timeout") || message.contains("timed out") -> TIMEOUT
-            message.contains("refused") -> CONNECTION_REFUSED
-            else -> UNKNOWN_ERROR
+    private fun classifySocketException(error: SocketException): DiagnosticTcpOutcome {
+        val message = error.message.orEmpty().trim().lowercase(Locale.ROOT)
+        return when (message) {
+            "network is unreachable",
+            "enetunreach",
+            "connect failed: enetunreach (network is unreachable)",
+            -> DiagnosticTcpOutcome.NETWORK_UNREACHABLE
+
+            else -> DiagnosticTcpOutcome.UNKNOWN
         }
     }
 
-    private fun failed(host: String, port: Int, message: String): TcpProbeResult = TcpProbeResult(
+    private fun errorMessageFor(outcome: DiagnosticTcpOutcome): String = when (outcome) {
+        DiagnosticTcpOutcome.NO_ROUTE -> NO_ROUTE
+        DiagnosticTcpOutcome.NETWORK_UNREACHABLE -> NETWORK_UNREACHABLE
+        else -> UNKNOWN_ERROR
+    }
+
+    private fun failed(
+        host: String,
+        port: Int,
+        message: String,
+        outcome: DiagnosticTcpOutcome? = null,
+    ): TcpProbeResult = TcpProbeResult(
         host = host,
         port = port,
         success = false,
         latencyMs = null,
         errorMessage = message,
+        outcome = outcome,
     )
 
     private fun elapsedMillis(startedAt: Long): Long =
@@ -91,6 +115,8 @@ class AndroidTcpPortChecker(
         const val NANOS_PER_MILLISECOND = 1_000_000L
         const val CONNECTION_REFUSED = "Connection refused"
         const val TIMEOUT = "Timeout"
+        const val NO_ROUTE = "No route to host"
+        const val NETWORK_UNREACHABLE = "Network unreachable"
         const val UNKNOWN_ERROR = "Unknown error"
     }
 }
