@@ -1551,7 +1551,10 @@ pipeline and emits evidence/checks only; rule evaluation remains Task 051.
 
 Implement the rule matrix as pure deterministic rules. Add the eight primary
 categories, evidence references, confidence, severity aggregation, and
-recommendation prioritization. Do not add Compose conditions.
+recommendation prioritization. Do not add Compose conditions. **Completed:**
+the implementation consumes only `DiagnosticRunEvidence`, keeps legacy
+diagnostic paths compiling in parallel, and is covered by fixture-based rule
+tests without network or platform I/O.
 
 ### Task 052 — Progressive Automatic Diagnostics UI
 
