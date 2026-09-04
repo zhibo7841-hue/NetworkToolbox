@@ -412,6 +412,63 @@ by this design. A user-triggered Traceroute may take tens of seconds and a
 user-triggered LAN scan may take longer; those are advanced tools, not Quick
 Diagnosis stages.
 
+### 6.1 TCP outcome semantics
+
+The automatic-diagnostics layer must preserve the distinction made by the TCP
+adapter. It must not collapse every non-success into “Internet unavailable”.
+
+| TCP outcome | What it confirms | Diagnostic interpretation |
+|---|---|---|
+| `CONNECT_SUCCESS` | The TCP handshake was accepted by the target endpoint | Positive Internet-path or target-path evidence; it does not prove HTTP, TLS, or application health |
+| `CONNECTION_REFUSED` | The target or an intermediate device explicitly refused the connection | Strong IP-path reachability evidence, while the selected port did not accept the connection; not equivalent to a timeout |
+| `TIMEOUT` | No definitive response arrived within the time budget | Inconclusive negative evidence; filtering, path, target, or policy may explain it |
+| `NETWORK_UNREACHABLE` / `NO_ROUTE` | The platform explicitly reported an unavailable route or network | Supports a local or routing-path problem, subject to platform error semantics |
+| `UNKNOWN` / `INTERNAL_ERROR` | The adapter could not establish a reliable outcome | Unknown only; never automatically upgraded to a network fault |
+
+For approved public probes, `CONNECT_SUCCESS` is positive Internet-path
+evidence and `CONNECTION_REFUSED` is positive IP-path evidence with a
+service-level refusal. `TIMEOUT`, `NO_ROUTE`, and `NETWORK_UNREACHABLE` enter
+the analyzer with their own meanings. For example, public target A timing out
+while public target B returns `CONNECTION_REFUSED` must not produce an
+“Internet unavailable” diagnosis: the refusal is evidence that at least one
+public IP path reached a responding endpoint. A stronger public-path finding
+requires all approved probes to complete without positive path evidence and no
+contradicting success.
+
+The current repository's `TcpProbeResult` is still a compact model with
+`success`, `latencyMs`, and `errorMessage`; it does not yet expose this outcome
+taxonomy as a typed enum. Task 049 must define the stable mapping at the
+adapter/domain boundary, preserving the raw error classification where it is
+real. Until then, a null latency or generic failure must not be guessed to be
+`TIMEOUT`, `CONNECTION_REFUSED`, or `NO_ROUTE`.
+
+### 6.2 Android validated and captive-portal context
+
+`NET_CAPABILITY_VALIDATED == true` is important supporting evidence that
+Android considers the network validated. It is not a substitute for the
+application's selected probes. If `VALIDATED` is true while both fixed public
+TCP probes fail, the result is conflicting or `INCONCLUSIVE` evidence rather
+than an immediate Internet Connectivity Problem. Conversely,
+`VALIDATED == false` alone does not prove that the network is unusable.
+
+Android captive-portal and partial-connectivity capabilities are contextual
+Internet findings, not a ninth primary failure category. If the platform
+clearly exposes captive-portal evidence, the report may say:
+
+> 当前网络可能需要登录认证。
+
+Recommendations are:
+
+1. 检查系统网络登录提示。
+2. 重新连接当前 Wi-Fi。
+3. 完成门户认证后重新检测。
+
+Captive Portal is not evidence that a router is damaged or that a DNS provider
+is broken. The current `NetworkContext` exposes validated/network state but
+does not yet provide a dedicated captive-portal field; Task 050 must audit the
+API mapping and availability on supported Android versions before implementation.
+This design task does not change the repository or add a capability field.
+
 ## 7. Evidence model
 
 The model intentionally separates raw facts, check outcomes, interpretations,
@@ -557,6 +614,58 @@ The first report should normally expose 2–3 actions. A recommendation may open
 the existing DNS, Ping, Traceroute, or Android settings surface, but it must not
 silently modify configuration.
 
+### 8.4 Stable machine-readable identifiers
+
+`Finding`, `DiagnosticCheck`, and `DiagnosticRecommendation` must each have a
+stable machine-readable code that is independent of translated title text.
+The names are intentionally provisional until Task 049 finalizes the contract:
+
+```text
+FindingCode:
+  NO_ACTIVE_NETWORK
+  GATEWAY_PROBE_NO_RESPONSE
+  PUBLIC_CONNECTIVITY_UNCONFIRMED
+  DNS_RESOLUTION_FAILURE
+  TARGET_TCP_REFUSED
+  VPN_ACTIVE
+  FAKE_IP_CONTEXT
+
+CheckCode:
+  NETWORK_STATE
+  GATEWAY
+  PUBLIC_CONNECTIVITY
+  DNS
+  TARGET_CONNECTIVITY
+
+RecommendationCode:
+  RETRY_DIAGNOSTIC
+  CHECK_PRIVATE_DNS_VPN_PROXY
+  CHECK_ROUTER_WAN
+  COMPARE_ANOTHER_NETWORK
+```
+
+The final enums may be renamed or reduced by Task 049, but Chinese or other
+localized titles must never be used as persistence IDs, comparison IDs, or
+Retry/Verify matching keys.
+
+### 8.5 Run status and diagnosis status are separate
+
+The execution lifecycle and the interpretation lifecycle are different
+dimensions:
+
+```text
+DiagnosticRunStatus:
+  RUNNING | COMPLETED | CANCELLED | NETWORK_CHANGED | FAILED
+
+DiagnosticDiagnosisStatus:
+  NORMAL | ATTENTION | LIMITED | UNKNOWN
+```
+
+`NETWORK_CHANGED` means the run cannot form a strong combined diagnosis; the
+diagnosis is absent or `UNKNOWN` according to the Task 049 contract. `CANCELLED`
+must not save a completed report. `FAILED` means the diagnostic workflow could
+not assemble a valid run result; it is not a network-fault conclusion.
+
 ## 9. Severity and status policy
 
 Keep the existing severity vocabulary for compatibility:
@@ -574,6 +683,21 @@ not automatically `ERROR`. A cellular gateway is `NOT_APPLICABLE`, not failed.
 False positive is more dangerous than incomplete diagnosis. The analyzer must
 prefer “未能确认”“可能”“建议进一步检查” over a definitive claim when
 evidence is insufficient.
+
+### 9.1 Minimum evidence for a normal transport profile
+
+The minimum evidence for `NORMAL` depends on the transport profile, not on a
+single field:
+
+| Profile | Minimum evidence for `NORMAL` | Gateway rule | Explanation constraint |
+|---|---|---|---|
+| Wi-Fi / Ethernet | Active network, a usable address, positive Internet-path evidence, and usable DNS | A gateway timeout may coexist with `NORMAL` when public connectivity has a clear success; keep a gateway `NOTICE` | “本次检测中的选定网络路径表现正常” rather than “所有网络均正常” |
+| Mobile | Active network, a usable address, positive Internet-path evidence, and usable DNS | `NOT_APPLICABLE`; a mobile next-hop is not promoted to a user-facing gateway probe | Do not require a traditional gateway to declare normal |
+| VPN active | The same evidence as the underlying observed transport, if available | Follow the applicable transport profile | Say “当前通过 VPN 的联网路径在本次检测中表现正常”; do not claim independent physical-path validation |
+
+An absent IPv4 address does not fail an IPv6-capable profile, and an absent
+IPv6 address does not fail IPv4 connectivity. `NORMAL` remains scoped to the
+checks that actually ran and to the current network fingerprint.
 
 ## 10. Initial failure categories
 
@@ -701,12 +825,17 @@ or intermittent failure may still exist.
 | Gateway/public | Gateway probe fails and all public paths fail | Local or upstream boundary needs attention | Gateway/local/WAN/upstream path may be involved | WARNING | MEDIUM | Check access point/router WAN and another network |
 | Gateway/public | Gateway timeout but public TCP succeeds | Gateway probe response unavailable | Internet path is still observed working | NOTICE | HIGH for contradiction | Do not replace gateway; rerun or inspect details |
 | Public | All completed approved public TCP targets fail and no domain path succeeds | Public path not confirmed | WAN/upstream/route/target policy may be involved | WARNING | MEDIUM | Check another device/network and router WAN |
+| Public | Target A `TIMEOUT`, target B `CONNECTION_REFUSED` | Mixed public probe outcomes | IP-path evidence exists; Internet unavailable is not established | NOTICE | MEDIUM | Retry with the same bounded target set; inspect target-specific details |
+| Public | `VALIDATED=true` but all public probes time out | Conflicting platform/probe evidence | Internet conclusion is inconclusive | NOTICE | MEDIUM | Retry on a stable network; do not call the network unavailable from this alone |
+| Public | `VALIDATED=false` without corroborating probe failure | Network validation not confirmed | Validation alone does not prove no Internet | NOTICE | LOW | Continue selected probes or retry |
+| Public | Explicit captive-portal capability | Captive Portal context | Current network may require login authentication | NOTICE | HIGH for platform signal | Check system login prompt, reconnect Wi-Fi, authenticate, then retry |
 | Public/DNS | Public TCP succeeds; DNS transport fails | DNS resolution problem | DNS path/configuration may be abnormal | WARNING/ERROR | HIGH for boundary | Retry DNS; check Private DNS/VPN/proxy |
 | DNS | A records + AAAA `NO_RECORDS` | No IPv6 records published | IPv4 resolution remains normal | NOTICE | HIGH | No repair required; inspect only if IPv6 is expected |
 | DNS | NXDOMAIN | Queried name reported nonexistent | Name may not exist or may be incorrectly queried | NOTICE/WARNING | HIGH for response | Verify name/zone; do not call DNS globally broken |
 | DNS | `198.18.0.0/15` result | Possible Fake-IP environment | DNS result interpretation needs context | NOTICE | HIGH for range, LOW for cause | Check proxy/VPN/Private DNS if access is unexpected |
 | VPN | VPN transport active | VPN context | Results may describe the tunnel path | NOTICE | HIGH | Interpret results in VPN context; rerun without VPN only manually |
-| DNS/target | DNS succeeds; selected target TCP fails | Target path/service may be abnormal | Target-specific issue possible | WARNING | MEDIUM | Try another target and inspect target/address family |
+| DNS/target | DNS succeeds; selected target TCP returns `CONNECTION_REFUSED` | Target port did not accept connection | Target address path exists; selected port is not accepting connections | WARNING | MEDIUM | Try another target/service; do not describe this as route failure |
+| DNS/target | DNS succeeds; selected target TCP returns `TIMEOUT` | Target path/service may be abnormal | Target-specific issue remains ambiguous | WARNING | MEDIUM/LOW | Retry and compare address family or another target |
 | Traceroute | Intermediate hop absent but later hop responds | Intermediate response filtered/limited | Path continues; missing hop is not a fault | NOTICE | HIGH | No action unless end-to-end path also fails |
 | Network change | Fingerprint changes during run | Mixed network evidence | Current report cannot make a strong combined diagnosis | NOTICE | HIGH | Rerun on a stable network |
 | All required checks | Required checks pass; no material contradiction | Network appears normal | No problem confirmed in tested scope | HEALTHY | MEDIUM | If issue persists, run target-specific or advanced check |
@@ -785,6 +914,28 @@ the user supplied. It separates:
 
 Traceroute `PARTIAL`, a single TCP refusal, or a missing intermediate hop is
 never enough to assert that a website is down.
+
+### 13.1 General DNS Health Probe Target
+
+The current `DefaultDiagnosticPipeline` uses the centralized
+`DiagnosticProbeTargets.domainName`, whose current default is `example.com`,
+for the no-user-target DNS health check. It requests A + AAAA through the
+current Android network's system DNS path. The same target is used for the
+subsequent domain-path check when usable addresses are returned.
+
+This is a record of the current baseline, not a claim that a third party is a
+NetworkToolbox service or that it is always reachable. Before Task 050 fixes
+the implementation contract, the following must be verified:
+
+- the name is expected to remain available for the release lifetime;
+- the check does not require a NetworkToolbox-owned server;
+- a valid A response with AAAA `NO_RECORDS` remains a successful DNS health
+  result;
+- NXDOMAIN is still a valid DNS response about the queried name, not a global
+  DNS failure.
+
+Status: **TO BE VERIFIED IN TASK 050**. This task does not change the DNS
+engine, target list, or query behavior.
 
 ## 14. Architecture and reuse strategy
 
@@ -1009,10 +1160,17 @@ Potentially sensitive network information includes:
 - VPN/Private DNS context;
 - Traceroute hop addresses.
 
-The default user report should prefer summaries and omit BSSID, device
-inventory, raw MAC, and full Traceroute details. Technical details may include
-the local address/gateway/DNS needed for troubleshooting, but the share action
-must tell the user that network information is included.
+The default `User / Concise Report` must prefer summaries and must not include
+SSID, BSSID, a complete LAN inventory, a complete Traceroute hop list, raw MAC,
+or other unnecessary local network identifiers. Technical details may include
+the local address/prefix, gateway, configured DNS, VPN/Private DNS, probe
+targets, technical results, and a brief Traceroute summary when needed for
+troubleshooting. Before sharing it, the app must show:
+
+> 技术报告包含本地网络信息。
+
+The user must actively choose the technical report; the share action must not
+silently include it.
 
 Field-level redaction is a useful future enhancement, not a reason to expand
 the v0.4 MVP into a complex privacy editor. At minimum, provide a clear
@@ -1174,8 +1332,10 @@ DNS 解析：异常
 
 **Finding**
 
-“网关与公网连通性检测均未通过，问题可能位于本地链路、接入点、路由器
-WAN 或上游路径。” Evidence level `SUPPORTED`, confidence `MEDIUM`.
+“本地网关探测未响应，且公网连通性检测未通过；问题可能位于本地链路、
+接入点、路由器 WAN 或上游路径。” Evidence level `SUPPORTED`, confidence
+`MEDIUM`. “探测未响应” describes the observed method outcome; it does not
+claim that the gateway itself is confirmed broken.
 
 **Diagnosis**
 
@@ -1196,7 +1356,7 @@ router, cable, ISP, or VLAN from this run.
 
 ```text
 总体状态：发现网络异常
-本地网关：异常
+本地网关：探测未响应
 公网连接：未通过
 诊断结论：问题可能位于本地链路、网关、WAN 或上游路径。
 ```
@@ -1208,13 +1368,21 @@ router, cable, ISP, or VLAN from this run.
 - user selected `service.example`;
 - base network and DNS checks pass;
 - resolved address is available;
-- TCP 443 to the selected target address is refused or times out;
 - an independent public target succeeds.
+
+The target TCP outcome is retained rather than normalized:
+
+- `CONNECTION_REFUSED`: the target address path has a strong positive reachability
+  signal, but port 443 did not accept the connection;
+- `TIMEOUT`: the target service or access path remains ambiguous within the
+  time budget.
 
 **Finding**
 
-“域名解析成功，但目标 TCP 连接未建立。” Evidence level `SUPPORTED`,
-confidence `MEDIUM` for a target-specific path issue.
+For `CONNECTION_REFUSED`, “域名解析成功，目标端口未接受连接。” Evidence
+level `SUPPORTED`, confidence `MEDIUM` for the target-port outcome. For
+`TIMEOUT`, “目标服务或访问路径可能异常。” Evidence level `INCONCLUSIVE`,
+confidence `MEDIUM` or `LOW` according to the other public evidence.
 
 **Diagnosis**
 
@@ -1222,9 +1390,10 @@ confidence `MEDIUM` for a target-specific path issue.
 
 **Explanation**
 
-The selected target path did not accept the test. This does not prove that the
-website is down; service policy, address family, firewall, or target-side
-filtering remain possible.
+The selected target did not produce an accepted TCP connection. A refusal is
+not the same as a broken route; a timeout does not identify whether filtering,
+the path, service policy, address family, or the target caused the missing
+response. Neither outcome proves that the website is down.
 
 **Recommendation**
 
@@ -1239,7 +1408,7 @@ filtering remain possible.
 公网连接：正常
 DNS 解析：正常
 目标访问：未建立
-诊断结论：目标服务或访问路径可能异常。
+诊断结论：目标端口未接受连接，或目标服务/访问路径可能异常。
 ```
 
 ### E. VPN + Fake-IP Environment
@@ -1299,13 +1468,26 @@ Minimum scenarios:
 - gateway timeout + Internet success;
 - gateway failure + public failure;
 - public multi-target success/failure combinations;
+- public target A `TIMEOUT` + public target B `CONNECTION_REFUSED` without an
+  Internet-unavailable diagnosis;
+- `VALIDATED=true` + public probe timeouts producing conflicting/
+  `INCONCLUSIVE` evidence;
+- explicit Captive Portal evidence producing a portal context finding;
 - public success + DNS timeout/network error/invalid response;
 - A success + AAAA `NO_RECORDS`;
 - explicit NXDOMAIN;
 - Fake-IP notice;
 - VPN notice;
+- gateway timeout + Internet success allowing overall `NORMAL` with a gateway
+  `NOTICE`;
+- mobile gateway `NOT_APPLICABLE` with Internet + DNS success producing
+  `NORMAL`;
+- VPN active with Internet + DNS success producing `NORMAL` and VPN-path
+  wording;
 - IPv4/IPv6 contradictory path evidence;
-- DNS success + target TCP refusal/timeout;
+- DNS success + target TCP `CONNECTION_REFUSED` producing target-port refusal,
+  not route failure;
+- DNS success + target TCP `TIMEOUT` remaining target/path ambiguous;
 - Traceroute partial result not becoming target failure;
 - network fingerprint change;
 - cancellation without a completed report;
