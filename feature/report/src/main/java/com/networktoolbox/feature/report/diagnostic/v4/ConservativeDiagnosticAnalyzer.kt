@@ -650,6 +650,17 @@ class DefaultDiagnosticAnalyzerV4 : DiagnosticAnalyzerV4 {
                 )
             }
 
+            if (DiagnosticFindingCode.NO_ACTIVE_NETWORK in codes) {
+                addFor(
+                    DiagnosticRecommendationCode.RETRY_DIAGNOSTIC,
+                    DiagnosticRecommendationPriority.SECONDARY,
+                    "重新运行诊断",
+                    "连接网络后重新运行诊断。",
+                    "重新检测可以确认网络状态是否已经恢复。",
+                    listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                )
+            }
+
             if (DiagnosticFindingCode.CAPTIVE_PORTAL_CONTEXT in codes) {
                 addFor(
                     DiagnosticRecommendationCode.CHECK_CAPTIVE_PORTAL,
@@ -683,7 +694,6 @@ class DefaultDiagnosticAnalyzerV4 : DiagnosticAnalyzerV4 {
 
             if (DiagnosticFindingCode.LOCAL_OR_UPSTREAM_PATH_UNCONFIRMED in codes ||
                 DiagnosticFindingCode.PUBLIC_CONNECTIVITY_UNCONFIRMED in codes ||
-                DiagnosticFindingCode.NO_ACTIVE_NETWORK in codes ||
                 diagnosis.status == DiagnosticDiagnosisStatus.NORMAL
             ) {
                 addFor(

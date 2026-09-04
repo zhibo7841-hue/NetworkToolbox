@@ -377,6 +377,10 @@ class ConservativeDiagnosticAnalyzerTest {
         val finding = result.findings.single { it.code == DiagnosticFindingCode.NO_ACTIVE_NETWORK }
         assertEquals(DiagnosticSeverity.ERROR, finding.severity)
         assertEquals(DiagnosticConfidence.HIGH, finding.confidence)
+        assertEquals(
+            listOf("CHECK_WIFI_OR_MOBILE_NETWORK", "RETRY_DIAGNOSTIC"),
+            result.recommendations.map { it.code.name },
+        )
     }
 
     @Test
