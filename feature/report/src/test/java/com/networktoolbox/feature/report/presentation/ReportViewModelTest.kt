@@ -1,29 +1,31 @@
 package com.networktoolbox.feature.report.presentation
 
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheck
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheckCode
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticConfidence
+import com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosis
+import com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticFinding
+import com.networktoolbox.core.common.diagnostic.DiagnosticFindingCode
+import com.networktoolbox.core.common.diagnostic.DiagnosticIntent
+import com.networktoolbox.core.common.diagnostic.DiagnosticRecommendation
+import com.networktoolbox.core.common.diagnostic.DiagnosticRecommendationCode
+import com.networktoolbox.core.common.diagnostic.DiagnosticRecommendationPriority
+import com.networktoolbox.core.common.diagnostic.DiagnosticRunStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticSeverity
+import com.networktoolbox.core.common.diagnostic.DiagnosticStage
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryRecorder
-import com.networktoolbox.core.network.dns.DnsLookupResult
-import com.networktoolbox.core.network.dns.DnsLookupStatus
-import com.networktoolbox.core.network.dns.DnsQueryMethod
-import com.networktoolbox.core.network.dns.DnsRecordType
-import com.networktoolbox.core.network.model.ConnectionType
-import com.networktoolbox.core.network.model.NetworkContext
-import com.networktoolbox.core.network.ping.PingMethod
-import com.networktoolbox.core.network.ping.PingMode
-import com.networktoolbox.core.network.ping.PingProtocol
-import com.networktoolbox.core.network.ping.PingSessionResult
-import com.networktoolbox.core.network.tcp.TcpProbeResult
-import com.networktoolbox.feature.report.diagnostic.v2.DefaultDiagnosticAnalyzerV2
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticCheck
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticCheckStatus
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticPipeline
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticPipelineResult
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticProbeTargets
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticSeverity
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageProgress
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageState
-import com.networktoolbox.feature.report.domain.RunDiagnosticV2UseCase
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticOrchestrator
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticRunEvidence
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticStageProgress
+import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticStageState
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticAnalysisResult
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticAnalyzerV4
+import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
+import com.networktoolbox.feature.report.domain.RunAutomaticDiagnosticUseCase
+import java.util.concurrent.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -58,33 +60,29 @@ class ReportViewModelTest {
     }
 
     @Test
-    fun progressMapsPipelineStageStatesForTheRunningUi() {
-        val running = ReportProgress()
-            .apply(DiagnosticStageProgress(DiagnosticStage.DNS, DiagnosticStageState.RUNNING))
-        val progress = running
-            .apply(DiagnosticStageProgress(DiagnosticStage.DNS, DiagnosticStageState.COMPLETED))
-            .apply(DiagnosticStageProgress(DiagnosticStage.GATEWAY, DiagnosticStageState.SKIPPED))
-
-        assertEquals(DiagnosticStage.DNS, running.activeStage)
-        assertEquals(ReportStageStatus.COMPLETED, progress.stageStates[DiagnosticStage.DNS])
-        assertEquals(ReportStageStatus.SKIPPED, progress.stageStates[DiagnosticStage.GATEWAY])
-        assertEquals(null, progress.activeStage)
-    }
-
-    @Test
-    fun runningStateReflectsRealPipelineStagesAndEndsInSuccess() = runTest {
+    fun runningStateReflectsRealOrchestratorStagesAndEndsCompleted() = runTest {
         val events = mutableListOf<DiagnosticStageProgress>()
         val viewModel = viewModelFor(
-            pipeline = SuccessfulPipeline(onProgress = { events += it }),
+            orchestrator = FakeOrchestrator { onProgress ->
+                onProgress(DiagnosticStageProgress(DiagnosticStage.NETWORK_STATE, DiagnosticStageState.RUNNING))
+                onProgress(DiagnosticStageProgress(DiagnosticStage.NETWORK_STATE, DiagnosticStageState.COMPLETED))
+                onProgress(DiagnosticStageProgress(DiagnosticStage.DNS, DiagnosticStageState.RUNNING))
+                onProgress(DiagnosticStageProgress(DiagnosticStage.DNS, DiagnosticStageState.COMPLETED))
+                evidence()
+            },
+            eventSink = events,
         )
 
         viewModel.runCheck()
-
         assertTrue(viewModel.uiState.value.status is ReportStatus.Running)
         advanceUntilIdle()
 
         val status = viewModel.uiState.value.status
-        assertTrue(status is ReportStatus.Success)
+        assertTrue(status is ReportStatus.Completed)
+        assertEquals(
+            ReportStageStatus.COMPLETED,
+            (status as ReportStatus.Completed).result.evidence.runStatus.toReportStatus(),
+        )
         assertTrue(events.any {
             it.stage == DiagnosticStage.DNS && it.state == DiagnosticStageState.RUNNING
         })
@@ -95,27 +93,47 @@ class ReportViewModelTest {
     }
 
     @Test
-    fun cancellationIsRestartableAndDoesNotSaveHistory() = runTest {
+    fun completedRunProducesOneLocalReportRecord() = runTest {
+        val records = mutableListOf<HistoryRecord>()
+        val viewModel = viewModelFor(records = records)
+
+        viewModel.runCheck()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.status is ReportStatus.Completed)
+        assertEquals(1, records.size)
+        assertEquals("网络诊断", records.single().title)
+        assertTrue(records.single().detailJson.contains("\"schemaVersion\":2"))
+    }
+
+    @Test
+    fun networkChangedRunHasDedicatedStateAndDoesNotRecordHistory() = runTest {
         val records = mutableListOf<HistoryRecord>()
         val viewModel = viewModelFor(
-            pipeline = object : DiagnosticPipeline {
-                override suspend fun run(
-                    onStageChanged: (DiagnosticStageProgress) -> Unit,
-                ): DiagnosticPipelineResult {
-                    onStageChanged(
-                        DiagnosticStageProgress(
-                            DiagnosticStage.NETWORK_CONTEXT,
-                            DiagnosticStageState.RUNNING,
-                        ),
-                    )
-                    delay(Long.MAX_VALUE)
-                    error("unreachable")
-                }
+            orchestrator = FakeOrchestrator { evidence(DiagnosticRunStatus.NETWORK_CHANGED) },
+            records = records,
+        )
+
+        viewModel.runCheck()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.status is ReportStatus.NetworkChanged)
+        assertTrue(records.isEmpty())
+    }
+
+    @Test
+    fun cancellationIsRestartableAndDoesNotRecordHistory() = runTest {
+        val records = mutableListOf<HistoryRecord>()
+        val viewModel = viewModelFor(
+            orchestrator = FakeOrchestrator {
+                delay(Long.MAX_VALUE)
+                throw AssertionError("unreachable")
             },
             records = records,
         )
 
         viewModel.runCheck()
+        assertTrue(viewModel.uiState.value.status is ReportStatus.Running)
         viewModel.stopCheck()
         advanceUntilIdle()
 
@@ -124,109 +142,137 @@ class ReportViewModelTest {
 
         viewModel.runCheck()
         assertTrue(viewModel.uiState.value.status is ReportStatus.Running)
+        viewModel.stopCheck()
     }
 
     @Test
-    fun pipelineFailureBecomesUserFacingError() = runTest {
+    fun failedOrchestratorBecomesUserFacingFailedState() = runTest {
         val viewModel = viewModelFor(
-            pipeline = object : DiagnosticPipeline {
-                override suspend fun run(
-                    onStageChanged: (DiagnosticStageProgress) -> Unit,
-                ): DiagnosticPipelineResult = error("network adapter unavailable")
-            },
+            orchestrator = FakeOrchestrator { throw IllegalStateException("adapter unavailable") },
         )
 
         viewModel.runCheck()
         advanceUntilIdle()
 
         assertEquals(
-            ReportStatus.Error("network adapter unavailable"),
+            ReportStatus.Failed(message = "adapter unavailable"),
             viewModel.uiState.value.status,
         )
     }
 
+    @Test
+    fun duplicateRunRequestDoesNotStartAnotherOrchestratorRun() = runTest {
+        var runCount = 0
+        val viewModel = viewModelFor(
+            orchestrator = FakeOrchestrator {
+                runCount++
+                delay(Long.MAX_VALUE)
+                throw AssertionError("unreachable")
+            },
+        )
+
+        viewModel.runCheck()
+        viewModel.runCheck()
+        advanceUntilIdle()
+
+        assertEquals(1, runCount)
+        viewModel.stopCheck()
+    }
+
     private fun viewModelFor(
-        pipeline: DiagnosticPipeline = SuccessfulPipeline(),
+        orchestrator: DiagnosticOrchestrator = FakeOrchestrator { evidence() },
         records: MutableList<HistoryRecord> = mutableListOf(),
+        eventSink: MutableList<DiagnosticStageProgress>? = null,
     ): ReportViewModel {
-        val useCase = RunDiagnosticV2UseCase(
-            pipeline = pipeline,
-            analyzer = DefaultDiagnosticAnalyzerV2(),
+        val actualOrchestrator = if (eventSink == null) orchestrator else RecordingOrchestrator(
+            delegate = orchestrator,
+            sink = eventSink,
+        )
+        val useCase = RunAutomaticDiagnosticUseCase(
+            orchestrator = actualOrchestrator,
+            analyzer = FixedAnalyzer(),
             historyRecorder = HistoryRecorder { records += it },
         )
         return ReportViewModel(useCase)
     }
 }
 
-private class SuccessfulPipeline(
-    private val onProgress: (DiagnosticStageProgress) -> Unit = {},
-) : DiagnosticPipeline {
-    override suspend fun run(
-        onStageChanged: (DiagnosticStageProgress) -> Unit,
-    ): DiagnosticPipelineResult {
-        listOf(
-            DiagnosticStage.NETWORK_CONTEXT,
-            DiagnosticStage.GATEWAY,
-            DiagnosticStage.PUBLIC_CONNECTIVITY,
-            DiagnosticStage.DNS,
-            DiagnosticStage.DOMAIN_CONNECTIVITY,
-        ).forEach { stage ->
-            onStageChanged(DiagnosticStageProgress(stage, DiagnosticStageState.RUNNING))
-            onProgress(DiagnosticStageProgress(stage, DiagnosticStageState.RUNNING))
-            onStageChanged(DiagnosticStageProgress(stage, DiagnosticStageState.COMPLETED))
-            onProgress(DiagnosticStageProgress(stage, DiagnosticStageState.COMPLETED))
-        }
-        return DiagnosticPipelineResult(
-            startedAt = 1_000L,
-            endedAt = 1_100L,
-            networkContext = NetworkContext(
-                connectionType = ConnectionType.WIFI,
-                ipv4Address = "192.0.2.20",
-                ipv6Address = null,
-                gateway = "192.0.2.1",
-                dnsServers = listOf("192.0.2.1"),
-                vpnActive = false,
-                wifiName = "Test Wi-Fi",
-                wifiSignalLevel = 3,
-                activeNetworkAvailable = true,
-                validated = true,
+private class FixedAnalyzer : DiagnosticAnalyzerV4 {
+    override fun analyze(evidence: DiagnosticRunEvidence): DiagnosticAnalysisResult =
+        DiagnosticAnalysisResult(
+            findings = listOf(
+                DiagnosticFinding(
+                    code = DiagnosticFindingCode.NETWORK_APPEARS_NORMAL,
+                    title = "基础网络连接正常",
+                    description = "在本次检测范围内，基础网络连接表现正常。",
+                    severity = DiagnosticSeverity.HEALTHY,
+                    evidenceLevel = com.networktoolbox.core.common.diagnostic.DiagnosticEvidenceLevel.CONFIRMED,
+                    confidence = DiagnosticConfidence.HIGH,
+                ),
             ),
-            gatewayResult = null,
-            publicConnectivity = null,
-            dnsResult = DnsLookupResult(
-                queryName = "example.com",
-                requestedTypes = setOf(DnsRecordType.A, DnsRecordType.AAAA),
-                records = emptyList(),
-                server = null,
-                method = DnsQueryMethod.ANDROID_DNS_RESOLVER,
-                status = DnsLookupStatus.NO_RECORDS,
-                durationMs = 10L,
-                startTime = 1_000L,
-                endTime = 1_010L,
-                errorMessage = null,
+            diagnosis = DiagnosticDiagnosis(
+                status = DiagnosticDiagnosisStatus.NORMAL,
+                title = "基础网络连接正常",
+                explanation = "在本次检测范围内，基础网络连接表现正常。",
+                confidence = DiagnosticConfidence.HIGH,
             ),
-            domainResults = emptyList(),
-            checks = listOf(
-                check(DiagnosticStage.NETWORK_CONTEXT, DiagnosticCheckStatus.PASS),
-                check(DiagnosticStage.GATEWAY, DiagnosticCheckStatus.NOT_APPLICABLE),
-                check(DiagnosticStage.PUBLIC_CONNECTIVITY, DiagnosticCheckStatus.UNKNOWN),
-                check(DiagnosticStage.DNS, DiagnosticCheckStatus.NO_RECORDS),
-                check(DiagnosticStage.DOMAIN_CONNECTIVITY, DiagnosticCheckStatus.SKIPPED),
+            recommendations = listOf(
+                DiagnosticRecommendation(
+                    code = DiagnosticRecommendationCode.RUN_TARGET_CHECK,
+                    priority = DiagnosticRecommendationPriority.OPTIONAL,
+                    title = "运行目标检测",
+                    action = "如果仍然无法访问某个服务，可以运行目标检测。",
+                    reason = "基础检测正常不代表所有应用或网站都一定正常。",
+                ),
             ),
-            networkChanged = false,
         )
-    }
+}
 
-    private fun check(stage: DiagnosticStage, status: DiagnosticCheckStatus) = DiagnosticCheck(
-        id = stage.name,
-        stage = stage,
-        name = stage.name,
-        status = status,
-        severity = if (status == DiagnosticCheckStatus.PASS) {
-            DiagnosticSeverity.HEALTHY
-        } else {
-            DiagnosticSeverity.NOTICE
-        },
-        summary = "test",
-    )
+private class RecordingOrchestrator(
+    private val delegate: DiagnosticOrchestrator,
+    private val sink: MutableList<DiagnosticStageProgress>,
+) : DiagnosticOrchestrator {
+    override suspend fun run(
+        intent: DiagnosticIntent,
+        onProgress: (DiagnosticStageProgress) -> Unit,
+    ): DiagnosticRunEvidence = delegate.run(intent) {
+        sink += it
+        onProgress(it)
+    }
+}
+
+private class FakeOrchestrator(
+    private val block: suspend (onProgress: (DiagnosticStageProgress) -> Unit) -> DiagnosticRunEvidence,
+) : DiagnosticOrchestrator {
+    override suspend fun run(
+        intent: DiagnosticIntent,
+        onProgress: (DiagnosticStageProgress) -> Unit,
+    ): DiagnosticRunEvidence = block(onProgress)
+}
+
+private fun evidence(
+    status: DiagnosticRunStatus = DiagnosticRunStatus.COMPLETED,
+) = DiagnosticRunEvidence(
+    runStatus = status,
+    startedAt = 1_000L,
+    finishedAt = 1_100L,
+    durationMs = 100L,
+    fingerprint = null,
+    networkContextSummary = null,
+    observations = emptyList(),
+    checks = listOf(
+        DiagnosticCheck(
+            code = DiagnosticCheckCode.NETWORK_STATE,
+            stage = DiagnosticStage.NETWORK_STATE,
+            status = DiagnosticCheckStatus.PASS,
+            severity = DiagnosticSeverity.HEALTHY,
+            summary = "test",
+        ),
+    ),
+    intent = DiagnosticIntent(),
+)
+
+private fun DiagnosticRunStatus.toReportStatus(): ReportStageStatus = when (this) {
+    DiagnosticRunStatus.COMPLETED -> ReportStageStatus.COMPLETED
+    else -> ReportStageStatus.UNKNOWN
 }

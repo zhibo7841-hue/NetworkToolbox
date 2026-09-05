@@ -61,6 +61,8 @@ import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DefaultDiag
 import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DefaultDiagnosticOrchestrator
 import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticNetworkFingerprintProvider
 import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticOrchestrator
+import com.networktoolbox.feature.report.diagnostic.v4.DefaultDiagnosticAnalyzerV4
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticAnalyzerV4
 import com.networktoolbox.feature.report.domain.DnsUseCase as ReportDnsUseCase
 import com.networktoolbox.feature.report.domain.PingUseCase as ReportPingUseCase
 import com.networktoolbox.feature.report.domain.TcpUseCase as ReportTcpUseCase
@@ -236,6 +238,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideDiagnosticAnalyzerV2(): DiagnosticAnalyzerV2 = DefaultDiagnosticAnalyzerV2()
+
+    @Provides
+    @Singleton
+    fun provideDiagnosticAnalyzerV4(): DiagnosticAnalyzerV4 = DefaultDiagnosticAnalyzerV4()
 
     @Provides
     @Singleton

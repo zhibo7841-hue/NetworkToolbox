@@ -24,6 +24,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.network.model.ConnectionType
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheck as AutomaticDiagnosticCheck
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus as AutomaticDiagnosticCheckStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticConnectionType
+import com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticEvidenceLevel
+import com.networktoolbox.core.common.diagnostic.DiagnosticFinding
+import com.networktoolbox.core.common.diagnostic.DiagnosticNetworkSummary
+import com.networktoolbox.core.common.diagnostic.DiagnosticObservation
+import com.networktoolbox.core.common.diagnostic.DiagnosticObservationCode
+import com.networktoolbox.core.common.diagnostic.DiagnosticObservationValue
+import com.networktoolbox.core.common.diagnostic.DiagnosticRecommendation
+import com.networktoolbox.core.common.diagnostic.DiagnosticSeverity as AutomaticDiagnosticSeverity
+import com.networktoolbox.core.common.diagnostic.DiagnosticStage as AutomaticDiagnosticStage
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticCheck
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticCheckStatus
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticFindingV2
@@ -33,6 +46,7 @@ import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticSeverity
 import java.util.Locale
 import kotlin.math.round
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage
+import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.presentation.ReportProgress
 import com.networktoolbox.feature.report.presentation.ReportStageStatus
 import com.networktoolbox.feature.report.presentation.ReportStatus
@@ -86,6 +100,20 @@ fun ReportScreen(
                     onStopCheck = onStopCheck,
                 )
 
+                uiState.status is ReportStatus.Completed -> AutomaticReportContent(
+                    result = uiState.status.result,
+                )
+
+                uiState.status is ReportStatus.NetworkChanged -> NetworkChangedContent(
+                    result = uiState.status.result,
+                    onRunCheck = onRunCheck,
+                )
+
+                uiState.status is ReportStatus.Failed -> FailedContent(
+                    status = uiState.status,
+                    onRetry = onRunCheck,
+                )
+
                 uiState.status is ReportStatus.Success -> ReportContent(
                     report = uiState.status.report,
                     restored = false,
@@ -126,7 +154,13 @@ private fun StartDiagnosticCard(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onRunCheck,
             ) {
-                Text(if (status is ReportStatus.Success) "重新诊断" else "开始诊断")
+                Text(
+                    if (status is ReportStatus.Success || status is ReportStatus.Completed) {
+                        "重新诊断"
+                    } else {
+                        "开始诊断"
+                    },
+                )
             }
         }
     }
@@ -160,8 +194,302 @@ private fun RunningContent(
 }
 
 @Composable
+private fun AutomaticReportContent(
+    result: AutomaticDiagnosticResult,
+) {
+    val diagnosis = result.analysis.diagnosis
+    var detailsExpanded by rememberSaveable(result.evidence.startedAt) {
+        mutableStateOf(false)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        AutomaticOverview(diagnosis?.status)
+
+        ReportSectionCard(title = "诊断结论") {
+            Text(
+                text = diagnosis?.explanation ?: "本次检测没有形成可展示的整体结论。",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+
+        ReportSectionCard(title = "检查结果") {
+            if (result.evidence.checks.isEmpty()) {
+                Text("暂无阶段结果。")
+            } else {
+                diagnosticStages.forEach { stage ->
+                    val checks = result.evidence.checks
+                        .filter { it.stage == stage }
+                        .take(MAX_VISIBLE_CHECKS_PER_STAGE)
+                    if (checks.isNotEmpty()) {
+                        Text(
+                            text = stage.displayName(),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        checks.forEach { check -> AutomaticCheckRow(check) }
+                    }
+                }
+            }
+        }
+
+        ReportSectionCard(title = "发现") {
+            if (result.analysis.findings.isEmpty()) {
+                Text("未发现需要关注的现象。")
+            } else {
+                result.analysis.findings
+                    .take(MAX_VISIBLE_FINDINGS)
+                    .forEach { finding -> AutomaticFindingItem(finding) }
+            }
+        }
+
+        result.analysis.recommendations
+            .take(MAX_VISIBLE_RECOMMENDATIONS)
+            .takeIf(List<*>::isNotEmpty)
+            ?.let { recommendations ->
+                val title = if (diagnosis?.status == DiagnosticDiagnosisStatus.NORMAL) {
+                    "如果仍然遇到问题"
+                } else {
+                    "建议尝试"
+                }
+                ReportSectionCard(title = title) {
+                    recommendations.forEachIndexed { index, recommendation ->
+                        Text(
+                            text = "${index + 1}. ${recommendation.action}",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = recommendation.reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+        TextButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { detailsExpanded = !detailsExpanded },
+        ) {
+            Text(if (detailsExpanded) "收起详细信息" else "查看详细信息")
+        }
+        if (detailsExpanded) {
+            AutomaticDiagnosticDetails(result)
+        }
+    }
+}
+
+@Composable
+private fun AutomaticOverview(status: DiagnosticDiagnosisStatus?) {
+    val (label, color) = status.overviewDisplayInfo()
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("诊断完成", style = MaterialTheme.typography.titleLarge)
+            Surface(
+                color = color.copy(alpha = 0.14f),
+                contentColor = color,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutomaticCheckRow(check: AutomaticDiagnosticCheck) {
+    val (marker, label, color) = check.displayInfo()
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "$marker ${check.stage.checkDisplayName()}",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(label, color = color, style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(
+            text = check.userFacingSummary(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AutomaticFindingItem(finding: DiagnosticFinding) {
+    val (marker, label, color) = finding.severity.findingDisplayInfo()
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = "$marker $label · ${finding.title}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+        )
+        Text(finding.description, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun AutomaticDiagnosticDetails(result: AutomaticDiagnosticResult) {
+    val summary = result.evidence.networkContextSummary
+    ReportSectionCard(title = "网络环境") {
+        if (summary == null) {
+            Text("未获得网络环境信息。")
+        } else {
+            ResultRow("网络类型", summary.connectionType.displayName())
+            if (summary.localAddressSummary.isEmpty()) {
+                ResultRow("本机地址", "未检测到")
+            } else {
+                Text(
+                    "本机地址",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                summary.localAddressSummary.take(MAX_DETAIL_ADDRESSES).forEach { address ->
+                    Text(address, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            summary.prefixLength?.let { ResultRow("IPv4 前缀", "/$it") }
+            ResultRow("网关", summary.gateway ?: "未提供")
+            ResultRow("VPN", summary.vpnActive.toEnabledText())
+            ResultRow("私人 DNS", summary.privateDnsActive.toEnabledText())
+            summary.privateDnsServerName?.let { ResultRow("私人 DNS 名称", it) }
+            ResultRow("系统联网验证", summary.validated.toValidatedText())
+            Text(
+                "网络配置 DNS",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (summary.configuredDnsServers.isEmpty()) {
+                Text("未配置")
+            } else {
+                summary.configuredDnsServers.take(MAX_DETAIL_DNS).forEach { server ->
+                    Text(server, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+
+    result.evidence.checks
+        .filter { it.stage != AutomaticDiagnosticStage.NETWORK_STATE &&
+            it.stage != AutomaticDiagnosticStage.IP_CONFIGURATION
+        }
+        .take(MAX_DETAIL_CHECKS)
+        .groupBy { it.stage }
+        .forEach { (stage, checks) ->
+            ReportSectionCard(title = stage.detailDisplayName()) {
+                checks.forEach { check ->
+                    ResultRow("结果", check.status.displayName())
+                    check.target?.let { target -> ResultRow("目标", target.value) }
+                    check.method?.let { method -> ResultRow("检测方式", method.toTechnicalDisplayName()) }
+                    Text(
+                        check.userFacingSummary(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val observations = result.evidence.observations
+                        .filter { it.id in check.evidenceObservationIds }
+                    DnsObservationDetails(observations)
+                }
+            }
+        }
+
+    result.analysis.findings
+        .filter { it.confidence.name.isNotBlank() }
+        .take(MAX_VISIBLE_FINDINGS)
+        .let { findings ->
+            if (findings.isNotEmpty()) {
+                ReportSectionCard(title = "分析依据") {
+                    findings.forEach { finding ->
+                        Text(
+                            "${finding.title} · ${finding.confidence.displayName()} · " +
+                                finding.evidenceLevel.displayName(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+}
+
+@Composable
+private fun DnsObservationDetails(observations: List<DiagnosticObservation>) {
+    val records = observations.mapNotNull { observation ->
+        observation.value as? DiagnosticObservationValue.DnsRecordValue
+    }
+    if (records.isNotEmpty()) {
+        Text("DNS 记录", style = MaterialTheme.typography.labelLarge)
+        records.take(MAX_DETAIL_DNS_RECORDS).forEach { record ->
+            val suffix = buildString {
+                record.ttlSeconds?.let { append(" · TTL $it s") }
+                record.priority?.let { append(" · 优先级 $it") }
+            }
+            Text(
+                "${record.recordType}  ${record.value}$suffix",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+    if (observations.any { it.code == DiagnosticObservationCode.FAKE_IP_RANGE_MATCH }) {
+        Text(
+            "提示：检测到特殊用途地址，可能存在 Fake-IP DNS 环境。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+    }
+}
+
+@Composable
+private fun NetworkChangedContent(
+    result: AutomaticDiagnosticResult,
+    onRunCheck: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("检测过程中网络发生变化", style = MaterialTheme.typography.titleMedium)
+            Text(
+                result.analysis.diagnosis?.explanation
+                    ?: "部分结果可能来自不同网络环境，暂时无法合并判断。",
+            )
+            Text(
+                "建议在网络稳定后重新执行诊断。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = onRunCheck) { Text("重新诊断") }
+        }
+    }
+}
+
+@Composable
+private fun FailedContent(
+    status: ReportStatus.Failed,
+    onRetry: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("诊断无法完成", style = MaterialTheme.typography.titleMedium)
+            Text(status.message)
+            status.result?.analysis?.diagnosis?.explanation?.let { Text(it) }
+            TextButton(onClick = onRetry) { Text("重新诊断") }
+        }
+    }
+}
+
+@Composable
 private fun StageProgressRow(
-    stage: DiagnosticStage,
+    stage: AutomaticDiagnosticStage,
     status: ReportStageStatus,
 ) {
     val (marker, label, color) = when (status) {
@@ -169,6 +497,8 @@ private fun StageProgressRow(
         ReportStageStatus.RUNNING -> Triple("→", stage.displayName(), MaterialTheme.colorScheme.primary)
         ReportStageStatus.FAILED -> Triple("×", stage.displayName(), MaterialTheme.colorScheme.error)
         ReportStageStatus.SKIPPED -> Triple("－", stage.displayName(), MaterialTheme.colorScheme.onSurfaceVariant)
+        ReportStageStatus.NOT_APPLICABLE -> Triple("－", stage.displayName(), MaterialTheme.colorScheme.onSurfaceVariant)
+        ReportStageStatus.UNKNOWN -> Triple("?", stage.displayName(), MaterialTheme.colorScheme.onSurfaceVariant)
         ReportStageStatus.PENDING -> Triple("○", stage.displayName(), MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Text("$marker $label", color = color)
@@ -451,6 +781,175 @@ private fun ErrorContent(
             TextButton(onClick = onRetry) { Text("重试") }
         }
     }
+}
+
+private const val MAX_VISIBLE_CHECKS_PER_STAGE = 3
+private const val MAX_VISIBLE_FINDINGS = 5
+private const val MAX_VISIBLE_RECOMMENDATIONS = 3
+private const val MAX_DETAIL_CHECKS = 16
+private const val MAX_DETAIL_ADDRESSES = 16
+private const val MAX_DETAIL_DNS = 16
+private const val MAX_DETAIL_DNS_RECORDS = 12
+
+private fun AutomaticDiagnosticStage.displayName(): String = when (this) {
+    AutomaticDiagnosticStage.NETWORK_STATE -> "获取网络状态"
+    AutomaticDiagnosticStage.IP_CONFIGURATION -> "检查 IP 配置"
+    AutomaticDiagnosticStage.GATEWAY -> "检查本地网关"
+    AutomaticDiagnosticStage.INTERNET -> "检查公网连接"
+    AutomaticDiagnosticStage.DNS -> "检查 DNS"
+    AutomaticDiagnosticStage.TARGET -> "检查目标访问"
+    AutomaticDiagnosticStage.ADVANCED_PATH -> "检查高级路径"
+}
+
+private fun AutomaticDiagnosticStage.checkDisplayName(): String = when (this) {
+    AutomaticDiagnosticStage.NETWORK_STATE -> "本机网络"
+    AutomaticDiagnosticStage.IP_CONFIGURATION -> "IP 配置"
+    AutomaticDiagnosticStage.GATEWAY -> "本地网关"
+    AutomaticDiagnosticStage.INTERNET -> "公网连接"
+    AutomaticDiagnosticStage.DNS -> "DNS 解析"
+    AutomaticDiagnosticStage.TARGET -> "域名访问"
+    AutomaticDiagnosticStage.ADVANCED_PATH -> "高级路径"
+}
+
+private fun AutomaticDiagnosticStage.detailDisplayName(): String = when (this) {
+    AutomaticDiagnosticStage.NETWORK_STATE -> "网络状态"
+    AutomaticDiagnosticStage.IP_CONFIGURATION -> "IP 配置"
+    AutomaticDiagnosticStage.GATEWAY -> "网关"
+    AutomaticDiagnosticStage.INTERNET -> "公网"
+    AutomaticDiagnosticStage.DNS -> "DNS"
+    AutomaticDiagnosticStage.TARGET -> "目标访问"
+    AutomaticDiagnosticStage.ADVANCED_PATH -> "高级路径"
+}
+
+@Composable
+private fun AutomaticDiagnosticCheck.displayInfo(): Triple<String, String, Color> = when (status) {
+    AutomaticDiagnosticCheckStatus.PASS -> if (severity == AutomaticDiagnosticSeverity.HEALTHY) {
+        Triple("✓", "正常", AutomaticDiagnosticSeverity.HEALTHY.color())
+    } else {
+        Triple("!", "提示", AutomaticDiagnosticSeverity.NOTICE.color())
+    }
+    AutomaticDiagnosticCheckStatus.FAIL -> if (severity == AutomaticDiagnosticSeverity.ERROR) {
+        Triple("×", "严重异常", AutomaticDiagnosticSeverity.ERROR.color())
+    } else {
+        Triple("!", "异常", AutomaticDiagnosticSeverity.WARNING.color())
+    }
+    AutomaticDiagnosticCheckStatus.NO_RECORDS ->
+        Triple("!", "无记录", AutomaticDiagnosticSeverity.NOTICE.color())
+    AutomaticDiagnosticCheckStatus.NOT_APPLICABLE ->
+        Triple("－", "不适用", MaterialTheme.colorScheme.onSurfaceVariant)
+    AutomaticDiagnosticCheckStatus.SKIPPED ->
+        Triple("－", "未执行", MaterialTheme.colorScheme.onSurfaceVariant)
+    AutomaticDiagnosticCheckStatus.UNKNOWN ->
+        Triple("?", "未确定", MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun AutomaticDiagnosticSeverity.color(): Color = when (this) {
+    AutomaticDiagnosticSeverity.HEALTHY -> MaterialTheme.colorScheme.primary
+    AutomaticDiagnosticSeverity.NOTICE -> MaterialTheme.colorScheme.tertiary
+    AutomaticDiagnosticSeverity.WARNING -> MaterialTheme.colorScheme.secondary
+    AutomaticDiagnosticSeverity.ERROR -> MaterialTheme.colorScheme.error
+}
+
+@Composable
+private fun AutomaticDiagnosticSeverity.findingDisplayInfo(): Triple<String, String, Color> = when (this) {
+    AutomaticDiagnosticSeverity.HEALTHY -> Triple("✓", "正常", color())
+    AutomaticDiagnosticSeverity.NOTICE -> Triple("ℹ", "提示", color())
+    AutomaticDiagnosticSeverity.WARNING -> Triple("!", "异常", color())
+    AutomaticDiagnosticSeverity.ERROR -> Triple("×", "严重异常", color())
+}
+
+@Composable
+private fun DiagnosticDiagnosisStatus?.overviewDisplayInfo(): Pair<String, Color> = when (this) {
+    DiagnosticDiagnosisStatus.NORMAL -> "🟢 网络状态正常" to MaterialTheme.colorScheme.primary
+    DiagnosticDiagnosisStatus.ATTENTION -> "🟡 发现需要关注的问题" to MaterialTheme.colorScheme.secondary
+    DiagnosticDiagnosisStatus.LIMITED -> "🟠 部分网络能力受限" to MaterialTheme.colorScheme.secondary
+    DiagnosticDiagnosisStatus.UNKNOWN,
+    null,
+    -> "⚪ 暂时无法确定网络状态" to MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+private fun AutomaticDiagnosticCheckStatus.displayName(): String = when (this) {
+    AutomaticDiagnosticCheckStatus.PASS -> "正常"
+    AutomaticDiagnosticCheckStatus.FAIL -> "异常"
+    AutomaticDiagnosticCheckStatus.NO_RECORDS -> "无记录"
+    AutomaticDiagnosticCheckStatus.NOT_APPLICABLE -> "不适用"
+    AutomaticDiagnosticCheckStatus.SKIPPED -> "未执行"
+    AutomaticDiagnosticCheckStatus.UNKNOWN -> "未确定"
+}
+
+private fun AutomaticDiagnosticCheck.userFacingSummary(): String = when (stage) {
+    AutomaticDiagnosticStage.NETWORK_STATE,
+    AutomaticDiagnosticStage.IP_CONFIGURATION,
+    -> summary
+
+    AutomaticDiagnosticStage.GATEWAY -> when (status) {
+        AutomaticDiagnosticCheckStatus.PASS -> "本地网关可达性探测收到响应。"
+        AutomaticDiagnosticCheckStatus.NOT_APPLICABLE -> "当前网络不适用传统本地网关探测。"
+        AutomaticDiagnosticCheckStatus.UNKNOWN -> "当前无法确认本地网关是否响应。"
+        AutomaticDiagnosticCheckStatus.FAIL -> "本地网关未响应当前探测；这不单独表示网络故障。"
+        AutomaticDiagnosticCheckStatus.SKIPPED -> "本地网关探测未执行。"
+        AutomaticDiagnosticCheckStatus.NO_RECORDS -> "本地网关没有可用记录。"
+    }
+
+    AutomaticDiagnosticStage.INTERNET -> when (status) {
+        AutomaticDiagnosticCheckStatus.PASS -> "公网探测收到响应。"
+        AutomaticDiagnosticCheckStatus.FAIL -> "公网探测未获得成功响应证据；这不单独证明互联网不可用。"
+        AutomaticDiagnosticCheckStatus.UNKNOWN -> "当前无法确认公网连接状态。"
+        AutomaticDiagnosticCheckStatus.NOT_APPLICABLE -> "当前网络不适用公网探测。"
+        AutomaticDiagnosticCheckStatus.SKIPPED -> "公网探测未执行。"
+        AutomaticDiagnosticCheckStatus.NO_RECORDS -> "公网探测没有可用记录。"
+    }
+
+    AutomaticDiagnosticStage.DNS -> when (status) {
+        AutomaticDiagnosticCheckStatus.PASS -> "DNS 查询完成并返回记录。"
+        AutomaticDiagnosticCheckStatus.NO_RECORDS -> "DNS 查询正常完成，但没有返回所请求的记录。"
+        AutomaticDiagnosticCheckStatus.FAIL -> "DNS 查询未正常完成。"
+        AutomaticDiagnosticCheckStatus.UNKNOWN -> "当前无法确认 DNS 查询结果。"
+        AutomaticDiagnosticCheckStatus.NOT_APPLICABLE -> "当前网络不适用 DNS 查询。"
+        AutomaticDiagnosticCheckStatus.SKIPPED -> "DNS 查询未执行。"
+    }
+
+    AutomaticDiagnosticStage.TARGET -> when (status) {
+        AutomaticDiagnosticCheckStatus.PASS -> "目标访问收到成功响应。"
+        AutomaticDiagnosticCheckStatus.FAIL -> "目标服务或访问路径未获得成功响应。"
+        AutomaticDiagnosticCheckStatus.UNKNOWN -> "当前无法确认目标访问结果。"
+        AutomaticDiagnosticCheckStatus.NOT_APPLICABLE -> "当前目标访问不适用。"
+        AutomaticDiagnosticCheckStatus.SKIPPED -> "目标访问未执行。"
+        AutomaticDiagnosticCheckStatus.NO_RECORDS -> "目标访问没有可用记录。"
+    }
+
+    AutomaticDiagnosticStage.ADVANCED_PATH -> "高级路径检查结果已记录。"
+}
+
+private fun DiagnosticConnectionType.displayName(): String = when (this) {
+    DiagnosticConnectionType.WIFI -> "Wi-Fi"
+    DiagnosticConnectionType.CELLULAR -> "移动网络"
+    DiagnosticConnectionType.ETHERNET -> "以太网"
+    DiagnosticConnectionType.VPN -> "VPN"
+    DiagnosticConnectionType.BLUETOOTH -> "蓝牙"
+    DiagnosticConnectionType.UNKNOWN -> "未知网络"
+}
+
+private fun DiagnosticEvidenceLevel.displayName(): String = when (this) {
+    DiagnosticEvidenceLevel.CONFIRMED -> "已确认"
+    DiagnosticEvidenceLevel.SUPPORTED -> "有一定依据"
+    DiagnosticEvidenceLevel.INCONCLUSIVE -> "证据不足"
+    DiagnosticEvidenceLevel.CONTRADICTED -> "存在冲突"
+}
+
+private fun com.networktoolbox.core.common.diagnostic.DiagnosticConfidence.displayName(): String = when (this) {
+    com.networktoolbox.core.common.diagnostic.DiagnosticConfidence.HIGH -> "高可信度"
+    com.networktoolbox.core.common.diagnostic.DiagnosticConfidence.MEDIUM -> "中等可信度"
+    com.networktoolbox.core.common.diagnostic.DiagnosticConfidence.LOW -> "低可信度"
+}
+
+private fun String.toTechnicalDisplayName(): String = when (this) {
+    "TCP_CONNECT" -> "TCP 连接探测"
+    "SYSTEM_DNS" -> "系统 DNS 解析器"
+    "ANDROID_DNS_RESOLVER" -> "Android 系统 DNS 解析器"
+    "TCP_443_PROBES_WITH_VALIDATED_CONTEXT" -> "TCP 443 辅助探测与系统联网状态"
+    else -> replace('_', ' ')
 }
 
 private fun DiagnosticStage.displayName(): String = when (this) {
