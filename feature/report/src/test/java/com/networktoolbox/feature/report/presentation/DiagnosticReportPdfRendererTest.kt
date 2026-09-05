@@ -18,6 +18,83 @@ import org.junit.Test
 
 class DiagnosticReportPdfRendererTest {
     @Test
+    fun privacySentenceKeepsNetworkToolboxTogether() {
+        val lines = DiagnosticReportPdfLayout.wrapLine(
+            "报告由 NetworkToolbox 在本机生成，不会上传到 NetworkToolbox 服务。",
+        )
+
+        assertTrue(lines.count { it.contains("NetworkToolbox") } == 2)
+        assertFalse(lines.any { it.contains("NetworkToolbo") && !it.contains("NetworkToolbox") })
+        assertFalse(lines.any { it == "x" })
+    }
+
+    @Test
+    fun ttlNumberAndUnitStayTogetherWhenThePrefixDoesNotFit() {
+        val lines = DiagnosticReportPdfLayout.wrapLine(
+            "A example.com → 198.18.13.240 · TTL 1 秒",
+            maxWidth = 37,
+        )
+
+        assertTrue(lines.any { it.contains("1 秒") })
+        assertFalse(lines.any { it.trim() == "TTL 1" })
+        assertFalse(lines.any { it.trim() == "秒" })
+    }
+
+    @Test
+    fun technicalWordsDomainsEndpointsAndIpv6MoveAsWholeTokens() {
+        val domainLines = DiagnosticReportPdfLayout.wrapLine("查询 example.com", maxWidth = 12)
+        val productLines = DiagnosticReportPdfLayout.wrapLine("报告 NetworkToolbox", maxWidth = 14)
+        val fakeIpLines = DiagnosticReportPdfLayout.wrapLine("状态 Fake-IP", maxWidth = 7)
+        val privateDnsLines = DiagnosticReportPdfLayout.wrapLine("配置 Private DNS", maxWidth = 7)
+        val endpointLines = DiagnosticReportPdfLayout.wrapLine(
+            "目标 223.5.5.5:443 1.1.1.1:443",
+            maxWidth = 13,
+        )
+        val ipv6Lines = DiagnosticReportPdfLayout.wrapLine("DNS 2001:db8::53", maxWidth = 13)
+
+        assertTrue(domainLines.any { it == "example.com" })
+        assertTrue(productLines.any { it == "NetworkToolbox" })
+        assertTrue(fakeIpLines.any { it == "Fake-IP" })
+        assertTrue(privateDnsLines.any { it == "Private" })
+        assertTrue(privateDnsLines.any { it == "DNS" })
+        assertTrue(endpointLines.any { it == "223.5.5.5:443" })
+        assertTrue(endpointLines.any { it == "1.1.1.1:443" })
+        assertTrue(ipv6Lines.any { it == "2001:db8::53" })
+    }
+
+    @Test
+    fun longTokensUseWidthAwareCodePointFallback() {
+        val longAsciiToken = "OpenSSL".repeat(20)
+        val lines = DiagnosticReportPdfLayout.wrapLine(longAsciiToken, maxWidth = 10)
+
+        assertTrue(lines.size > 1)
+        assertEquals(longAsciiToken, lines.joinToString(""))
+        assertTrue(lines.all { DiagnosticReportPdfLayout.measuredWidth(it) <= 10 })
+    }
+
+    @Test
+    fun fallbackDoesNotSplitUnicodeSurrogatePairs() {
+        val emojiText = "\uD83D\uDE80".repeat(8)
+        val lines = DiagnosticReportPdfLayout.wrapLine(emojiText, maxWidth = 3)
+
+        assertEquals(emojiText, lines.joinToString(""))
+        assertTrue(lines.none(::hasUnpairedSurrogate))
+    }
+
+    @Test
+    fun longChineseAndMixedLinesStayWithinLayoutWidth() {
+        val lines = DiagnosticReportPdfLayout.wrapLine(
+            "中文网络诊断报告 NetworkToolbox 2001:db8::53 30 ms",
+            maxWidth = 20,
+        )
+
+        assertTrue(lines.size > 1)
+        assertTrue(lines.all { DiagnosticReportPdfLayout.measuredWidth(it) <= 20 })
+        assertTrue(lines.joinToString("").contains("NetworkToolbox"))
+        assertTrue(lines.joinToString("").contains("2001:db8::53"))
+    }
+
+    @Test
     fun completeReportLayoutHasHeaderAndReadableChineseContent() {
         val pages = DiagnosticReportPdfLayout.pages(normalPresentation())
         val lines = pages.flatten()
@@ -51,7 +128,7 @@ class DiagnosticReportPdfRendererTest {
         assertTrue("Expected more than one A4 page", pages.size > 1)
         assertContains(pages.flatten(), "网络环境提示 16")
         assertContains(pages.flatten(), "198.18.13.240")
-        assertContains(pages.flatten(), "TTL 300 秒")
+        assertContains(pages.flatten(), "300 秒")
         assertTrue(pages.flatten().all { it.length <= 44 })
     }
 
@@ -82,9 +159,14 @@ class DiagnosticReportPdfRendererTest {
         assertContains(lines, "路由下一跳：10.0.0.1")
         assertContains(lines, "fe80::58cf:44ff:fe53:f11e")
         assertContains(lines, "2001:db8::53")
-        assertContains(lines, "DNS 记录：A example.com → 198.18.13.240 · TTL 300 秒")
+        assertContains(lines, "DNS 记录：A example.com → 198.18.13.240 · TTL")
+        assertContains(lines, "300 秒")
+        assertContains(lines, "223.5.5.5:443")
+        assertContains(lines, "1.1.1.1:443")
         assertContains(lines, "优先级 10")
         assertContains(lines, "可能存在 Fake-IP DNS 环境")
+        assertContains(lines, "私人 DNS：已启用")
+        assertContains(lines, "私人 DNS 名称：dns.example")
         assertContains(lines, "重新进行 DNS 查询")
         assertFalse(lines.any { it.contains("DiagnosticReportV2") || it.contains("schemaVersion") })
     }
@@ -162,6 +244,7 @@ class DiagnosticReportPdfRendererTest {
                         "recordCounts" to "A=1,AAAA=1,MX=1,TXT=1",
                         "durationMs" to "32",
                         "fakeIpObserved" to "true",
+                        "targetOutcomes" to "223.5.5.5:443=SUCCESS;1.1.1.1:443=TIMEOUT",
                     ),
                     observationIds = listOf("dns-a", "dns-mx"),
                 ),
@@ -180,8 +263,8 @@ class DiagnosticReportPdfRendererTest {
         gateway = "10.0.1.1",
         configuredDnsServers = listOf("10.0.1.1", "2001:db8::53"),
         vpnActive = false,
-        privateDnsActive = false,
-        privateDnsServerName = null,
+        privateDnsActive = true,
+        privateDnsServerName = "dns.example",
         validated = true,
     )
 
@@ -191,5 +274,21 @@ class DiagnosticReportPdfRendererTest {
             "Expected <$expected> in:\n${lines.joinToString("\n")}",
             lines.any { it.contains(expected) } || wrapped.contains(expected),
         )
+    }
+
+    private fun hasUnpairedSurrogate(text: String): Boolean {
+        var index = 0
+        while (index < text.length) {
+            val character = text[index]
+            if (character.isHighSurrogate()) {
+                if (index + 1 >= text.length || !text[index + 1].isLowSurrogate()) return true
+                index += 2
+            } else if (character.isLowSurrogate()) {
+                return true
+            } else {
+                index++
+            }
+        }
+        return false
     }
 }
