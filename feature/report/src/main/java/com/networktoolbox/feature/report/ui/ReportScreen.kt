@@ -11,13 +11,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -50,6 +53,8 @@ import com.networktoolbox.feature.report.presentation.DiagnosticPresentationMapp
 import com.networktoolbox.feature.report.presentation.DiagnosticCheckPresentation
 import com.networktoolbox.feature.report.presentation.DiagnosticFindingPresentation
 import com.networktoolbox.feature.report.presentation.DiagnosticReportPresentation
+import com.networktoolbox.feature.report.presentation.DiagnosticReportExportFormat
+import com.networktoolbox.feature.report.presentation.DiagnosticReportTextFormatter
 import com.networktoolbox.feature.report.presentation.DiagnosticStageSummary
 import com.networktoolbox.feature.report.presentation.ReportProgress
 import com.networktoolbox.feature.report.presentation.ReportStageStatus
@@ -66,6 +71,8 @@ fun ReportScreen(
     onStopCheck: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onCopyReport: (String) -> Unit = {},
+    onShareReport: (String, String) -> Unit = { _, _ -> },
 ) {
     val hasRestoredReport = restoredReport != null || restoredAutomaticResult != null
     val isRunning = !hasRestoredReport && uiState.status is ReportStatus.Running
@@ -98,11 +105,15 @@ fun ReportScreen(
             when {
                 restoredAutomaticResult != null -> AutomaticReportContent(
                     result = restoredAutomaticResult,
+                    onCopyReport = onCopyReport,
+                    onShareReport = onShareReport,
                 )
 
                 restoredReport != null -> ReportContent(
                     report = restoredReport,
                     restored = true,
+                    onCopyReport = onCopyReport,
+                    onShareReport = onShareReport,
                 )
 
                 uiState.status is ReportStatus.Running -> RunningContent(
@@ -112,6 +123,8 @@ fun ReportScreen(
 
                 uiState.status is ReportStatus.Completed -> AutomaticReportContent(
                     result = uiState.status.result,
+                    onCopyReport = onCopyReport,
+                    onShareReport = onShareReport,
                 )
 
                 uiState.status is ReportStatus.NetworkChanged -> NetworkChangedContent(
@@ -127,6 +140,8 @@ fun ReportScreen(
                 uiState.status is ReportStatus.Success -> ReportContent(
                     report = uiState.status.report,
                     restored = false,
+                    onCopyReport = onCopyReport,
+                    onShareReport = onShareReport,
                 )
 
                 uiState.status is ReportStatus.Cancelled -> CancelledContent(
@@ -206,10 +221,14 @@ private fun RunningContent(
 @Composable
 private fun AutomaticReportContent(
     result: AutomaticDiagnosticResult,
+    onCopyReport: (String) -> Unit,
+    onShareReport: (String, String) -> Unit,
 ) {
     UnifiedDiagnosticReportContent(
         presentation = DiagnosticPresentationMapper.forLive(result),
         stateKey = result.evidence.startedAt,
+        onCopyReport = onCopyReport,
+        onShareReport = onShareReport,
     )
 }
 
@@ -221,6 +240,8 @@ private fun AutomaticReportContent(
 private fun UnifiedDiagnosticReportContent(
     presentation: DiagnosticReportPresentation,
     stateKey: Long,
+    onCopyReport: (String) -> Unit,
+    onShareReport: (String, String) -> Unit,
 ) {
     val stageSummaries = DiagnosticPresentationMapper.stageSummariesForPresentation(
         presentation.checks,
@@ -307,6 +328,142 @@ private fun UnifiedDiagnosticReportContent(
         if (detailsExpanded) {
             UnifiedDiagnosticDetails(presentation)
         }
+
+        ReportExportActions(
+            presentation = presentation,
+            stateKey = stateKey,
+            onCopyReport = onCopyReport,
+            onShareReport = onShareReport,
+        )
+    }
+}
+
+private enum class ReportExportOperation(
+    val format: DiagnosticReportExportFormat,
+    val share: Boolean,
+) {
+    COPY_CONCISE(DiagnosticReportExportFormat.CONCISE, share = false),
+    SHARE_CONCISE(DiagnosticReportExportFormat.CONCISE, share = true),
+    COPY_TECHNICAL(DiagnosticReportExportFormat.TECHNICAL, share = false),
+    SHARE_TECHNICAL(DiagnosticReportExportFormat.TECHNICAL, share = true),
+}
+
+@Composable
+private fun ReportExportActions(
+    presentation: DiagnosticReportPresentation,
+    stateKey: Long,
+    onCopyReport: (String) -> Unit,
+    onShareReport: (String, String) -> Unit,
+) {
+    var optionsVisible by rememberSaveable(stateKey) { mutableStateOf(false) }
+    var copyFeedbackVisible by rememberSaveable(stateKey) { mutableStateOf(false) }
+    var pendingTechnicalOperation by remember {
+        mutableStateOf<ReportExportOperation?>(null)
+    }
+
+    fun reportText(operation: ReportExportOperation): String = when (operation.format) {
+        DiagnosticReportExportFormat.CONCISE ->
+            DiagnosticReportTextFormatter.formatConcise(presentation)
+
+        DiagnosticReportExportFormat.TECHNICAL ->
+            DiagnosticReportTextFormatter.formatTechnical(presentation)
+    }
+
+    fun dispatch(operation: ReportExportOperation) {
+        val text = reportText(operation)
+        if (operation.share) {
+            onShareReport(text, DiagnosticReportTextFormatter.SHARE_SUBJECT)
+        } else {
+            onCopyReport(text)
+            copyFeedbackVisible = true
+        }
+    }
+
+    fun request(operation: ReportExportOperation) {
+        optionsVisible = false
+        if (operation.format == DiagnosticReportExportFormat.TECHNICAL) {
+            pendingTechnicalOperation = operation
+        } else {
+            dispatch(operation)
+        }
+    }
+
+    OutlinedButton(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { optionsVisible = true },
+    ) {
+        Text("复制或分享报告")
+    }
+    if (copyFeedbackVisible) {
+        Text(
+            text = "报告已复制",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+
+    if (optionsVisible) {
+        AlertDialog(
+            onDismissRequest = { optionsVisible = false },
+            title = { Text("导出报告") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("请选择报告内容。简洁报告适合日常阅读；技术报告包含本地网络信息。")
+                    TextButton(onClick = {
+                        request(ReportExportOperation.COPY_CONCISE)
+                    }) {
+                        Text("复制简洁报告")
+                    }
+                    TextButton(onClick = {
+                        request(ReportExportOperation.SHARE_CONCISE)
+                    }) {
+                        Text("分享简洁报告")
+                    }
+                    TextButton(onClick = {
+                        request(ReportExportOperation.COPY_TECHNICAL)
+                    }) {
+                        Text("复制技术报告")
+                    }
+                    TextButton(onClick = {
+                        request(ReportExportOperation.SHARE_TECHNICAL)
+                    }) {
+                        Text("分享技术报告")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { optionsVisible = false }) { Text("取消") }
+            },
+        )
+    }
+
+    pendingTechnicalOperation?.let { operation ->
+        AlertDialog(
+            onDismissRequest = { pendingTechnicalOperation = null },
+            title = {
+                Text(if (operation.share) "分享技术报告" else "复制技术报告")
+            },
+            text = {
+                Text(
+                    "技术报告包含本地网络信息。\n\n" +
+                        "可能包含本机 IP、网关、网络配置 DNS、VPN/私人 DNS 状态以及探测目标。",
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTechnicalOperation = null }) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    dispatch(operation)
+                    pendingTechnicalOperation = null
+                }) {
+                    Text("继续")
+                }
+            },
+        )
     }
 }
 
@@ -793,10 +950,14 @@ private fun StageProgressRow(
 private fun ReportContent(
     report: DiagnosticReportV2,
     restored: Boolean,
+    onCopyReport: (String) -> Unit,
+    onShareReport: (String, String) -> Unit,
 ) {
     UnifiedDiagnosticReportContent(
         presentation = DiagnosticPresentationMapper.forHistory(report),
         stateKey = report.timestamp,
+        onCopyReport = onCopyReport,
+        onShareReport = onShareReport,
     )
 }
 

@@ -1,5 +1,8 @@
 package com.networktoolbox
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -70,6 +73,20 @@ class MainActivity : ComponentActivity() {
     private val subnetViewModel: SubnetViewModel by viewModels()
     private val lanScannerViewModel: LanScannerViewModel by viewModels()
     private val tracerouteViewModel: TracerouteViewModel by viewModels()
+
+    private fun copyDiagnosticReport(text: String) {
+        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText("NetworkToolbox 报告", text))
+    }
+
+    private fun shareDiagnosticReport(text: String, subject: String) {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startActivity(Intent.createChooser(sendIntent, "分享诊断报告"))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -264,6 +281,8 @@ class MainActivity : ComponentActivity() {
                                     restoredAutomaticDiagnosticResult = null
                                     openTopLevel(TopLevelDestination.TOOLS)
                                 },
+                                onCopyReport = ::copyDiagnosticReport,
+                                onShareReport = ::shareDiagnosticReport,
                             )
                             ToolScreen.HISTORY -> HistoryScreen(
                                 uiState = historyUiState,

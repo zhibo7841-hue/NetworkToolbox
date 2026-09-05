@@ -1138,6 +1138,22 @@ and a concise Traceroute summary when the user explicitly ran it.
   clear “包含技术网络信息” notice.
 - PDF, cloud URL, QR, account sync, and report server are out of scope.
 
+Task 053 implementation baseline:
+
+- The live completed report and supported schema-2/schema-3 history reports
+  use the same `DiagnosticReportPresentation` before text generation.
+- The export surface offers concise and technical plain-text output. Concise
+  output is the default choice and omits unnecessary local network
+  identifiers; technical output is bounded and requires an explicit privacy
+  confirmation before copy or share.
+- Copy is an explicit local clipboard action. Share is an explicit Android
+  `ACTION_SEND` action with MIME type `text/plain`. Neither action reruns a
+  diagnostic, re-analyzes a saved report, writes history, or uploads report
+  data.
+- Missing fields in legacy history remain missing rather than being
+  fabricated. The formatter does not expose raw JSON or machine-readable enum
+  values as user-facing report content.
+
 ### 17.4 History decision
 
 v0.4 MVP does not add a new automatic report-history policy. Existing v0.3
