@@ -32,6 +32,7 @@ import com.networktoolbox.core.common.diagnostic.DiagnosticConnectionType
 import com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus
 import com.networktoolbox.core.common.diagnostic.DiagnosticEvidenceLevel
 import com.networktoolbox.core.common.diagnostic.DiagnosticFinding
+import com.networktoolbox.core.common.diagnostic.DiagnosticFindingCode
 import com.networktoolbox.core.common.diagnostic.DiagnosticNetworkSummary
 import com.networktoolbox.core.common.diagnostic.DiagnosticObservation
 import com.networktoolbox.core.common.diagnostic.DiagnosticObservationCode
@@ -60,6 +61,8 @@ import com.networktoolbox.feature.report.presentation.ReportStageStatus
 import com.networktoolbox.feature.report.presentation.ReportStatus
 import com.networktoolbox.feature.report.presentation.ReportUiState
 import com.networktoolbox.feature.report.presentation.diagnosticStages
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationResult
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationStatus
 
 @Composable
 fun ReportScreen(
@@ -125,6 +128,7 @@ fun ReportScreen(
 
                 uiState.status is ReportStatus.Completed -> AutomaticReportContent(
                     result = uiState.status.result,
+                    comparison = uiState.status.comparison,
                     onCopyReport = onCopyReport,
                     onSavePdf = onSavePdf,
                     onSharePdf = onSharePdf,
@@ -225,6 +229,7 @@ private fun RunningContent(
 @Composable
 private fun AutomaticReportContent(
     result: AutomaticDiagnosticResult,
+    comparison: DiagnosticVerificationResult? = null,
     onCopyReport: (String) -> Unit,
     onSavePdf: (ByteArray, String) -> Unit,
     onSharePdf: (ByteArray, String) -> Unit,
@@ -232,6 +237,7 @@ private fun AutomaticReportContent(
     UnifiedDiagnosticReportContent(
         presentation = DiagnosticPresentationMapper.forLive(result),
         stateKey = result.evidence.startedAt,
+        comparison = comparison,
         onCopyReport = onCopyReport,
         onSavePdf = onSavePdf,
         onSharePdf = onSharePdf,
@@ -246,6 +252,7 @@ private fun AutomaticReportContent(
 private fun UnifiedDiagnosticReportContent(
     presentation: DiagnosticReportPresentation,
     stateKey: Long,
+    comparison: DiagnosticVerificationResult? = null,
     onCopyReport: (String) -> Unit,
     onSavePdf: (ByteArray, String) -> Unit,
     onSharePdf: (ByteArray, String) -> Unit,
@@ -261,6 +268,10 @@ private fun UnifiedDiagnosticReportContent(
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AutomaticOverview(presentation.overallStatus)
+
+        comparison?.let { verification ->
+            DiagnosticVerificationCard(verification)
+        }
 
         ReportSectionCard(title = "诊断结论") {
             Text(
@@ -344,6 +355,110 @@ private fun UnifiedDiagnosticReportContent(
             onSharePdf = onSharePdf,
         )
     }
+}
+
+@Composable
+private fun DiagnosticVerificationCard(
+    comparison: DiagnosticVerificationResult,
+) {
+    val (statusLabel, statusColor) = comparison.status.displayInfo()
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("与上次相比", style = MaterialTheme.typography.titleMedium)
+            Surface(
+                color = statusColor.copy(alpha = 0.14f),
+                contentColor = statusColor,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    text = statusLabel,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+            Text(comparison.summary, style = MaterialTheme.typography.bodyLarge)
+
+            comparison.resolvedFindingCodes.forEach { code ->
+                Text("✓ 此前检测到的${code.verificationLabel()}本次未再次出现。")
+            }
+            comparison.stillPresentFindingCodes.forEach { code ->
+                Text("! 此前检测到的${code.verificationLabel()}仍然存在。")
+            }
+            comparison.newFindingCodes.forEach { code ->
+                Text("! 本次检测发现新的${code.verificationLabel()}。")
+            }
+            comparison.inconclusiveFindingCodes.forEach { code ->
+                Text("? ${code.verificationLabel()}暂时无法确认。")
+            }
+            comparison.resolvedContextFindingCodes.forEach { code ->
+                Text("ℹ 此前的${code.verificationLabel()}环境提示本次未再次出现。")
+            }
+            comparison.stillPresentContextFindingCodes.forEach { code ->
+                Text("ℹ 当前仍检测到${code.verificationLabel()}环境提示；这不等同于网络故障。")
+            }
+            comparison.newContextFindingCodes.forEach { code ->
+                Text("ℹ 本次出现${code.verificationLabel()}环境提示；这不等同于网络故障。")
+            }
+
+            Text(
+                comparison.status.suggestion(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticVerificationStatus.displayInfo(): Pair<String, Color> = when (this) {
+    DiagnosticVerificationStatus.RESOLVED_OR_NOT_REPRODUCED ->
+        "此前问题未再次出现" to MaterialTheme.colorScheme.primary
+    DiagnosticVerificationStatus.STILL_PRESENT ->
+        "此前问题仍需关注" to MaterialTheme.colorScheme.secondary
+    DiagnosticVerificationStatus.NEW_FINDINGS ->
+        "发现新的网络问题" to MaterialTheme.colorScheme.secondary
+    DiagnosticVerificationStatus.UNCHANGED ->
+        "结果基本一致" to MaterialTheme.colorScheme.primary
+    DiagnosticVerificationStatus.INCONCLUSIVE ->
+        "暂时无法确认" to MaterialTheme.colorScheme.onSurfaceVariant
+    DiagnosticVerificationStatus.CONTEXT_CHANGED ->
+        "检测环境已变化" to MaterialTheme.colorScheme.tertiary
+}
+
+private fun DiagnosticVerificationStatus.suggestion(): String = when (this) {
+    DiagnosticVerificationStatus.RESOLVED_OR_NOT_REPRODUCED ->
+        "如果问题再次出现，可以重新运行诊断。"
+    DiagnosticVerificationStatus.STILL_PRESENT ->
+        "请参考本次诊断中的建议，并在网络稳定时再次检测。"
+    DiagnosticVerificationStatus.NEW_FINDINGS ->
+        "请参考本次诊断中的最新建议；单次结果不能确定根因。"
+    DiagnosticVerificationStatus.UNCHANGED ->
+        "如果问题仍然存在，可以尝试运行目标检测。"
+    DiagnosticVerificationStatus.INCONCLUSIVE ->
+        "请在网络稳定后重新运行诊断。"
+    DiagnosticVerificationStatus.CONTEXT_CHANGED ->
+        "请在相同网络环境下重新运行诊断，以便进行比较。"
+}
+
+private fun DiagnosticFindingCode.verificationLabel(): String = when (this) {
+    DiagnosticFindingCode.NO_ACTIVE_NETWORK -> "活动网络不可用"
+    DiagnosticFindingCode.NETWORK_STATE_UNCONFIRMED -> "网络状态"
+    DiagnosticFindingCode.IP_CONFIGURATION_UNCONFIRMED -> "IP 配置"
+    DiagnosticFindingCode.GATEWAY_PROBE_NO_RESPONSE -> "网关探测未响应"
+    DiagnosticFindingCode.LOCAL_OR_UPSTREAM_PATH_UNCONFIRMED -> "本地或上游网络路径"
+    DiagnosticFindingCode.PUBLIC_CONNECTIVITY_UNCONFIRMED -> "公网连接"
+    DiagnosticFindingCode.DNS_RESOLUTION_FAILURE -> "DNS 查询异常"
+    DiagnosticFindingCode.DNS_NXDOMAIN -> "域名解析结果"
+    DiagnosticFindingCode.FAKE_IP_CONTEXT -> "特殊用途地址"
+    DiagnosticFindingCode.VPN_ACTIVE -> "VPN 环境"
+    DiagnosticFindingCode.CAPTIVE_PORTAL_CONTEXT -> "网络认证"
+    DiagnosticFindingCode.TARGET_TCP_REFUSED -> "目标端口连接"
+    DiagnosticFindingCode.TARGET_TCP_TIMEOUT -> "目标连接响应"
+    DiagnosticFindingCode.TARGET_TCP_PATH_UNCONFIRMED -> "目标地址路径"
+    DiagnosticFindingCode.NETWORK_APPEARS_NORMAL -> "基础网络连接"
 }
 
 private enum class ReportExportOperation { COPY_TEXT, SAVE_PDF, SHARE_PDF }

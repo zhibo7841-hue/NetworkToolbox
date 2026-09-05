@@ -15,6 +15,7 @@ import com.networktoolbox.core.common.diagnostic.DiagnosticRecommendationPriorit
 import com.networktoolbox.core.common.diagnostic.DiagnosticRunStatus
 import com.networktoolbox.core.common.diagnostic.DiagnosticSeverity
 import com.networktoolbox.core.common.diagnostic.DiagnosticStage
+import com.networktoolbox.core.common.diagnostic.NetworkFingerprint
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.feature.report.diagnostic.v2.orchestration.DiagnosticOrchestrator
@@ -104,6 +105,32 @@ class ReportViewModelTest {
         assertEquals(1, records.size)
         assertEquals("网络诊断", records.single().title)
         assertTrue(records.single().detailJson.contains("\"schemaVersion\":3"))
+    }
+
+    @Test
+    fun rerunComparesAgainstPreviousCompletedRunAndKeepsIndependentHistory() = runTest {
+        val records = mutableListOf<HistoryRecord>()
+        var runCount = 0
+        val viewModel = viewModelFor(
+            orchestrator = FakeOrchestrator {
+                runCount++
+                evidence(fingerprint = NetworkFingerprint("same-network"))
+            },
+            records = records,
+        )
+
+        viewModel.runCheck()
+        advanceUntilIdle()
+        viewModel.runCheck()
+        advanceUntilIdle()
+
+        val completed = viewModel.uiState.value.status as ReportStatus.Completed
+        assertEquals(2, runCount)
+        assertEquals(2, records.size)
+        assertEquals(
+            com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationStatus.UNCHANGED,
+            completed.comparison?.status,
+        )
     }
 
     @Test
@@ -252,12 +279,13 @@ private class FakeOrchestrator(
 
 private fun evidence(
     status: DiagnosticRunStatus = DiagnosticRunStatus.COMPLETED,
+    fingerprint: NetworkFingerprint? = null,
 ) = DiagnosticRunEvidence(
     runStatus = status,
     startedAt = 1_000L,
     finishedAt = 1_100L,
     durationMs = 100L,
-    fingerprint = null,
+    fingerprint = fingerprint,
     networkContextSummary = null,
     observations = emptyList(),
     checks = listOf(

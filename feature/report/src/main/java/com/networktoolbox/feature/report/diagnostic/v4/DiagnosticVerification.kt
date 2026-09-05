@@ -1,0 +1,356 @@
+package com.networktoolbox.feature.report.diagnostic.v4
+
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticFinding
+import com.networktoolbox.core.common.diagnostic.DiagnosticFindingCode
+import com.networktoolbox.core.common.diagnostic.DiagnosticRunStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticSeverity
+import com.networktoolbox.core.common.diagnostic.DiagnosticStage
+import com.networktoolbox.core.common.diagnostic.DiagnosticTarget
+import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
+import java.util.Locale
+
+/** The user-visible outcome of comparing two completed diagnostic runs. */
+enum class DiagnosticVerificationStatus {
+    RESOLVED_OR_NOT_REPRODUCED,
+    STILL_PRESENT,
+    NEW_FINDINGS,
+    UNCHANGED,
+    INCONCLUSIVE,
+    CONTEXT_CHANGED,
+}
+
+/**
+ * A session-only comparison. It is intentionally not part of the persisted
+ * report schema: the current run remains an independent history record and
+ * the comparison is meaningful only against the selected previous run.
+ */
+data class DiagnosticVerificationResult(
+    val status: DiagnosticVerificationStatus,
+    val resolvedFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val stillPresentFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val newFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val inconclusiveFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val resolvedContextFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val stillPresentContextFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val newContextFindingCodes: List<DiagnosticFindingCode> = emptyList(),
+    val previousRunStatus: DiagnosticRunStatus,
+    val currentRunStatus: DiagnosticRunStatus,
+    val sameNetworkContext: Boolean? = null,
+    val sameTarget: Boolean? = null,
+    val summary: String,
+)
+
+/**
+ * Compares stable finding codes and stage evidence, never localized titles or
+ * descriptions. A missing stage is not treated as proof that a prior finding
+ * disappeared, which keeps a partial/unknown run from claiming recovery.
+ */
+object DiagnosticVerificationComparator {
+    private val contextOnlyCodes = setOf(
+        DiagnosticFindingCode.NETWORK_STATE_UNCONFIRMED,
+        DiagnosticFindingCode.GATEWAY_PROBE_NO_RESPONSE,
+        DiagnosticFindingCode.PUBLIC_CONNECTIVITY_UNCONFIRMED,
+        DiagnosticFindingCode.FAKE_IP_CONTEXT,
+        DiagnosticFindingCode.VPN_ACTIVE,
+        DiagnosticFindingCode.CAPTIVE_PORTAL_CONTEXT,
+    )
+
+    private val materialCodes = setOf(
+        DiagnosticFindingCode.NO_ACTIVE_NETWORK,
+        DiagnosticFindingCode.IP_CONFIGURATION_UNCONFIRMED,
+        DiagnosticFindingCode.LOCAL_OR_UPSTREAM_PATH_UNCONFIRMED,
+        DiagnosticFindingCode.DNS_RESOLUTION_FAILURE,
+        DiagnosticFindingCode.DNS_NXDOMAIN,
+        DiagnosticFindingCode.TARGET_TCP_REFUSED,
+        DiagnosticFindingCode.TARGET_TCP_TIMEOUT,
+        DiagnosticFindingCode.TARGET_TCP_PATH_UNCONFIRMED,
+    )
+
+    fun compare(
+        previous: AutomaticDiagnosticResult,
+        current: AutomaticDiagnosticResult,
+    ): DiagnosticVerificationResult {
+        val previousStatus = previous.evidence.runStatus
+        val currentStatus = current.evidence.runStatus
+        if (previousStatus != DiagnosticRunStatus.COMPLETED ||
+            currentStatus != DiagnosticRunStatus.COMPLETED
+        ) {
+            return inconclusive(
+                previousStatus = previousStatus,
+                currentStatus = currentStatus,
+                summary = "两次诊断都需要完整完成后才能进行比较。",
+            )
+        }
+
+        val previousTarget = previous.evidence.intent.target
+        val currentTarget = current.evidence.intent.target
+        val sameTarget = targetsEqual(previousTarget, currentTarget)
+        if (sameTarget == false) {
+            return contextChanged(
+                previousStatus = previousStatus,
+                currentStatus = currentStatus,
+                sameTarget = false,
+                sameNetworkContext = fingerprintsEqualOrUnknown(previous, current),
+                summary = "本次检测目标与上次不同，无法直接比较两次诊断结果。",
+            )
+        }
+        if (sameTarget == null) {
+            return inconclusive(
+                previousStatus = previousStatus,
+                currentStatus = currentStatus,
+                sameTarget = null,
+                sameNetworkContext = fingerprintsEqualOrUnknown(previous, current),
+                summary = "两次诊断的检测目标信息不完整，无法直接比较。",
+            )
+        }
+
+        val previousFingerprint = previous.evidence.fingerprint
+        val currentFingerprint = current.evidence.fingerprint
+        if (previousFingerprint == null || currentFingerprint == null) {
+            return inconclusive(
+                previousStatus = previousStatus,
+                currentStatus = currentStatus,
+                sameTarget = sameTarget,
+                sameNetworkContext = null,
+                summary = "网络环境指纹不完整，无法确认两次诊断是否处于同一网络环境。",
+            )
+        }
+        if (previousFingerprint != currentFingerprint) {
+            return contextChanged(
+                previousStatus = previousStatus,
+                currentStatus = currentStatus,
+                sameTarget = sameTarget,
+                sameNetworkContext = false,
+                summary = "当前网络环境与上次不同，无法直接比较两次诊断结果。",
+            )
+        }
+
+        val previousMaterial = previous.analysis.findings
+            .orderedCodes(::isMaterialFinding)
+        val currentMaterialFindings = current.analysis.findings
+            .filter(::isMaterialFinding)
+        val currentMaterial = currentMaterialFindings.orderedCodes { true }
+        val previousContext = previous.analysis.findings
+            .orderedCodes(::isContextFinding)
+        val currentContextFindings = current.analysis.findings
+            .filter(::isContextFinding)
+        val currentContext = currentContextFindings.orderedCodes { true }
+
+        val invalidPrevious = previous.analysis.findings
+            .filter(::isMaterialFinding)
+            .filterNot { previous.hasVerifiedEvidence(it.code) }
+            .map { it.code }
+            .distinct()
+        val invalidCurrent = current.analysis.findings
+            .filter { isMaterialFinding(it) || isContextFinding(it) }
+            .filterNot { current.hasVerifiedEvidence(it.code) }
+            .map { it.code }
+            .distinct()
+
+        val resolved = previousMaterial.filter { code ->
+            code !in currentMaterial &&
+                code !in invalidCurrent &&
+                code !in invalidPrevious &&
+                current.hasVerifiedEvidence(code)
+        }
+        val stillPresent = previousMaterial.filter { code ->
+            code in currentMaterial && code !in invalidCurrent
+        }
+        val newFindings = currentMaterial.filter { code ->
+            code !in previousMaterial && code !in invalidCurrent
+        }
+        val inconclusive = buildList {
+            addAll(invalidPrevious)
+            addAll(invalidCurrent)
+            previousMaterial
+                .filter { code ->
+                    code !in currentMaterial &&
+                        (code in invalidCurrent || !current.hasVerifiedEvidence(code))
+                }
+                .forEach(::add)
+        }.distinct()
+
+        val resolvedContext = previousContext.filter { code ->
+            code !in currentContext &&
+                code !in invalidCurrent &&
+                current.hasVerifiedEvidence(code)
+        }
+        val stillContext = previousContext.filter { code ->
+            code in currentContext && code !in invalidCurrent
+        }
+        val newContext = currentContext.filter { code ->
+            code !in previousContext && code !in invalidCurrent
+        }
+
+        val status = when {
+            inconclusive.isNotEmpty() -> DiagnosticVerificationStatus.INCONCLUSIVE
+            newFindings.isNotEmpty() -> DiagnosticVerificationStatus.NEW_FINDINGS
+            stillPresent.isNotEmpty() -> DiagnosticVerificationStatus.STILL_PRESENT
+            previousMaterial.isNotEmpty() ->
+                DiagnosticVerificationStatus.RESOLVED_OR_NOT_REPRODUCED
+            else -> DiagnosticVerificationStatus.UNCHANGED
+        }
+
+        return DiagnosticVerificationResult(
+            status = status,
+            resolvedFindingCodes = resolved,
+            stillPresentFindingCodes = stillPresent,
+            newFindingCodes = newFindings,
+            inconclusiveFindingCodes = inconclusive,
+            resolvedContextFindingCodes = resolvedContext,
+            stillPresentContextFindingCodes = stillContext,
+            newContextFindingCodes = newContext,
+            previousRunStatus = previousStatus,
+            currentRunStatus = currentStatus,
+            sameNetworkContext = true,
+            sameTarget = true,
+            summary = status.summary(),
+        )
+    }
+
+    private fun contextChanged(
+        previousStatus: DiagnosticRunStatus,
+        currentStatus: DiagnosticRunStatus,
+        sameTarget: Boolean?,
+        sameNetworkContext: Boolean?,
+        summary: String,
+    ) = DiagnosticVerificationResult(
+        status = DiagnosticVerificationStatus.CONTEXT_CHANGED,
+        previousRunStatus = previousStatus,
+        currentRunStatus = currentStatus,
+        sameNetworkContext = sameNetworkContext,
+        sameTarget = sameTarget,
+        summary = summary,
+    )
+
+    private fun inconclusive(
+        previousStatus: DiagnosticRunStatus,
+        currentStatus: DiagnosticRunStatus,
+        sameTarget: Boolean? = null,
+        sameNetworkContext: Boolean? = null,
+        summary: String,
+    ) = DiagnosticVerificationResult(
+        status = DiagnosticVerificationStatus.INCONCLUSIVE,
+        previousRunStatus = previousStatus,
+        currentRunStatus = currentStatus,
+        sameNetworkContext = sameNetworkContext,
+        sameTarget = sameTarget,
+        summary = summary,
+    )
+
+    private fun DiagnosticVerificationStatus.summary(): String = when (this) {
+        DiagnosticVerificationStatus.RESOLVED_OR_NOT_REPRODUCED ->
+            "此前检测到的问题本次未再次出现。"
+        DiagnosticVerificationStatus.STILL_PRESENT ->
+            "此前检测到的问题仍然存在或证据相似。"
+        DiagnosticVerificationStatus.NEW_FINDINGS ->
+            "本次检测发现新的网络问题。"
+        DiagnosticVerificationStatus.UNCHANGED ->
+            "基础网络连接状态与上次基本一致。"
+        DiagnosticVerificationStatus.INCONCLUSIVE ->
+            "本次未能完成比较所需的全部验证，无法确认此前问题是否仍存在。"
+        DiagnosticVerificationStatus.CONTEXT_CHANGED ->
+            "当前网络环境或检测目标与上次不同，无法直接比较两次诊断结果。"
+    }
+
+    private fun targetsEqual(
+        previous: DiagnosticTarget?,
+        current: DiagnosticTarget?,
+    ): Boolean? {
+        if (previous == null && current == null) return true
+        if (previous == null || current == null) return null
+        return targetKey(previous) == targetKey(current)
+    }
+
+    private fun targetKey(target: DiagnosticTarget): String = buildString {
+        append(target.kind.name)
+        append(':')
+        append(target.value.trim().lowercase(Locale.ROOT))
+        append(':')
+        append(target.port)
+    }
+
+    private fun fingerprintsEqualOrUnknown(
+        previous: AutomaticDiagnosticResult,
+        current: AutomaticDiagnosticResult,
+    ): Boolean? = when {
+        previous.evidence.fingerprint == null || current.evidence.fingerprint == null -> null
+        else -> previous.evidence.fingerprint == current.evidence.fingerprint
+    }
+
+    private fun AutomaticDiagnosticResult.hasVerifiedEvidence(
+        code: DiagnosticFindingCode,
+    ): Boolean {
+        val requiredStages = requiredStagesFor(code)
+        return requiredStages.isNotEmpty() && requiredStages.all { stage ->
+            evidence.checks.any { check ->
+                check.stage == stage && check.status.isCompletedEvidence()
+            }
+        }
+    }
+
+    private fun DiagnosticCheckStatus.isCompletedEvidence(): Boolean = when (this) {
+        DiagnosticCheckStatus.PASS,
+        DiagnosticCheckStatus.FAIL,
+        DiagnosticCheckStatus.NO_RECORDS,
+        -> true
+
+        DiagnosticCheckStatus.NOT_APPLICABLE,
+        DiagnosticCheckStatus.SKIPPED,
+        DiagnosticCheckStatus.UNKNOWN,
+        -> false
+    }
+
+    private fun requiredStagesFor(code: DiagnosticFindingCode): Set<DiagnosticStage> = when (code) {
+        DiagnosticFindingCode.NO_ACTIVE_NETWORK,
+        DiagnosticFindingCode.NETWORK_STATE_UNCONFIRMED,
+        -> setOf(DiagnosticStage.NETWORK_STATE)
+
+        DiagnosticFindingCode.IP_CONFIGURATION_UNCONFIRMED ->
+            setOf(DiagnosticStage.IP_CONFIGURATION)
+
+        DiagnosticFindingCode.GATEWAY_PROBE_NO_RESPONSE ->
+            setOf(DiagnosticStage.GATEWAY, DiagnosticStage.INTERNET)
+
+        DiagnosticFindingCode.LOCAL_OR_UPSTREAM_PATH_UNCONFIRMED ->
+            setOf(DiagnosticStage.GATEWAY, DiagnosticStage.INTERNET)
+
+        DiagnosticFindingCode.PUBLIC_CONNECTIVITY_UNCONFIRMED ->
+            setOf(DiagnosticStage.INTERNET)
+
+        DiagnosticFindingCode.DNS_RESOLUTION_FAILURE,
+        DiagnosticFindingCode.DNS_NXDOMAIN,
+        DiagnosticFindingCode.FAKE_IP_CONTEXT,
+        -> setOf(DiagnosticStage.DNS)
+
+        DiagnosticFindingCode.TARGET_TCP_REFUSED,
+        DiagnosticFindingCode.TARGET_TCP_TIMEOUT,
+        DiagnosticFindingCode.TARGET_TCP_PATH_UNCONFIRMED,
+        -> setOf(DiagnosticStage.TARGET)
+
+        DiagnosticFindingCode.VPN_ACTIVE,
+        DiagnosticFindingCode.CAPTIVE_PORTAL_CONTEXT,
+        -> setOf(DiagnosticStage.NETWORK_STATE)
+
+        DiagnosticFindingCode.NETWORK_APPEARS_NORMAL -> emptySet()
+    }
+
+    private fun isMaterialFinding(finding: DiagnosticFinding): Boolean = when {
+        finding.code == DiagnosticFindingCode.NETWORK_APPEARS_NORMAL -> false
+        finding.code in contextOnlyCodes -> finding.code ==
+            DiagnosticFindingCode.PUBLIC_CONNECTIVITY_UNCONFIRMED &&
+            finding.severity == DiagnosticSeverity.WARNING
+        finding.code in materialCodes -> true
+        else -> finding.severity == DiagnosticSeverity.WARNING ||
+            finding.severity == DiagnosticSeverity.ERROR
+    }
+
+    private fun isContextFinding(finding: DiagnosticFinding): Boolean =
+        finding.code != DiagnosticFindingCode.NETWORK_APPEARS_NORMAL &&
+            !isMaterialFinding(finding)
+
+    private fun List<DiagnosticFinding>.orderedCodes(
+        predicate: (DiagnosticFinding) -> Boolean,
+    ): List<DiagnosticFindingCode> = filter(predicate).map { it.code }.distinct()
+}

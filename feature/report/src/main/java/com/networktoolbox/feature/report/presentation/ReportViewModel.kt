@@ -8,6 +8,8 @@ import com.networktoolbox.core.common.diagnostic.DiagnosticStage
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageProgress as LegacyStageProgress
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStageState as LegacyStageState
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationComparator
+import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationResult
 import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.domain.RunAutomaticDiagnosticUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +36,7 @@ sealed interface ReportStatus {
 
     data class Completed(
         val result: AutomaticDiagnosticResult,
+        val comparison: DiagnosticVerificationResult? = null,
     ) : ReportStatus
 
     data object Cancelled : ReportStatus
@@ -121,6 +124,7 @@ class ReportViewModel @Inject constructor(
     fun runCheck() {
         if (_uiState.value.status is ReportStatus.Running) return
 
+        val previousResult = (_uiState.value.status as? ReportStatus.Completed)?.result
         val generation = ++runGeneration
         cancellationRequested = false
         _uiState.value = ReportUiState(status = ReportStatus.Running())
@@ -143,7 +147,12 @@ class ReportViewModel @Inject constructor(
                 if (generation != runGeneration || cancellationRequested) return@launch
                 _uiState.value = ReportUiState(
                     status = when (result.evidence.runStatus) {
-                        DiagnosticRunStatus.COMPLETED -> ReportStatus.Completed(result)
+                        DiagnosticRunStatus.COMPLETED -> ReportStatus.Completed(
+                            result = result,
+                            comparison = previousResult?.let {
+                                DiagnosticVerificationComparator.compare(it, result)
+                            },
+                        )
                         DiagnosticRunStatus.NETWORK_CHANGED -> ReportStatus.NetworkChanged(result)
                         DiagnosticRunStatus.CANCELLED -> ReportStatus.Cancelled
                         DiagnosticRunStatus.FAILED -> ReportStatus.Failed(
