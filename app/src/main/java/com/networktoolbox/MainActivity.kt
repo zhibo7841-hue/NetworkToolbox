@@ -45,9 +45,9 @@ import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
 import com.networktoolbox.feature.port.presentation.TcpViewModel
 import com.networktoolbox.feature.port.ui.TcpScreen
-import com.networktoolbox.feature.report.diagnostic.v2.AutomaticDiagnosticHistorySnapshotDeserializer
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
-import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2HistoryDeserializer
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticHistoryReportResolver
+import com.networktoolbox.feature.report.diagnostic.v2.ResolvedDiagnosticHistory
 import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.presentation.ReportStatus
 import com.networktoolbox.feature.report.presentation.ReportViewModel
@@ -135,18 +135,22 @@ class MainActivity : ComponentActivity() {
             }
 
             fun openDiagnosticHistory(record: HistoryRecord) {
-                AutomaticDiagnosticHistorySnapshotDeserializer.fromHistoryRecord(record)?.let { result ->
-                    restoredDiagnosticReport = null
-                    restoredAutomaticDiagnosticResult = result
-                    topLevelDestination = TopLevelDestination.TOOLS
-                    toolScreen = ToolScreen.REPORT
-                    return
-                }
-                DiagnosticReportV2HistoryDeserializer.fromHistoryRecord(record)?.let { report ->
-                    restoredAutomaticDiagnosticResult = null
-                    restoredDiagnosticReport = report
-                    topLevelDestination = TopLevelDestination.TOOLS
-                    toolScreen = ToolScreen.REPORT
+                when (val resolved = DiagnosticHistoryReportResolver.resolve(record)) {
+                    is ResolvedDiagnosticHistory.Automatic -> {
+                        restoredDiagnosticReport = null
+                        restoredAutomaticDiagnosticResult = resolved.result
+                        topLevelDestination = TopLevelDestination.TOOLS
+                        toolScreen = ToolScreen.REPORT
+                    }
+
+                    is ResolvedDiagnosticHistory.Legacy -> {
+                        restoredAutomaticDiagnosticResult = null
+                        restoredDiagnosticReport = resolved.report
+                        topLevelDestination = TopLevelDestination.TOOLS
+                        toolScreen = ToolScreen.REPORT
+                    }
+
+                    null -> Unit
                 }
             }
 
@@ -268,6 +272,7 @@ class MainActivity : ComponentActivity() {
                                 onClear = historyViewModel::clear,
                                 onBack = { openTopLevel(TopLevelDestination.TOOLS) },
                                 onOpenReport = ::openDiagnosticHistory,
+                                canOpenReport = DiagnosticHistoryReportResolver::canOpen,
                             )
                             ToolScreen.LAN_SCAN -> LanScannerScreen(
                                 uiState = lanScannerUiState,

@@ -41,6 +41,7 @@ fun HistoryScreen(
     onClear: () -> Unit,
     onBack: () -> Unit,
     onOpenReport: (HistoryRecord) -> Unit = {},
+    canOpenReport: (HistoryRecord) -> Boolean = { false },
     modifier: Modifier = Modifier,
 ) {
     var showClearDialog by rememberSaveable { mutableStateOf(false) }
@@ -88,6 +89,7 @@ fun HistoryScreen(
                             record = record,
                             onDelete = onDelete,
                             onOpenReport = onOpenReport,
+                            canOpenReport = canOpenReport,
                         )
                     }
                 }
@@ -127,6 +129,7 @@ private fun HistoryRecordCard(
     record: HistoryRecord,
     onDelete: (Long) -> Unit,
     onOpenReport: (HistoryRecord) -> Unit,
+    canOpenReport: (HistoryRecord) -> Boolean,
 ) {
     val pingDetails = if (record.type == HistoryType.PING) {
         record.pingDetails()
@@ -138,18 +141,17 @@ private fun HistoryRecordCard(
     } else {
         null
     }
-    val isDiagnosticV2 = record.type == HistoryType.REPORT &&
-        record.detailJson.readJsonNumber("schemaVersion") == "2"
-    val diagnosticHistorySummary = if (isDiagnosticV2) {
+    val isReport = record.type == HistoryType.REPORT
+    val diagnosticHistorySummary = if (isReport) {
         record.detailJson.readJsonString("historySummary")
     } else {
         null
     }
     val displayTitle = when {
-        isDiagnosticV2 -> "网络诊断"
-        record.type == HistoryType.REPORT && record.title == "Network Diagnostic Report" -> "网络诊断"
+        isReport -> "网络诊断"
         else -> pingDetails?.target ?: dnsDetails?.domain ?: record.title
     }
+    val reportActionAvailable = canShowReportAction(record, canOpenReport)
     val displaySummary = if (record.type == HistoryType.PING) {
         PingHistorySummary.fromQualityLevel(
             qualityLevel = pingDetails?.qualityLevel.orEmpty(),
@@ -200,7 +202,7 @@ private fun HistoryRecordCard(
                 )
             }
             Row(modifier = Modifier.fillMaxWidth()) {
-                if (isDiagnosticV2) {
+                if (reportActionAvailable) {
                     TextButton(onClick = { onOpenReport(record) }) {
                         Text("查看报告")
                     }
