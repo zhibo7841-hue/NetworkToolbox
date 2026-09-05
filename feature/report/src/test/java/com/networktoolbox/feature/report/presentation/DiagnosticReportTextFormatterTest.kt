@@ -44,34 +44,18 @@ import org.junit.Test
 
 class DiagnosticReportTextFormatterTest {
     @Test
-    fun conciseNormalReportContainsConclusionAndStageStatus() {
-        val text = DiagnosticReportTextFormatter.formatConcise(normalPresentation())
+    fun completeReportContainsConclusionStageStatusAndNetworkContext() {
+        val text = DiagnosticReportTextFormatter.formatReport(normalPresentation())
 
         assertContains(text, "总体状态：网络状态正常")
         assertContains(text, "本机网络：正常")
         assertContains(text, "公网连接：正常")
         assertContains(text, "DNS 解析：正常")
-    }
-
-    @Test
-    fun technicalNormalReportContainsNetworkContext() {
-        val text = DiagnosticReportTextFormatter.formatTechnical(normalPresentation())
-
         assertContains(text, "网络类型：Wi-Fi")
         assertContains(text, "192.168.1.20")
         assertContains(text, "网关：192.168.1.1")
         assertContains(text, "网络配置 DNS：")
         assertContains(text, "系统联网验证：已通过")
-    }
-
-    @Test
-    fun conciseReportDoesNotExposeLocalNetworkFields() {
-        val text = DiagnosticReportTextFormatter.formatConcise(normalPresentation())
-
-        assertFalse(text.contains("192.168.1.20"))
-        assertFalse(text.contains("192.168.1.1"))
-        assertFalse(text.contains("2001:db8::53"))
-        assertFalse(text.contains("网络配置 DNS"))
     }
 
     @Test
@@ -99,7 +83,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "网络状态正常")
         assertContains(text, "不能据此判断网关故障")
@@ -107,7 +91,7 @@ class DiagnosticReportTextFormatterTest {
     }
 
     @Test
-    fun mixedPublicProbesAreAggregatedInConciseAndDetailedInTechnical() {
+    fun mixedPublicProbesAreAggregatedAndDetailedInCompleteReport() {
         val checks = normalChecks().filterNot { it.stage == DiagnosticStage.INTERNET } + listOf(
             check(
                 stage = DiagnosticStage.INTERNET,
@@ -147,14 +131,13 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val concise = DiagnosticReportTextFormatter.formatConcise(report)
-        val technical = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
-        assertEquals(1, concise.lines().count { it.startsWith("• 公网连接：") })
-        assertContains(technical, "223.5.5.5:443")
-        assertContains(technical, "1.1.1.1:443")
-        assertContains(technical, "连接成功")
-        assertContains(technical, "连接超时")
+        assertEquals(1, text.lines().count { it.startsWith("• 公网连接：") })
+        assertContains(text, "223.5.5.5:443")
+        assertContains(text, "1.1.1.1:443")
+        assertContains(text, "连接成功")
+        assertContains(text, "连接超时")
     }
 
     @Test
@@ -179,7 +162,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "DNS 查询未正常完成")
         assertContains(text, "问题可能与 DNS 服务或网络配置有关")
@@ -199,7 +182,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "检测到 VPN 网络")
         assertContains(text, "VPN 隧道后的网络环境")
@@ -207,31 +190,22 @@ class DiagnosticReportTextFormatterTest {
     }
 
     @Test
-    fun fakeIpConciseReportHidesRawAddress() {
-        val report = fakeIpPresentation(vpnActive = false)
+    fun fakeIpCompleteReportIncludesConservativeRawEvidence() {
+        val report = fakeIpPresentation(vpnActive = true)
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "可能存在 Fake-IP DNS 环境")
         assertContains(text, "不一定表示网络存在故障")
-        assertFalse(text.contains("198.18.13.240"))
-    }
-
-    @Test
-    fun fakeIpTechnicalReportIncludesEvidenceAndPrivacyContext() {
-        val report = fakeIpPresentation(vpnActive = true)
-
-        val text = DiagnosticReportTextFormatter.formatTechnical(report)
-
         assertContains(text, "198.18.13.240")
         assertContains(text, "TTL 300 秒")
-        assertContains(text, "检测到 VPN")
-        assertContains(text, "技术报告可能包含本机地址")
+        assertContains(text, "VPN：已启用")
+        assertContains(text, "完整报告可能包含本机地址")
     }
 
     @Test
     fun fakeIpWithoutVpnDoesNotNameSpecificProxy() {
-        val text = DiagnosticReportTextFormatter.formatTechnical(
+        val text = DiagnosticReportTextFormatter.formatReport(
             fakeIpPresentation(vpnActive = false),
         )
 
@@ -248,7 +222,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "路由下一跳：192.168.1.1")
         assertFalse(text.contains("网关：192.168.1.1"))
@@ -277,7 +251,7 @@ class DiagnosticReportTextFormatterTest {
             networkSummary = null,
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "没有可用的活动网络")
         assertFalse(text.contains("DNS 解析：正常"))
@@ -309,11 +283,11 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val technical = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
-        assertContains(technical, "目标端口未接受连接")
-        assertContains(technical, "不等同于路由或互联网故障")
-        assertFalse(technical.contains("网站已宕机"))
+        assertContains(text, "目标端口未接受连接")
+        assertContains(text, "不等同于路由或互联网故障")
+        assertFalse(text.contains("网站已宕机"))
     }
 
     @Test
@@ -331,7 +305,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "不能据此判断网站或服务已停止")
         assertFalse(text.contains("网站已宕机"))
@@ -351,7 +325,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "总体状态：状态未确定")
         assertContains(text, "公网连接：未确定")
@@ -373,7 +347,7 @@ class DiagnosticReportTextFormatterTest {
             recommendations = listOf(recommendation("请在网络稳定后重新运行诊断。")),
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "不能合并为一个强结论")
         assertContains(text, "请在网络稳定后重新运行诊断")
@@ -402,7 +376,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         listOf(
             "TIMEOUT",
@@ -414,46 +388,31 @@ class DiagnosticReportTextFormatterTest {
     }
 
     @Test
-    fun schema3LiveAndHistoryConciseTextAreIdentical() {
+    fun schema3LiveAndHistoryCompleteTextIsIdentical() {
         val original = automaticResult()
         val restored = AutomaticDiagnosticHistorySnapshotDeserializer.fromDetailJson(
             AutomaticDiagnosticHistorySnapshotSerializer.toHistoryRecord(original).detailJson,
         ) ?: error("schema3 snapshot should restore")
 
         assertEquals(
-            DiagnosticReportTextFormatter.formatConcise(original),
-            DiagnosticReportTextFormatter.formatConcise(restored),
+            DiagnosticReportTextFormatter.formatReport(original),
+            DiagnosticReportTextFormatter.formatReport(restored),
         )
     }
 
     @Test
-    fun schema3LiveAndHistoryTechnicalTextAreIdentical() {
-        val original = automaticResult()
-        val restored = AutomaticDiagnosticHistorySnapshotDeserializer.fromDetailJson(
-            AutomaticDiagnosticHistorySnapshotSerializer.toHistoryRecord(original).detailJson,
-        ) ?: error("schema3 snapshot should restore")
-
-        assertEquals(
-            DiagnosticReportTextFormatter.formatTechnical(original),
-            DiagnosticReportTextFormatter.formatTechnical(restored),
-        )
-    }
-
-    @Test
-    fun dnsTtlAndRecordDetailsAppearOnlyInTechnicalReport() {
+    fun dnsTtlAndRecordDetailsAppearInCompleteReport() {
         val report = fakeIpPresentation(vpnActive = false)
 
-        val concise = DiagnosticReportTextFormatter.formatConcise(report)
-        val technical = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
-        assertFalse(concise.contains("TTL 300"))
-        assertContains(technical, "TTL 300 秒")
-        assertContains(technical, "DNS 记录")
+        assertContains(text, "TTL 300 秒")
+        assertContains(text, "DNS 记录")
     }
 
     @Test
-    fun configuredDnsServersAreListedOnePerLineInTechnicalReport() {
-        val text = DiagnosticReportTextFormatter.formatTechnical(normalPresentation())
+    fun configuredDnsServersAreListedOnePerLineInCompleteReport() {
+        val text = DiagnosticReportTextFormatter.formatReport(normalPresentation())
 
         assertContains(text, "  192.168.1.1")
         assertContains(text, "  2001:db8::53")
@@ -465,7 +424,7 @@ class DiagnosticReportTextFormatterTest {
             recommendations = (1..5).map { index -> recommendation("建议 $index") },
         )
 
-        val text = DiagnosticReportTextFormatter.formatConcise(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "1. 建议 1")
         assertContains(text, "3. 建议 3")
@@ -474,17 +433,16 @@ class DiagnosticReportTextFormatterTest {
     }
 
     @Test
-    fun technicalReportContainsPrivacyNotice() {
-        val text = DiagnosticReportTextFormatter.formatTechnical(normalPresentation())
+    fun completeReportContainsPrivacyNotice() {
+        val text = DiagnosticReportTextFormatter.formatReport(normalPresentation())
 
-        assertContains(text, "技术报告可能包含本机地址")
+        assertContains(text, "完整报告可能包含本机地址")
         assertContains(text, "不会上传到 NetworkToolbox 服务")
     }
 
     @Test
-    fun exportUsesPlainTextMimeTypeAndStableSubject() {
-        assertEquals("text/plain", DiagnosticReportTextFormatter.PLAIN_TEXT_MIME_TYPE)
-        assertEquals("NetworkToolbox 网络诊断报告", DiagnosticReportTextFormatter.SHARE_SUBJECT)
+    fun exportMimeTypesAreExplicit() {
+        assertEquals("application/pdf", DiagnosticReportPdfRenderer.PDF_MIME_TYPE)
     }
 
     @Test
@@ -524,7 +482,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "未获得网络环境信息")
         assertFalse(text.contains("schemaVersion"))
@@ -533,8 +491,8 @@ class DiagnosticReportTextFormatterTest {
     }
 
     @Test
-    fun technicalReportDoesNotExposeSerializationEnvelope() {
-        val text = DiagnosticReportTextFormatter.formatTechnical(automaticResult())
+    fun completeReportDoesNotExposeSerializationEnvelope() {
+        val text = DiagnosticReportTextFormatter.formatReport(automaticResult())
 
         assertFalse(text.contains("payloadType"))
         assertFalse(text.contains("detailJson"))
@@ -560,7 +518,7 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "DNS 查询结果：域名不存在")
         assertFalse(text.contains("NXDOMAIN"))
@@ -585,14 +543,14 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val text = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
         assertContains(text, "TCP 探测结果：连接被拒绝")
         assertFalse(text.contains("CONNECTION_REFUSED"))
     }
 
     @Test
-    fun privateDnsAndVpnStateAreIncludedInTechnicalOnly() {
+    fun privateDnsAndVpnStateAreIncludedInCompleteReport() {
         val report = normalPresentation(
             networkSummary = wifiSummary.copy(
                 vpnActive = true,
@@ -601,18 +559,17 @@ class DiagnosticReportTextFormatterTest {
             ),
         )
 
-        val concise = DiagnosticReportTextFormatter.formatConcise(report)
-        val technical = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
-        assertFalse(concise.contains("dns.example"))
-        assertContains(technical, "VPN：已启用")
-        assertContains(technical, "私人 DNS：已启用")
-        assertContains(technical, "私人 DNS 名称：dns.example")
+        assertContains(text, "dns.example")
+        assertContains(text, "VPN：已启用")
+        assertContains(text, "私人 DNS：已启用")
+        assertContains(text, "私人 DNS 名称：dns.example")
     }
 
     @Test
-    fun technicalReportKeepsIpv4AndIpv6AddressesTogether() {
-        val text = DiagnosticReportTextFormatter.formatTechnical(normalPresentation())
+    fun completeReportKeepsIpv4AndIpv6AddressesTogether() {
+        val text = DiagnosticReportTextFormatter.formatReport(normalPresentation())
 
         assertContains(text, "192.168.1.20")
         assertContains(text, "fe80::1")
@@ -623,11 +580,9 @@ class DiagnosticReportTextFormatterTest {
     fun reportFormatterDoesNotPerformNetworkOrHistoryWork() {
         val report = normalPresentation()
 
-        val concise = DiagnosticReportTextFormatter.formatConcise(report)
-        val technical = DiagnosticReportTextFormatter.formatTechnical(report)
+        val text = DiagnosticReportTextFormatter.formatReport(report)
 
-        assertTrue(concise.isNotBlank())
-        assertTrue(technical.isNotBlank())
+        assertTrue(text.isNotBlank())
     }
 
     private fun normalPresentation(

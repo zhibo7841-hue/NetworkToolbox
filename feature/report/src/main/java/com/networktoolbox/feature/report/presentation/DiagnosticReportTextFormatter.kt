@@ -17,23 +17,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** The two user-selectable report representations supported by phase 1. */
-internal enum class DiagnosticReportExportFormat {
-    CONCISE,
-    TECHNICAL,
-}
-
 /**
- * Pure Kotlin text projection for copy and Android text sharing.
+ * Pure Kotlin text projection for copy and PDF generation.
  *
  * Both live and restored reports are first mapped to the same presentation
  * model. This class only formats that model: it never reruns probes, replays
  * analysis, reads Android state, or parses UI strings.
  */
 internal object DiagnosticReportTextFormatter {
-    const val PLAIN_TEXT_MIME_TYPE = "text/plain"
-    const val SHARE_SUBJECT = "NetworkToolbox 网络诊断报告"
-
     private const val MAX_CHECKS = 16
     private const val MAX_FINDINGS = 16
     private const val MAX_RECOMMENDATIONS = 3
@@ -83,19 +74,18 @@ internal object DiagnosticReportTextFormatter {
         "ERROR" to "严重异常",
     )
 
-    fun formatConcise(result: AutomaticDiagnosticResult): String =
-        formatConcise(DiagnosticPresentationMapper.forLive(result))
+    fun formatReport(result: AutomaticDiagnosticResult): String =
+        formatReport(DiagnosticPresentationMapper.forLive(result))
 
-    fun formatTechnical(result: AutomaticDiagnosticResult): String =
-        formatTechnical(DiagnosticPresentationMapper.forLive(result))
+    fun formatReport(report: DiagnosticReportV2): String =
+        formatReport(DiagnosticPresentationMapper.forHistory(report))
 
-    fun formatConcise(report: DiagnosticReportV2): String =
-        formatConcise(DiagnosticPresentationMapper.forHistory(report))
-
-    fun formatTechnical(report: DiagnosticReportV2): String =
-        formatTechnical(DiagnosticPresentationMapper.forHistory(report))
-
-    internal fun formatConcise(presentation: DiagnosticReportPresentation): String {
+    /**
+     * Formats the single complete report used by live screens, copied text,
+     * saved PDFs, shared PDFs, and restored history. The user-facing summary
+     * comes first; bounded technical evidence follows it in the same output.
+     */
+    internal fun formatReport(presentation: DiagnosticReportPresentation): String {
         val stageSummaries = DiagnosticPresentationMapper.stageSummariesForPresentation(
             presentation.checks,
         )
@@ -104,12 +94,14 @@ internal object DiagnosticReportTextFormatter {
         )
         val lines = mutableListOf<String>()
 
-        lines += "NetworkToolbox 网络诊断报告"
-        lines += "报告时间：${formatTimestamp(presentation.timestamp)}"
-        lines += ""
+        lines += "NetworkToolbox 网络诊断完整报告"
+        lines += "基本信息"
+        lines += "诊断时间：${formatTimestamp(presentation.timestamp)}"
         lines += "总体状态：${presentation.overallStatus.displayName()}"
+        lines += "总体等级：${presentation.overallSeverity.displayName()}"
         lines += ""
         lines += "诊断结论"
+        lines += "摘要：${safeHumanText(presentation.summary, "诊断摘要未确定。")}"
         lines += safeHumanText(
             presentation.explanation,
             fallback = "本次检测没有形成可展示的整体结论。",
@@ -120,7 +112,7 @@ internal object DiagnosticReportTextFormatter {
             lines += "未获得阶段结果。"
         } else {
             stageSummaries.forEach { stage ->
-                lines += "• ${stage.stage.conciseName()}：${stage.status.displayName(stage.severity)}"
+                lines += "• ${stage.stage.displayName()}：${stage.status.displayName(stage.severity)}"
             }
         }
 
@@ -135,8 +127,8 @@ internal object DiagnosticReportTextFormatter {
                 lines += DiagnosticPresentationMapper.noMaterialFindingMessage()
             } else {
                 visibleFindings.take(MAX_FINDINGS).forEach { finding ->
-                    lines += "• ${conciseFindingTitle(finding)}"
-                    conciseFindingDescription(finding)?.let { description ->
+                    lines += "• ${findingTitle(finding)}"
+                    findingDescription(finding)?.let { description ->
                         lines += "  $description"
                     }
                 }
@@ -156,26 +148,7 @@ internal object DiagnosticReportTextFormatter {
             }
 
         lines += ""
-        lines += "本报告由 NetworkToolbox 在本机生成，结果仅代表本次检测范围。"
-        return lines.joinToString("\n")
-    }
-
-    internal fun formatTechnical(presentation: DiagnosticReportPresentation): String {
-        val lines = mutableListOf<String>()
-
-        lines += "NetworkToolbox 网络诊断技术报告"
-        lines += "报告时间：${formatTimestamp(presentation.timestamp)}"
-        lines += "总体状态：${presentation.overallStatus.displayName()}"
-        lines += "总体等级：${presentation.overallSeverity.displayName()}"
-        lines += ""
-        lines += "诊断结论"
-        lines += safeHumanText(
-            presentation.explanation,
-            fallback = "本次检测没有形成可展示的整体结论。",
-        )
-
-        lines += ""
-        lines += "网络环境"
+        lines += "详细网络环境"
         appendNetworkSummary(lines, presentation)
 
         lines += ""
@@ -184,7 +157,7 @@ internal object DiagnosticReportTextFormatter {
             lines += "未获得阶段检查结果。"
         } else {
             presentation.checks.take(MAX_CHECKS).forEach { check ->
-                lines += "${check.stage.technicalName}：${check.status.displayName(check.severity)}"
+                lines += "${check.stage.displayName()}：${check.status.displayName(check.severity)}"
                 DiagnosticPresentationMapper.targetDisplayName(check)?.let { target ->
                     lines += "目标：${safeHumanText(target, "未提供")}"
                 }
@@ -219,23 +192,9 @@ internal object DiagnosticReportTextFormatter {
             }
         }
 
-        presentation.recommendations
-            .sortedBy { it.priority }
-            .take(MAX_RECOMMENDATIONS)
-            .takeIf { it.isNotEmpty() }
-            ?.let { recommendations ->
-                lines += ""
-                lines += "建议"
-                recommendations.forEachIndexed { index, recommendation ->
-                    lines += "${index + 1}. ${safeHumanText(recommendation.action, "请结合详细结果继续检查。")}"
-                    recommendation.reason
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { reason -> lines += "   依据：${safeHumanText(reason, "未提供")}" }
-                }
-            }
-
         lines += ""
-        lines += "技术报告可能包含本机地址、网关、网络配置 DNS、VPN/私人 DNS 状态及探测目标。"
+        lines += "隐私说明"
+        lines += "完整报告可能包含本机地址、网关、网络配置 DNS、VPN/私人 DNS 状态及探测目标。"
         lines += "报告由 NetworkToolbox 在本机生成，不会上传到 NetworkToolbox 服务。"
         return lines.joinToString("\n")
     }
@@ -387,13 +346,13 @@ internal object DiagnosticReportTextFormatter {
         }
     }
 
-    private fun conciseFindingTitle(finding: DiagnosticFindingPresentation): String = when (finding.id) {
+    private fun findingTitle(finding: DiagnosticFindingPresentation): String = when (finding.id) {
         "FAKE_IP_CONTEXT" -> "检测到特殊用途地址"
         "VPN_ACTIVE" -> "检测到 VPN 网络"
         else -> safeHumanText(finding.title, "网络环境提示")
     }
 
-    private fun conciseFindingDescription(finding: DiagnosticFindingPresentation): String? = when (finding.id) {
+    private fun findingDescription(finding: DiagnosticFindingPresentation): String? = when (finding.id) {
         "FAKE_IP_CONTEXT" -> "可能存在 Fake-IP DNS 环境；这不一定表示网络存在故障。"
         "VPN_ACTIVE" -> "当前诊断可能反映 VPN 隧道后的网络环境。"
         else -> safeHumanText(finding.description, "请结合阶段结果和建议继续判断。")
@@ -474,7 +433,7 @@ internal object DiagnosticReportTextFormatter {
         DiagnosticCheckStatus.UNKNOWN -> "未确定"
     }
 
-    private fun DiagnosticStage.conciseName(): String = when (this) {
+    private fun DiagnosticStage.displayName(): String = when (this) {
         DiagnosticStage.NETWORK_STATE -> "本机网络"
         DiagnosticStage.IP_CONFIGURATION -> "IP 配置"
         DiagnosticStage.GATEWAY -> "本地网关"
@@ -483,9 +442,6 @@ internal object DiagnosticReportTextFormatter {
         DiagnosticStage.TARGET -> "目标访问"
         DiagnosticStage.ADVANCED_PATH -> "高级路径"
     }
-
-    private val DiagnosticStage.technicalName: String
-        get() = conciseName()
 
     private fun DiagnosticConnectionType.displayName(): String = when (this) {
         DiagnosticConnectionType.WIFI -> "Wi-Fi"

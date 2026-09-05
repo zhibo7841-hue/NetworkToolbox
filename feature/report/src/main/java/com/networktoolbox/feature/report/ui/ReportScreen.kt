@@ -20,7 +20,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -53,7 +52,7 @@ import com.networktoolbox.feature.report.presentation.DiagnosticPresentationMapp
 import com.networktoolbox.feature.report.presentation.DiagnosticCheckPresentation
 import com.networktoolbox.feature.report.presentation.DiagnosticFindingPresentation
 import com.networktoolbox.feature.report.presentation.DiagnosticReportPresentation
-import com.networktoolbox.feature.report.presentation.DiagnosticReportExportFormat
+import com.networktoolbox.feature.report.presentation.DiagnosticReportPdfRenderer
 import com.networktoolbox.feature.report.presentation.DiagnosticReportTextFormatter
 import com.networktoolbox.feature.report.presentation.DiagnosticStageSummary
 import com.networktoolbox.feature.report.presentation.ReportProgress
@@ -72,7 +71,8 @@ fun ReportScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onCopyReport: (String) -> Unit = {},
-    onShareReport: (String, String) -> Unit = { _, _ -> },
+    onSavePdf: (ByteArray, String) -> Unit = { _, _ -> },
+    onSharePdf: (ByteArray, String) -> Unit = { _, _ -> },
 ) {
     val hasRestoredReport = restoredReport != null || restoredAutomaticResult != null
     val isRunning = !hasRestoredReport && uiState.status is ReportStatus.Running
@@ -106,14 +106,16 @@ fun ReportScreen(
                 restoredAutomaticResult != null -> AutomaticReportContent(
                     result = restoredAutomaticResult,
                     onCopyReport = onCopyReport,
-                    onShareReport = onShareReport,
+                    onSavePdf = onSavePdf,
+                    onSharePdf = onSharePdf,
                 )
 
                 restoredReport != null -> ReportContent(
                     report = restoredReport,
                     restored = true,
                     onCopyReport = onCopyReport,
-                    onShareReport = onShareReport,
+                    onSavePdf = onSavePdf,
+                    onSharePdf = onSharePdf,
                 )
 
                 uiState.status is ReportStatus.Running -> RunningContent(
@@ -124,7 +126,8 @@ fun ReportScreen(
                 uiState.status is ReportStatus.Completed -> AutomaticReportContent(
                     result = uiState.status.result,
                     onCopyReport = onCopyReport,
-                    onShareReport = onShareReport,
+                    onSavePdf = onSavePdf,
+                    onSharePdf = onSharePdf,
                 )
 
                 uiState.status is ReportStatus.NetworkChanged -> NetworkChangedContent(
@@ -141,7 +144,8 @@ fun ReportScreen(
                     report = uiState.status.report,
                     restored = false,
                     onCopyReport = onCopyReport,
-                    onShareReport = onShareReport,
+                    onSavePdf = onSavePdf,
+                    onSharePdf = onSharePdf,
                 )
 
                 uiState.status is ReportStatus.Cancelled -> CancelledContent(
@@ -222,13 +226,15 @@ private fun RunningContent(
 private fun AutomaticReportContent(
     result: AutomaticDiagnosticResult,
     onCopyReport: (String) -> Unit,
-    onShareReport: (String, String) -> Unit,
+    onSavePdf: (ByteArray, String) -> Unit,
+    onSharePdf: (ByteArray, String) -> Unit,
 ) {
     UnifiedDiagnosticReportContent(
         presentation = DiagnosticPresentationMapper.forLive(result),
         stateKey = result.evidence.startedAt,
         onCopyReport = onCopyReport,
-        onShareReport = onShareReport,
+        onSavePdf = onSavePdf,
+        onSharePdf = onSharePdf,
     )
 }
 
@@ -241,7 +247,8 @@ private fun UnifiedDiagnosticReportContent(
     presentation: DiagnosticReportPresentation,
     stateKey: Long,
     onCopyReport: (String) -> Unit,
-    onShareReport: (String, String) -> Unit,
+    onSavePdf: (ByteArray, String) -> Unit,
+    onSharePdf: (ByteArray, String) -> Unit,
 ) {
     val stageSummaries = DiagnosticPresentationMapper.stageSummariesForPresentation(
         presentation.checks,
@@ -270,8 +277,8 @@ private fun UnifiedDiagnosticReportContent(
             }
         }
 
-        // A healthy NETWORK_APPEARS_NORMAL finding is technical evidence, not
-        // a concise finding card. A notice-only stage still gets the shared,
+        // A healthy NETWORK_APPEARS_NORMAL finding is supporting evidence, not
+        // a primary finding card. A notice-only stage still gets the shared,
         // conservative empty wording so the user is not told that a fault was
         // found when no material finding exists.
         if (visibleFindings.isNotEmpty() || hasNoticeStage) {
@@ -333,58 +340,47 @@ private fun UnifiedDiagnosticReportContent(
             presentation = presentation,
             stateKey = stateKey,
             onCopyReport = onCopyReport,
-            onShareReport = onShareReport,
+            onSavePdf = onSavePdf,
+            onSharePdf = onSharePdf,
         )
     }
 }
 
-private enum class ReportExportOperation(
-    val format: DiagnosticReportExportFormat,
-    val share: Boolean,
-) {
-    COPY_CONCISE(DiagnosticReportExportFormat.CONCISE, share = false),
-    SHARE_CONCISE(DiagnosticReportExportFormat.CONCISE, share = true),
-    COPY_TECHNICAL(DiagnosticReportExportFormat.TECHNICAL, share = false),
-    SHARE_TECHNICAL(DiagnosticReportExportFormat.TECHNICAL, share = true),
-}
+private enum class ReportExportOperation { COPY_TEXT, SAVE_PDF, SHARE_PDF }
 
 @Composable
 private fun ReportExportActions(
     presentation: DiagnosticReportPresentation,
     stateKey: Long,
     onCopyReport: (String) -> Unit,
-    onShareReport: (String, String) -> Unit,
+    onSavePdf: (ByteArray, String) -> Unit,
+    onSharePdf: (ByteArray, String) -> Unit,
 ) {
     var optionsVisible by rememberSaveable(stateKey) { mutableStateOf(false) }
     var copyFeedbackVisible by rememberSaveable(stateKey) { mutableStateOf(false) }
-    var pendingTechnicalOperation by remember {
-        mutableStateOf<ReportExportOperation?>(null)
-    }
-
-    fun reportText(operation: ReportExportOperation): String = when (operation.format) {
-        DiagnosticReportExportFormat.CONCISE ->
-            DiagnosticReportTextFormatter.formatConcise(presentation)
-
-        DiagnosticReportExportFormat.TECHNICAL ->
-            DiagnosticReportTextFormatter.formatTechnical(presentation)
-    }
+    var pdfErrorVisible by rememberSaveable(stateKey) { mutableStateOf(false) }
 
     fun dispatch(operation: ReportExportOperation) {
-        val text = reportText(operation)
-        if (operation.share) {
-            onShareReport(text, DiagnosticReportTextFormatter.SHARE_SUBJECT)
-        } else {
-            onCopyReport(text)
-            copyFeedbackVisible = true
-        }
-    }
-
-    fun request(operation: ReportExportOperation) {
         optionsVisible = false
-        if (operation.format == DiagnosticReportExportFormat.TECHNICAL) {
-            pendingTechnicalOperation = operation
-        } else {
-            dispatch(operation)
+        when (operation) {
+            ReportExportOperation.COPY_TEXT -> {
+                onCopyReport(DiagnosticReportTextFormatter.formatReport(presentation))
+                copyFeedbackVisible = true
+            }
+
+            ReportExportOperation.SAVE_PDF,
+            ReportExportOperation.SHARE_PDF,
+            -> runCatching {
+                val bytes = DiagnosticReportPdfRenderer.render(presentation)
+                val fileName = DiagnosticReportPdfRenderer.fileName(presentation.timestamp)
+                if (operation == ReportExportOperation.SAVE_PDF) {
+                    onSavePdf(bytes, fileName)
+                } else {
+                    onSharePdf(bytes, fileName)
+                }
+            }.onFailure {
+                pdfErrorVisible = true
+            }
         }
     }
 
@@ -392,7 +388,7 @@ private fun ReportExportActions(
         modifier = Modifier.fillMaxWidth(),
         onClick = { optionsVisible = true },
     ) {
-        Text("复制或分享报告")
+        Text("导出报告")
     }
     if (copyFeedbackVisible) {
         Text(
@@ -408,26 +404,24 @@ private fun ReportExportActions(
             title = { Text("导出报告") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("请选择报告内容。简洁报告适合日常阅读；技术报告包含本地网络信息。")
+                    Text(
+                        "完整报告包含本地网络信息。\n" +
+                            "可能包括本机 IP、网关、DNS、VPN/Private DNS 状态和检测目标。",
+                    )
                     TextButton(onClick = {
-                        request(ReportExportOperation.COPY_CONCISE)
+                        dispatch(ReportExportOperation.SAVE_PDF)
                     }) {
-                        Text("复制简洁报告")
+                        Text("保存 PDF")
                     }
                     TextButton(onClick = {
-                        request(ReportExportOperation.SHARE_CONCISE)
+                        dispatch(ReportExportOperation.SHARE_PDF)
                     }) {
-                        Text("分享简洁报告")
+                        Text("分享 PDF")
                     }
                     TextButton(onClick = {
-                        request(ReportExportOperation.COPY_TECHNICAL)
+                        dispatch(ReportExportOperation.COPY_TEXT)
                     }) {
-                        Text("复制技术报告")
-                    }
-                    TextButton(onClick = {
-                        request(ReportExportOperation.SHARE_TECHNICAL)
-                    }) {
-                        Text("分享技术报告")
+                        Text("复制文本")
                     }
                 }
             },
@@ -437,32 +431,11 @@ private fun ReportExportActions(
             },
         )
     }
-
-    pendingTechnicalOperation?.let { operation ->
-        AlertDialog(
-            onDismissRequest = { pendingTechnicalOperation = null },
-            title = {
-                Text(if (operation.share) "分享技术报告" else "复制技术报告")
-            },
-            text = {
-                Text(
-                    "技术报告包含本地网络信息。\n\n" +
-                        "可能包含本机 IP、网关、网络配置 DNS、VPN/私人 DNS 状态以及探测目标。",
-                )
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingTechnicalOperation = null }) {
-                    Text("取消")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    dispatch(operation)
-                    pendingTechnicalOperation = null
-                }) {
-                    Text("继续")
-                }
-            },
+    if (pdfErrorVisible) {
+        Text(
+            text = "无法生成 PDF，请稍后重试。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
         )
     }
 }
@@ -951,13 +924,15 @@ private fun ReportContent(
     report: DiagnosticReportV2,
     restored: Boolean,
     onCopyReport: (String) -> Unit,
-    onShareReport: (String, String) -> Unit,
+    onSavePdf: (ByteArray, String) -> Unit,
+    onSharePdf: (ByteArray, String) -> Unit,
 ) {
     UnifiedDiagnosticReportContent(
         presentation = DiagnosticPresentationMapper.forHistory(report),
         stateKey = report.timestamp,
         onCopyReport = onCopyReport,
-        onShareReport = onShareReport,
+        onSavePdf = onSavePdf,
+        onSharePdf = onSharePdf,
     )
 }
 

@@ -144,3 +144,22 @@ This log records the confirmed project decisions. New scope or changes to these 
   approval.
 - Consequence: Detailed rules belong in the automatic-diagnostics design
   baseline and later implementation tasks, not in this decision record.
+
+## Decision: v0.4.0 complete diagnostic report export
+
+- Date: 2026-09-05
+- Status: Accepted
+- Decision: Diagnostic Report Phase 1 uses one Complete Diagnostic Report. It
+  presents the readable summary and recommendations first, followed by the
+  bounded technical details needed by IT and HomeLab users. There is no
+  user-facing concise/technical export split.
+- Export: The same `DiagnosticReportPresentation` snapshot is used for the
+  live report, restored history, text copy, local PDF saving, and PDF sharing.
+  The export actions are Copy Text, Save PDF, and Share PDF.
+- Privacy: PDF save and share require a fixed notice that the report can
+  contain local IP addresses, gateway, configured DNS, VPN/Private DNS state,
+  and probe targets. Files are selected or shared through Android platform
+  APIs; report data is not uploaded and no account is required.
+- Boundary: PDF uses the Android platform PDF API and the existing History
+  schema. This decision does not authorize a PDF service, cloud report, new
+  database columns, automatic repair, or any new diagnostic capability.

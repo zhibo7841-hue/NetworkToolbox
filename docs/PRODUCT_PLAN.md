@@ -183,7 +183,9 @@ The formal v0.4.0 baseline is documented in `docs/V0.4_PLAN.md` and
 `docs/AUTOMATIC_DIAGNOSTICS_V2_DESIGN.md`. The planned experience will combine
 local network observations, focused existing probes, conservative rule-based
 interpretation, understandable recommendations, and an inspectable local
-report.
+report. Diagnostic Report Phase 1 will provide one complete report with a
+user-facing summary followed by bounded technical details. The same local
+snapshot can be copied as text, saved as PDF, or shared as a PDF.
 
 v0.4.0 does not include automatic network repair, cloud AI diagnosis, account
 requirements, report upload, Wi-Fi Analyzer, Wake-on-LAN, SSL/TLS inspection,

@@ -45,9 +45,11 @@ The product remains:
 - free of automatic network repair and Android network reset behavior;
 - free of cloud AI dependency and report upload.
 
-Diagnostic Report Phase 1 means an in-app report, text copy, and explicit
-Android Share Sheet text sharing. It does not mean PDF generation, an online
-report URL, QR export, cloud synchronization, or a new report database.
+Diagnostic Report Phase 1 means one complete in-app report, text copy, local
+PDF saving, and explicit PDF sharing through Android platform APIs. The report
+uses a readable summary followed by bounded technical details. It does not
+mean an online report URL, QR export, cloud synchronization, or a new report
+database.
 
 ## 2. Current implementation audit
 
@@ -158,7 +160,7 @@ user-problem context, and a report export contract.
 - Retry/Verify that reports whether an earlier observation is still present;
   it must not claim that NetworkToolbox repaired anything.
 - Diagnostic Report Phase 1 in the app.
-- Copy and explicit Android Share Sheet text sharing.
+- Copy as text, local PDF saving, and explicit PDF sharing.
 - Unit-testable rule logic and fake-driven orchestration tests.
 
 ### 3.2 SHOULD HAVE / CONDITIONAL
@@ -167,8 +169,8 @@ user-problem context, and a report export contract.
 - An optional problem-type entry point after the base flow is stable.
 - A conditional “run path check” action using the existing Traceroute tool.
 - Safe deep links to Android Wi-Fi or network settings where supported.
-- A user-facing choice between a concise report and technical details before
-  copy/share.
+- A single complete report whose summary and recommendations come before its
+  bounded technical details.
 
 These items must not make the default diagnosis longer or turn a target-
 specific observation into a whole-network verdict.
@@ -178,7 +180,7 @@ specific observation into a whole-network verdict.
 - Automatic repair, DNS changes, VPN shutdown, route changes, or network reset.
 - Cloud AI, account requirements, cloud synchronization, analytics upload, or
   report upload.
-- PDF, online report URL, QR report, or server-hosted report.
+- Online report URL, QR report, or server-hosted report.
 - Automatic full `/24` LAN scanning during ordinary Internet diagnosis.
 - Wi-Fi Analyzer, Wake-on-LAN, SSL/TLS inspection, WHOIS, iPerf, IPv6
   Traceroute, Traceroute History, MAC/OUI, ASN, GeoIP, MTR, or unrelated tools.
@@ -1102,14 +1104,16 @@ DiagnosticReportV1
 └─ optionalTracerouteSummary?
 ```
 
-The user report contains conclusion, explanation, recommendation, and compact
-stage outcomes. Technical details may add local IP, prefix, gateway, DNS list,
-VPN/Private DNS context, Ping statistics, TCP target/port, DNS records/TTL,
-and a concise Traceroute summary when the user explicitly ran it.
+The complete report contains conclusion, explanation, recommendation, and
+compact stage outcomes first. It then adds bounded technical details for
+IT/HomeLab users: local IP, prefix, gateway, DNS list, VPN/Private DNS
+context, Ping statistics, TCP target/port, DNS records/TTL, and a concise
+Traceroute summary when the user explicitly ran it. The two layers are sections
+of one report, not separate export products.
 
-### 17.2 Two report levels
+### 17.2 Complete report layers
 
-**User Report** is for ordinary users:
+The first layer is readable by ordinary users and contains:
 
 - overall status;
 - what was checked;
@@ -1118,7 +1122,7 @@ and a concise Traceroute summary when the user explicitly ran it.
 - 2–3 next actions;
 - no raw packet payloads or verbose internal identifiers.
 
-**Technical Details** is for IT/HomeLab users:
+The following detail layer is for IT/HomeLab users and may contain:
 
 - timestamps and duration;
 - connection type, local address/prefix, gateway, configured DNS;
@@ -1132,22 +1136,27 @@ and a concise Traceroute summary when the user explicitly ran it.
 
 - In-app report viewing is required.
 - Copy as plain text is required.
-- Android Share Sheet text sharing is required after a deliberate user action.
-- The share surface should let the user choose concise or technical text if the
-  implementation cost remains small; otherwise default to concise text with a
-  clear “包含技术网络信息” notice.
-- PDF, cloud URL, QR, account sync, and report server are out of scope.
+- Save as PDF through Android's `ACTION_CREATE_DOCUMENT` is required.
+- Share PDF through an Android content URI is required after a deliberate user
+  action.
+- Copy Text, Save PDF, and Share PDF must use the same complete
+  `DiagnosticReportPresentation`. The UI shows one fixed notice before export:
+  the report may contain local IP, gateway, DNS, VPN/Private DNS state, and
+  probe targets.
+- PDF is local-only and must use the Android platform PDF API with a bounded,
+  readable multipage layout. No cloud URL, QR export, account sync, or report
+  server is part of this phase.
 
-Task 053 implementation baseline:
+Task 053-A implementation baseline:
 
 - The live completed report and supported schema-2/schema-3 history reports
   use the same `DiagnosticReportPresentation` before text generation.
-- The export surface offers concise and technical plain-text output. Concise
-  output is the default choice and omits unnecessary local network
-  identifiers; technical output is bounded and requires an explicit privacy
-  confirmation before copy or share.
-- Copy is an explicit local clipboard action. Share is an explicit Android
-  `ACTION_SEND` action with MIME type `text/plain`. Neither action reruns a
+- There is one complete report formatter. Its summary/recommendations are
+  followed by bounded network and probe details; there is no concise/technical
+  export split.
+- Copy is an explicit local clipboard action. Save uses `ACTION_CREATE_DOCUMENT`
+  and Share uses an explicit Android `ACTION_SEND` action with MIME type
+  `application/pdf` and a FileProvider content URI. Neither action reruns a
   diagnostic, re-analyzes a saved report, writes history, or uploads report
   data.
 - Missing fields in legacy history remain missing rather than being
@@ -1195,17 +1204,20 @@ Potentially sensitive network information includes:
 - VPN/Private DNS context;
 - Traceroute hop addresses.
 
-The default `User / Concise Report` must prefer summaries and must not include
-SSID, BSSID, a complete LAN inventory, a complete Traceroute hop list, raw MAC,
-or other unnecessary local network identifiers. Technical details may include
-the local address/prefix, gateway, configured DNS, VPN/Private DNS, probe
-targets, technical results, and a brief Traceroute summary when needed for
-troubleshooting. Before sharing it, the app must show:
+The default Complete Diagnostic Report must put a readable summary and
+recommendations first. Its bounded detail section may include the local
+address/prefix, gateway, configured DNS, VPN/Private DNS, probe targets,
+technical results, and a brief Traceroute summary when needed for
+troubleshooting. It must not include SSID, BSSID, a complete LAN inventory, a
+complete Traceroute hop list, raw MAC, or other unnecessary local identifiers.
+Before saving or sharing it, the app must show:
 
-> 技术报告包含本地网络信息。
+> 完整报告包含本地网络信息，可能包括本机 IP、网关、DNS、VPN/Private DNS
+> 状态和检测目标。
 
-The user must actively choose the technical report; the share action must not
-silently include it.
+The user must actively choose Save PDF or Share PDF; the export action must not
+silently create or share a file. Copy Text remains an explicit auxiliary local
+action.
 
 Field-level redaction is a useful future enhancement, not a reason to expand
 the v0.4 MVP into a complex privacy editor. At minimum, provide a clear
@@ -1593,10 +1605,13 @@ Connect real stage callbacks to the current Diagnostic screen. Add simple
 problem/target context only if the contract remains optional. Keep unknown,
 not-tested, and not-applicable visible in understandable language.
 
-### Task 053 — Diagnostic Report Phase 1 export
+### Task 053-A — Complete Diagnostic Report PDF export
 
-Add in-app user/technical report projections, copy, Share Sheet text export, and
-pre-share sensitive-information notice. No PDF, cloud, QR, or schema migration.
+Use one complete report projection for the in-app view, Copy Text, Save PDF, and
+Share PDF. Keep the summary and recommendations before bounded technical
+details, show the fixed local-network privacy notice before file export, and
+use Android's platform PDF and FileProvider APIs. Do not add a PDF service,
+cloud, QR export, or Room schema migration.
 
 ### Task 054 — Retry/Verify and historical compatibility
 

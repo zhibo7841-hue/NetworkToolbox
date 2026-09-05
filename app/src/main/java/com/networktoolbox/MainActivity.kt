@@ -3,12 +3,15 @@ package com.networktoolbox
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import android.widget.Toast
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.feature.dashboard.DashboardViewModel
@@ -61,9 +65,14 @@ import com.networktoolbox.feature.traceroute.presentation.TracerouteViewModel
 import com.networktoolbox.feature.traceroute.ui.TracerouteScreen
 import com.networktoolbox.ui.theme.NetworkToolboxTheme
 import dagger.hilt.android.AndroidEntryPoint
+import java.io.File
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private companion object {
+        const val PDF_MIME_TYPE = "application/pdf"
+    }
+
     private val dashboardViewModel: DashboardViewModel by viewModels()
     private val dnsViewModel: DnsViewModel by viewModels()
     private val historyViewModel: HistoryViewModel by viewModels()
@@ -73,19 +82,72 @@ class MainActivity : ComponentActivity() {
     private val subnetViewModel: SubnetViewModel by viewModels()
     private val lanScannerViewModel: LanScannerViewModel by viewModels()
     private val tracerouteViewModel: TracerouteViewModel by viewModels()
+    private var pendingPdfBytes: ByteArray? = null
+
+    private val createPdfDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(PDF_MIME_TYPE),
+    ) { uri ->
+        val bytes = pendingPdfBytes
+        pendingPdfBytes = null
+        if (uri == null || bytes == null) return@registerForActivityResult
+
+        runCatching {
+            val output = contentResolver.openOutputStream(uri)
+                ?: error("Unable to open selected document")
+            output.use { it.write(bytes) }
+        }.onSuccess {
+            Toast.makeText(this, "报告已保存为 PDF", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(this, "保存 PDF 失败，请重试。", Toast.LENGTH_LONG).show()
+        }
+    }
 
     private fun copyDiagnosticReport(text: String) {
         val clipboard = getSystemService(ClipboardManager::class.java) ?: return
         clipboard.setPrimaryClip(ClipData.newPlainText("NetworkToolbox 报告", text))
     }
 
-    private fun shareDiagnosticReport(text: String, subject: String) {
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, text)
+    private fun saveDiagnosticReportPdf(bytes: ByteArray, fileName: String) {
+        pendingPdfBytes = bytes
+        runCatching {
+            createPdfDocumentLauncher.launch(fileName)
+        }.onFailure {
+            pendingPdfBytes = null
+            Toast.makeText(this, "无法打开文件保存界面。", Toast.LENGTH_LONG).show()
         }
-        startActivity(Intent.createChooser(sendIntent, "分享诊断报告"))
+    }
+
+    private fun shareDiagnosticReportPdf(bytes: ByteArray, fileName: String) {
+        runCatching {
+            val reportDirectory = File(cacheDir, "reports")
+            if (!reportDirectory.exists() && !reportDirectory.mkdirs()) {
+                error("Unable to create temporary report directory")
+            }
+            reportDirectory.listFiles()
+                ?.filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
+                ?.forEach { it.delete() }
+
+            val reportFile = File(reportDirectory, fileName)
+            reportFile.outputStream().use { it.write(bytes) }
+            val contentUri = FileProvider.getUriForFile(
+                this,
+                "${BuildConfig.APPLICATION_ID}.fileprovider",
+                reportFile,
+            )
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = PDF_MIME_TYPE
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(sendIntent, "分享诊断 PDF"))
+        }.onFailure { error ->
+            val message = if (error is ActivityNotFoundException) {
+                "没有可用的应用来分享 PDF。"
+            } else {
+                "分享 PDF 失败，请重试。"
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -282,7 +344,8 @@ class MainActivity : ComponentActivity() {
                                     openTopLevel(TopLevelDestination.TOOLS)
                                 },
                                 onCopyReport = ::copyDiagnosticReport,
-                                onShareReport = ::shareDiagnosticReport,
+                                onSavePdf = ::saveDiagnosticReportPdf,
+                                onSharePdf = ::shareDiagnosticReportPdf,
                             )
                             ToolScreen.HISTORY -> HistoryScreen(
                                 uiState = historyUiState,
