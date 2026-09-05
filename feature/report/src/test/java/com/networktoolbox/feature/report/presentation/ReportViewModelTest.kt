@@ -103,7 +103,7 @@ class ReportViewModelTest {
         assertTrue(viewModel.uiState.value.status is ReportStatus.Completed)
         assertEquals(1, records.size)
         assertEquals("网络诊断", records.single().title)
-        assertTrue(records.single().detailJson.contains("\"schemaVersion\":2"))
+        assertTrue(records.single().detailJson.contains("\"schemaVersion\":3"))
     }
 
     @Test

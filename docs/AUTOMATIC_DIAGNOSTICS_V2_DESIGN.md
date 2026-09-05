@@ -1149,6 +1149,21 @@ Making reports a durable archive, comparing runs in History, or adding report
 retention/privacy controls requires a separate decision because it affects
 database lifecycle and sensitive-data retention.
 
+### 17.5 Automatic diagnostic history payload compatibility
+
+Completed v0.4 automatic diagnostics use an internal `schemaVersion: 3`
+snapshot inside the existing generic History `detailJson` column. The payload
+stores the bounded evidence and the analyzer output that were produced for that
+run: diagnosis status/title/explanation, checks, typed observations, findings,
+recommendations, network summary, DNS records/TTL, TCP outcomes, and the
+Fake-IP/VPN context needed to explain the result. It does not store raw DNS
+packets, SSID/BSSID, LAN inventory, or new Room columns.
+
+Opening a v0.4 record restores this snapshot without re-running probes or
+applying newer diagnostic rules. The schema-2 report serializer/deserializer
+remains available for v0.1--v0.3 and earlier v0.4-compatible records; if a
+legacy payload lacks a field, the UI may use its bounded legacy fallback.
+
 ## 18. Privacy and permissions
 
 ### 18.1 Information classification

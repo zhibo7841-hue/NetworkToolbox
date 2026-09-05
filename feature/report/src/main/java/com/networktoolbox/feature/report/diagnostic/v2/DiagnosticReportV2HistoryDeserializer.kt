@@ -131,21 +131,22 @@ object DiagnosticReportV2HistoryDeserializer {
     }
 }
 
-private sealed interface JsonValue
+/** Shared by the v2 compatibility reader and the v0.4 snapshot reader. */
+internal sealed interface JsonValue
 
-private data class JsonObject(val values: Map<String, JsonValue>) : JsonValue
+internal data class JsonObject(val values: Map<String, JsonValue>) : JsonValue
 
-private data class JsonArray(val values: List<JsonValue>) : JsonValue
+internal data class JsonArray(val values: List<JsonValue>) : JsonValue
 
-private data class JsonString(val value: String) : JsonValue
+internal data class JsonString(val value: String) : JsonValue
 
-private data class JsonNumber(val value: String) : JsonValue
+internal data class JsonNumber(val value: String) : JsonValue
 
-private data class JsonBoolean(val value: Boolean) : JsonValue
+internal data class JsonBoolean(val value: Boolean) : JsonValue
 
-private data object JsonNull : JsonValue
+internal data object JsonNull : JsonValue
 
-private class JsonParser(
+internal class JsonParser(
     private val source: String,
 ) {
     private var index = 0

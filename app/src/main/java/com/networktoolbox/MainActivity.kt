@@ -45,8 +45,10 @@ import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
 import com.networktoolbox.feature.port.presentation.TcpViewModel
 import com.networktoolbox.feature.port.ui.TcpScreen
+import com.networktoolbox.feature.report.diagnostic.v2.AutomaticDiagnosticHistorySnapshotDeserializer
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2HistoryDeserializer
+import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.presentation.ReportStatus
 import com.networktoolbox.feature.report.presentation.ReportViewModel
 import com.networktoolbox.feature.report.ui.ReportScreen
@@ -89,6 +91,9 @@ class MainActivity : ComponentActivity() {
             var restoredDiagnosticReport by remember {
                 mutableStateOf<DiagnosticReportV2?>(null)
             }
+            var restoredAutomaticDiagnosticResult by remember {
+                mutableStateOf<AutomaticDiagnosticResult?>(null)
+            }
             val recentHistory = (historyUiState as? HistoryUiState.Success)
                 ?.records
                 ?.firstOrNull { it.type == HistoryType.REPORT }
@@ -109,6 +114,7 @@ class MainActivity : ComponentActivity() {
                     tracerouteViewModel.stop()
                 }
                 restoredDiagnosticReport = null
+                restoredAutomaticDiagnosticResult = null
                 topLevelDestination = TopLevelDestination.TOOLS
                 toolScreen = screen
                 if (screen == ToolScreen.HISTORY) {
@@ -123,12 +129,21 @@ class MainActivity : ComponentActivity() {
                 lanScannerViewModel.stopScan()
                 tracerouteViewModel.stop()
                 restoredDiagnosticReport = null
+                restoredAutomaticDiagnosticResult = null
                 topLevelDestination = destination
                 toolScreen = ToolScreen.NONE
             }
 
             fun openDiagnosticHistory(record: HistoryRecord) {
+                AutomaticDiagnosticHistorySnapshotDeserializer.fromHistoryRecord(record)?.let { result ->
+                    restoredDiagnosticReport = null
+                    restoredAutomaticDiagnosticResult = result
+                    topLevelDestination = TopLevelDestination.TOOLS
+                    toolScreen = ToolScreen.REPORT
+                    return
+                }
                 DiagnosticReportV2HistoryDeserializer.fromHistoryRecord(record)?.let { report ->
+                    restoredAutomaticDiagnosticResult = null
                     restoredDiagnosticReport = report
                     topLevelDestination = TopLevelDestination.TOOLS
                     toolScreen = ToolScreen.REPORT
@@ -233,13 +248,16 @@ class MainActivity : ComponentActivity() {
                             ToolScreen.REPORT -> ReportScreen(
                                 uiState = reportUiState,
                                 restoredReport = restoredDiagnosticReport,
+                                restoredAutomaticResult = restoredAutomaticDiagnosticResult,
                                 onRunCheck = {
                                     restoredDiagnosticReport = null
+                                    restoredAutomaticDiagnosticResult = null
                                     reportViewModel.runCheck()
                                 },
                                 onStopCheck = reportViewModel::stopCheck,
                                 onBack = {
                                     restoredDiagnosticReport = null
+                                    restoredAutomaticDiagnosticResult = null
                                     openTopLevel(TopLevelDestination.TOOLS)
                                 },
                             )

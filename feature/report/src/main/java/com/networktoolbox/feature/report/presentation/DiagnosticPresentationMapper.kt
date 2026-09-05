@@ -122,6 +122,10 @@ internal object DiagnosticPresentationMapper {
         )
     }
 
+    /** A restored v0.4 snapshot already contains the original live result. */
+    fun forHistory(result: AutomaticDiagnosticResult): DiagnosticReportPresentation =
+        forLive(result)
+
     /**
      * Restores the same presentation contract for a schema-2 history report.
      * The old envelope does not contain every v4 observation, so rawData is
@@ -209,6 +213,9 @@ internal object DiagnosticPresentationMapper {
 
     fun recommendationSectionTitle(status: DiagnosticDiagnosisStatus?): String =
         if (status == DiagnosticDiagnosisStatus.NORMAL) "如果仍然遇到问题" else "建议尝试"
+
+    fun networkGatewayLabel(connectionType: DiagnosticConnectionType): String =
+        if (connectionType == DiagnosticConnectionType.CELLULAR) "路由下一跳" else "网关"
 
     fun methodDisplayName(value: String): String = when (value.trim().uppercase(Locale.US)) {
         "SYSTEM_REACHABILITY" -> "系统可达性探测"

@@ -61,12 +61,14 @@ import com.networktoolbox.feature.report.presentation.diagnosticStages
 fun ReportScreen(
     uiState: ReportUiState,
     restoredReport: DiagnosticReportV2? = null,
+    restoredAutomaticResult: AutomaticDiagnosticResult? = null,
     onRunCheck: () -> Unit,
     onStopCheck: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isRunning = restoredReport == null && uiState.status is ReportStatus.Running
+    val hasRestoredReport = restoredReport != null || restoredAutomaticResult != null
+    val isRunning = !hasRestoredReport && uiState.status is ReportStatus.Running
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
@@ -86,7 +88,7 @@ fun ReportScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            if (!isRunning && restoredReport == null) {
+            if (!isRunning && !hasRestoredReport) {
                 StartDiagnosticCard(
                     status = uiState.status,
                     onRunCheck = onRunCheck,
@@ -94,6 +96,10 @@ fun ReportScreen(
             }
 
             when {
+                restoredAutomaticResult != null -> AutomaticReportContent(
+                    result = restoredAutomaticResult,
+                )
+
                 restoredReport != null -> ReportContent(
                     report = restoredReport,
                     restored = true,
@@ -338,7 +344,10 @@ private fun UnifiedDiagnosticDetails(presentation: DiagnosticReportPresentation)
                 }
             }
             summary.prefixLength?.let { ResultRow("IPv4 前缀", "/$it") }
-            ResultRow("网关", summary.gateway ?: "未提供")
+            ResultRow(
+                DiagnosticPresentationMapper.networkGatewayLabel(summary.connectionType),
+                summary.gateway ?: "未提供",
+            )
             ResultRow("VPN", summary.vpnActive.toEnabledText())
             ResultRow("私人 DNS", summary.privateDnsActive.toEnabledText())
             summary.privateDnsServerName?.let { ResultRow("私人 DNS 名称", it) }
