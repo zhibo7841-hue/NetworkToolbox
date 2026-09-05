@@ -382,13 +382,13 @@ private fun DiagnosticVerificationCard(
             Text(comparison.summary, style = MaterialTheme.typography.bodyLarge)
 
             comparison.resolvedFindingCodes.forEach { code ->
-                Text("✓ 此前检测到的${code.verificationLabel()}本次未再次出现。")
+                Text("✓ ${code.resolvedVerificationMessage()}")
             }
             comparison.stillPresentFindingCodes.forEach { code ->
-                Text("! 此前检测到的${code.verificationLabel()}仍然存在。")
+                Text("! ${code.stillPresentVerificationMessage()}")
             }
             comparison.newFindingCodes.forEach { code ->
-                Text("! 本次检测发现新的${code.verificationLabel()}。")
+                Text("! ${code.newVerificationMessage()}")
             }
             comparison.inconclusiveFindingCodes.forEach { code ->
                 Text("? ${code.verificationLabel()}暂时无法确认。")
@@ -459,6 +459,24 @@ private fun DiagnosticFindingCode.verificationLabel(): String = when (this) {
     DiagnosticFindingCode.TARGET_TCP_TIMEOUT -> "目标连接响应"
     DiagnosticFindingCode.TARGET_TCP_PATH_UNCONFIRMED -> "目标地址路径"
     DiagnosticFindingCode.NETWORK_APPEARS_NORMAL -> "基础网络连接"
+}
+
+private fun DiagnosticFindingCode.resolvedVerificationMessage(): String = when (this) {
+    DiagnosticFindingCode.NO_ACTIVE_NETWORK ->
+        "此前检测到的‘没有可用的活动网络’本次未再次出现。"
+    else -> "此前检测到的${verificationLabel()}本次未再次出现。"
+}
+
+private fun DiagnosticFindingCode.stillPresentVerificationMessage(): String = when (this) {
+    DiagnosticFindingCode.NO_ACTIVE_NETWORK ->
+        "此前检测到的‘没有可用的活动网络’仍然存在。"
+    else -> "此前检测到的${verificationLabel()}仍然存在。"
+}
+
+private fun DiagnosticFindingCode.newVerificationMessage(): String = when (this) {
+    DiagnosticFindingCode.NO_ACTIVE_NETWORK ->
+        "本次检测发现当前没有可用的活动网络连接。"
+    else -> "本次检测发现新的${verificationLabel()}。"
 }
 
 private enum class ReportExportOperation { COPY_TEXT, SAVE_PDF, SHARE_PDF }

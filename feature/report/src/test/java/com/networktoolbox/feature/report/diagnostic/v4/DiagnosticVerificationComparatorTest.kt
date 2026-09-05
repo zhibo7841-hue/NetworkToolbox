@@ -4,11 +4,13 @@ import com.networktoolbox.core.common.diagnostic.DiagnosticCheck
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheckCode
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus
 import com.networktoolbox.core.common.diagnostic.DiagnosticConfidence
+import com.networktoolbox.core.common.diagnostic.DiagnosticConnectionType
 import com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosis
 import com.networktoolbox.core.common.diagnostic.DiagnosticEvidenceLevel
 import com.networktoolbox.core.common.diagnostic.DiagnosticFinding
 import com.networktoolbox.core.common.diagnostic.DiagnosticFindingCode
 import com.networktoolbox.core.common.diagnostic.DiagnosticIntent
+import com.networktoolbox.core.common.diagnostic.DiagnosticNetworkSummary
 import com.networktoolbox.core.common.diagnostic.DiagnosticRunStatus
 import com.networktoolbox.core.common.diagnostic.DiagnosticSeverity
 import com.networktoolbox.core.common.diagnostic.DiagnosticStage
@@ -228,6 +230,177 @@ class DiagnosticVerificationComparatorTest {
     }
 
     @Test
+    fun normalToNoActiveNetworkIsNewEvenWhenFingerprintChanges() {
+        val result = compare(
+            previous = report(fingerprint = "wifi-a"),
+            current = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                fingerprint = null,
+                connectionType = DiagnosticConnectionType.UNKNOWN,
+            ),
+        )
+
+        assertEquals(DiagnosticVerificationStatus.NEW_FINDINGS, result.status)
+        assertEquals(
+            listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+            result.newFindingCodes,
+        )
+        assertEquals("本次检测发现新的网络问题。", result.summary)
+    }
+
+    @Test
+    fun noActiveToNormalWifiIsResolvedBeforeFingerprintComparison() {
+        val result = compare(
+            previous = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                fingerprint = null,
+                connectionType = DiagnosticConnectionType.UNKNOWN,
+            ),
+            current = report(
+                fingerprint = "wifi-b",
+                connectionType = DiagnosticConnectionType.WIFI,
+            ),
+        )
+
+        assertEquals(
+            DiagnosticVerificationStatus.RESOLVED_OR_NOT_REPRODUCED,
+            result.status,
+        )
+        assertEquals(
+            listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+            result.resolvedFindingCodes,
+        )
+        assertEquals(
+            "此前检测到的‘没有可用的活动网络’本次未再次出现。",
+            result.summary,
+        )
+    }
+
+    @Test
+    fun noActiveToNormalMobileIsResolvedBeforeFingerprintComparison() {
+        val result = compare(
+            previous = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                fingerprint = "no-network",
+                connectionType = DiagnosticConnectionType.UNKNOWN,
+            ),
+            current = report(
+                fingerprint = "mobile-b",
+                connectionType = DiagnosticConnectionType.CELLULAR,
+            ),
+        )
+
+        assertEquals(
+            DiagnosticVerificationStatus.RESOLVED_OR_NOT_REPRODUCED,
+            result.status,
+        )
+        assertEquals(
+            listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+            result.resolvedFindingCodes,
+        )
+    }
+
+    @Test
+    fun noActiveToNoActiveIsStillPresentBeforeFingerprintComparison() {
+        val result = compare(
+            previous = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                fingerprint = "no-network-a",
+                connectionType = DiagnosticConnectionType.UNKNOWN,
+            ),
+            current = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                fingerprint = "no-network-b",
+                connectionType = DiagnosticConnectionType.UNKNOWN,
+            ),
+        )
+
+        assertEquals(DiagnosticVerificationStatus.STILL_PRESENT, result.status)
+        assertEquals(
+            listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+            result.stillPresentFindingCodes,
+        )
+        assertEquals(
+            "此前检测到的‘没有可用的活动网络’仍然存在。",
+            result.summary,
+        )
+    }
+
+    @Test
+    fun wifiToMobileRemainsContextChangedWhenBothRunsHaveActiveNetworks() {
+        val result = compare(
+            previous = report(
+                fingerprint = "wifi-a",
+                connectionType = DiagnosticConnectionType.WIFI,
+            ),
+            current = report(
+                fingerprint = "mobile-a",
+                connectionType = DiagnosticConnectionType.CELLULAR,
+            ),
+        )
+
+        assertEquals(DiagnosticVerificationStatus.CONTEXT_CHANGED, result.status)
+        assertEquals(false, result.sameNetworkContext)
+    }
+
+    @Test
+    fun wifiToDifferentWifiRemainsContextChanged() {
+        val result = compare(
+            previous = report(
+                fingerprint = "wifi-a",
+                connectionType = DiagnosticConnectionType.WIFI,
+            ),
+            current = report(
+                fingerprint = "wifi-b",
+                connectionType = DiagnosticConnectionType.WIFI,
+            ),
+        )
+
+        assertEquals(DiagnosticVerificationStatus.CONTEXT_CHANGED, result.status)
+        assertEquals(false, result.sameNetworkContext)
+    }
+
+    @Test
+    fun noActiveTransitionUsesStableCodeNotLocalizedText() {
+        val result = compare(
+            previous = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                findingTitle = "Previous localized title",
+                findingDescription = "Previous localized description",
+            ),
+            current = report(
+                findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+                findingTitle = "另一个本地化标题",
+                findingDescription = "另一个本地化说明",
+            ),
+        )
+
+        assertEquals(DiagnosticVerificationStatus.STILL_PRESENT, result.status)
+        assertEquals(
+            listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+            result.stillPresentFindingCodes,
+        )
+    }
+
+    @Test
+    fun currentNoActiveFindingKeepsAnalyzerDiagnosisUntouched() {
+        val current = report(
+            findings = listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK),
+            diagnosisStatus = com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus.ATTENTION,
+            diagnosisTitle = "设备当前没有可用网络",
+        )
+
+        val result = compare(previous = report(), current = current)
+
+        assertEquals(DiagnosticVerificationStatus.NEW_FINDINGS, result.status)
+        assertEquals(
+            com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus.ATTENTION,
+            current.analysis.diagnosis?.status,
+        )
+        assertEquals("设备当前没有可用网络", current.analysis.diagnosis?.title)
+    }
+
+    @Test
     fun incompleteCurrentRunHasNoVerdict() {
         val result = compare(
             previous = report(listOf(DiagnosticFindingCode.DNS_RESOLUTION_FAILURE)),
@@ -312,12 +485,25 @@ class DiagnosticVerificationComparatorTest {
         status: DiagnosticRunStatus = DiagnosticRunStatus.COMPLETED,
         target: DiagnosticTarget? = null,
         statuses: Map<DiagnosticStage, DiagnosticCheckStatus> = emptyMap(),
+        connectionType: DiagnosticConnectionType = DiagnosticConnectionType.WIFI,
+        findingTitle: String = "fixture title",
+        findingDescription: String = "fixture description",
+        diagnosisStatus: com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus =
+            com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus.NORMAL,
+        diagnosisTitle: String = "fixture",
     ): AutomaticDiagnosticResult {
         val checks = diagnosticStages.map { stage ->
             DiagnosticCheck(
                 code = stage.checkCode(),
                 stage = stage,
-                status = statuses[stage] ?: DiagnosticCheckStatus.PASS,
+                status = statuses[stage] ?: if (
+                    stage == DiagnosticStage.NETWORK_STATE &&
+                    DiagnosticFindingCode.NO_ACTIVE_NETWORK in findings
+                ) {
+                    DiagnosticCheckStatus.FAIL
+                } else {
+                    DiagnosticCheckStatus.PASS
+                },
                 severity = DiagnosticSeverity.HEALTHY,
                 summary = "fixture",
                 target = target.takeIf { stage == DiagnosticStage.TARGET },
@@ -330,16 +516,22 @@ class DiagnosticVerificationComparatorTest {
                 finishedAt = 1_100L,
                 durationMs = 100L,
                 fingerprint = fingerprint?.let(::NetworkFingerprint),
-                networkContextSummary = null,
+                networkContextSummary = DiagnosticNetworkSummary(connectionType = connectionType),
                 observations = emptyList(),
                 checks = checks,
                 intent = DiagnosticIntent(target = target),
             ),
             analysis = DiagnosticAnalysisResult(
-                findings = findings.map(::finding),
+                findings = findings.map {
+                    finding(
+                        code = it,
+                        title = findingTitle,
+                        description = findingDescription,
+                    )
+                },
                 diagnosis = DiagnosticDiagnosis(
-                    status = com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus.NORMAL,
-                    title = "fixture",
+                    status = diagnosisStatus,
+                    title = diagnosisTitle,
                     explanation = "fixture",
                     confidence = DiagnosticConfidence.HIGH,
                 ),
@@ -348,10 +540,14 @@ class DiagnosticVerificationComparatorTest {
         )
     }
 
-    private fun finding(code: DiagnosticFindingCode): DiagnosticFinding = DiagnosticFinding(
+    private fun finding(
+        code: DiagnosticFindingCode,
+        title: String = "fixture title",
+        description: String = "fixture description",
+    ): DiagnosticFinding = DiagnosticFinding(
         code = code,
-        title = "fixture title",
-        description = "fixture description",
+        title = title,
+        description = description,
         severity = when (code) {
             DiagnosticFindingCode.NO_ACTIVE_NETWORK -> DiagnosticSeverity.ERROR
             DiagnosticFindingCode.DNS_RESOLUTION_FAILURE,

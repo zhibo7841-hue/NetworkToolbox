@@ -1,6 +1,7 @@
 package com.networktoolbox.feature.report.diagnostic.v4
 
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus
+import com.networktoolbox.core.common.diagnostic.DiagnosticCheckCode
 import com.networktoolbox.core.common.diagnostic.DiagnosticFinding
 import com.networktoolbox.core.common.diagnostic.DiagnosticFindingCode
 import com.networktoolbox.core.common.diagnostic.DiagnosticRunStatus
@@ -83,10 +84,15 @@ object DiagnosticVerificationComparator {
             )
         }
 
+        val previousNoActiveNetwork = previous.hasConfirmedNoActiveNetworkFinding()
+        val currentNoActiveNetwork = current.hasConfirmedNoActiveNetworkFinding()
+        val prioritizeNoActiveNetwork = currentNoActiveNetwork ||
+            (previousNoActiveNetwork && current.hasConfirmedActiveNetworkEvidence())
+
         val previousTarget = previous.evidence.intent.target
         val currentTarget = current.evidence.intent.target
         val sameTarget = targetsEqual(previousTarget, currentTarget)
-        if (sameTarget == false) {
+        if (!prioritizeNoActiveNetwork && sameTarget == false) {
             return contextChanged(
                 previousStatus = previousStatus,
                 currentStatus = currentStatus,
@@ -95,7 +101,7 @@ object DiagnosticVerificationComparator {
                 summary = "本次检测目标与上次不同，无法直接比较两次诊断结果。",
             )
         }
-        if (sameTarget == null) {
+        if (!prioritizeNoActiveNetwork && sameTarget == null) {
             return inconclusive(
                 previousStatus = previousStatus,
                 currentStatus = currentStatus,
@@ -107,16 +113,19 @@ object DiagnosticVerificationComparator {
 
         val previousFingerprint = previous.evidence.fingerprint
         val currentFingerprint = current.evidence.fingerprint
-        if (previousFingerprint == null || currentFingerprint == null) {
+        val sameNetworkContext = fingerprintsEqualOrUnknown(previous, current)
+        if (!prioritizeNoActiveNetwork &&
+            (previousFingerprint == null || currentFingerprint == null)
+        ) {
             return inconclusive(
                 previousStatus = previousStatus,
                 currentStatus = currentStatus,
                 sameTarget = sameTarget,
-                sameNetworkContext = null,
+                sameNetworkContext = sameNetworkContext,
                 summary = "网络环境指纹不完整，无法确认两次诊断是否处于同一网络环境。",
             )
         }
-        if (previousFingerprint != currentFingerprint) {
+        if (!prioritizeNoActiveNetwork && previousFingerprint != currentFingerprint) {
             return contextChanged(
                 previousStatus = previousStatus,
                 currentStatus = currentStatus,
@@ -192,6 +201,26 @@ object DiagnosticVerificationComparator {
             else -> DiagnosticVerificationStatus.UNCHANGED
         }
 
+        val comparisonSummary = when {
+            prioritizeNoActiveNetwork &&
+                previousNoActiveNetwork &&
+                !currentNoActiveNetwork &&
+                resolved == listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK) &&
+                stillPresent.isEmpty() &&
+                newFindings.isEmpty() ->
+                "此前检测到的‘没有可用的活动网络’本次未再次出现。"
+
+            prioritizeNoActiveNetwork &&
+                previousNoActiveNetwork &&
+                currentNoActiveNetwork &&
+                stillPresent == listOf(DiagnosticFindingCode.NO_ACTIVE_NETWORK) &&
+                resolved.isEmpty() &&
+                newFindings.isEmpty() ->
+                "此前检测到的‘没有可用的活动网络’仍然存在。"
+
+            else -> status.summary()
+        }
+
         return DiagnosticVerificationResult(
             status = status,
             resolvedFindingCodes = resolved,
@@ -203,11 +232,31 @@ object DiagnosticVerificationComparator {
             newContextFindingCodes = newContext,
             previousRunStatus = previousStatus,
             currentRunStatus = currentStatus,
-            sameNetworkContext = true,
-            sameTarget = true,
-            summary = status.summary(),
+            sameNetworkContext = sameNetworkContext,
+            sameTarget = sameTarget,
+            summary = comparisonSummary,
         )
     }
+
+    /**
+     * The stable finding code is necessary but not sufficient: the network
+     * stage must explicitly fail, otherwise a localized label cannot create a
+     * no-network transition on its own.
+     */
+    private fun AutomaticDiagnosticResult.hasConfirmedNoActiveNetworkFinding(): Boolean =
+        analysis.findings.any { it.code == DiagnosticFindingCode.NO_ACTIVE_NETWORK } &&
+            evidence.checks.any { check ->
+                check.code == DiagnosticCheckCode.NETWORK_STATE &&
+                    check.stage == DiagnosticStage.NETWORK_STATE &&
+                    check.status == DiagnosticCheckStatus.FAIL
+            }
+
+    private fun AutomaticDiagnosticResult.hasConfirmedActiveNetworkEvidence(): Boolean =
+        evidence.checks.any { check ->
+            check.code == DiagnosticCheckCode.NETWORK_STATE &&
+                check.stage == DiagnosticStage.NETWORK_STATE &&
+                check.status == DiagnosticCheckStatus.PASS
+        }
 
     private fun contextChanged(
         previousStatus: DiagnosticRunStatus,
