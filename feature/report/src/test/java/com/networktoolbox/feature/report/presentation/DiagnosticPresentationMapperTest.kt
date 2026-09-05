@@ -12,6 +12,15 @@ import com.networktoolbox.core.common.diagnostic.DiagnosticSeverity
 import com.networktoolbox.core.common.diagnostic.DiagnosticStage
 import com.networktoolbox.core.common.diagnostic.DiagnosticTarget
 import com.networktoolbox.core.common.diagnostic.DiagnosticTargetKind
+import com.networktoolbox.core.network.model.ConnectionType
+import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticCheck as LegacyCheck
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticCheckStatus as LegacyCheckStatus
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticFindingV2 as LegacyFinding
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticOverallStatus
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticSeverity as LegacySeverity
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage as LegacyStage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -198,6 +207,275 @@ class DiagnosticPresentationMapperTest {
         assertEquals("连接超时", display)
         assertFalse(display.contains("TIMEOUT"))
     }
+
+    @Test
+    fun historyMapsIpConfigurationByStableIdInsteadOfLegacyDisplayStage() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                checks = listOf(
+                    legacyCheck("NETWORK_CONTEXT", LegacyStage.NETWORK_CONTEXT),
+                    // Older adapter versions stored both checks under the same
+                    // legacy display stage. The stable ID must win here.
+                    legacyCheck("IP_CONFIGURATION", LegacyStage.NETWORK_CONTEXT),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf(DiagnosticStage.NETWORK_STATE, DiagnosticStage.IP_CONFIGURATION),
+            DiagnosticPresentationMapper
+                .stageSummariesForPresentation(presentation.checks)
+                .map { it.stage },
+        )
+    }
+
+    @Test
+    fun historyAggregatesAllPublicChecksIntoOneSummary() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                checks = listOf(
+                    legacyCheck(
+                        id = "PUBLIC_CONNECTIVITY",
+                        stage = LegacyStage.PUBLIC_CONNECTIVITY,
+                        target = "223.5.5.5",
+                    ),
+                    legacyCheck(
+                        id = "PUBLIC_CONNECTIVITY",
+                        stage = LegacyStage.PUBLIC_CONNECTIVITY,
+                        target = "1.1.1.1",
+                    ),
+                ),
+            ),
+        )
+
+        val summary = DiagnosticPresentationMapper
+            .stageSummariesForPresentation(presentation.checks)
+            .single()
+
+        assertEquals(DiagnosticStage.INTERNET, summary.stage)
+        assertEquals("2 个公网探测目标均获得有效响应。", summary.summary)
+        assertEquals(2, summary.checks.size)
+    }
+
+    @Test
+    fun historyMixedPublicChecksStayOneNoticeSummary() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                checks = listOf(
+                    legacyCheck(
+                        id = "PUBLIC_CONNECTIVITY",
+                        stage = LegacyStage.PUBLIC_CONNECTIVITY,
+                        target = "223.5.5.5",
+                    ),
+                    legacyCheck(
+                        id = "PUBLIC_CONNECTIVITY",
+                        stage = LegacyStage.PUBLIC_CONNECTIVITY,
+                        status = LegacyCheckStatus.UNKNOWN,
+                        severity = LegacySeverity.NOTICE,
+                        target = "1.1.1.1",
+                    ),
+                ),
+            ),
+        )
+
+        val summary = DiagnosticPresentationMapper
+            .stageSummariesForPresentation(presentation.checks)
+            .single()
+
+        assertEquals(DiagnosticSeverity.NOTICE, summary.severity)
+        assertTrue(summary.summary.contains("部分探测结果存在差异"))
+    }
+
+    @Test
+    fun historyKeepsBothPublicTechnicalTargetsAndAddsPort() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                checks = listOf(
+                    legacyCheck(
+                        id = "PUBLIC_CONNECTIVITY",
+                        stage = LegacyStage.PUBLIC_CONNECTIVITY,
+                        target = "223.5.5.5",
+                    ),
+                    legacyCheck(
+                        id = "PUBLIC_CONNECTIVITY",
+                        stage = LegacyStage.PUBLIC_CONNECTIVITY,
+                        target = "1.1.1.1",
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("223.5.5.5:443", "1.1.1.1:443"),
+            presentation.checks.mapNotNull { check ->
+                DiagnosticPresentationMapper.targetDisplayName(check)
+            },
+        )
+    }
+
+    @Test
+    fun historyDoesNotReuseMachineSummary() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                checks = listOf(
+                    legacyCheck(
+                        id = "NETWORK_CONTEXT",
+                        stage = LegacyStage.NETWORK_CONTEXT,
+                        summary = "CONNECT_SUCCESS",
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals("已发现活动网络。", presentation.checks.single().summary)
+        assertFalse(presentation.checks.single().summary.contains("CONNECT_SUCCESS"))
+    }
+
+    @Test
+    fun healthyNormalFindingIsHiddenButRetainedForTechnicalDetails() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                findings = listOf(
+                    LegacyFinding(
+                        id = "NETWORK_APPEARS_NORMAL",
+                        severity = LegacySeverity.HEALTHY,
+                        title = "基础网络连接正常",
+                        description = "检测结果正常。",
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(1, presentation.findings.size)
+        assertTrue(
+            DiagnosticPresentationMapper
+                .visibleFindingPresentations(presentation.findings)
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun noticeFindingUsesEnvironmentFramingForHistory() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                findings = listOf(
+                    LegacyFinding(
+                        id = "VPN_ACTIVE",
+                        severity = LegacySeverity.NOTICE,
+                        title = "检测到 VPN",
+                        description = "当前结果可能来自 VPN 隧道后的网络环境。",
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            "网络环境提示",
+            DiagnosticPresentationMapper.findingsTitleForPresentation(
+                DiagnosticPresentationMapper.visibleFindingPresentations(presentation.findings),
+            ),
+        )
+    }
+
+    @Test
+    fun noMaterialFindingUsesConservativeWording() {
+        assertEquals(
+            "未发现明确的网络故障。",
+            DiagnosticPresentationMapper.noMaterialFindingMessage(),
+        )
+    }
+
+    @Test
+    fun healthyHistoryUsesNormalRecommendationFraming() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(overallStatus = DiagnosticOverallStatus.HEALTHY),
+        )
+
+        assertEquals(
+            "如果仍然遇到问题",
+            DiagnosticPresentationMapper.recommendationSectionTitle(
+                presentation.overallStatus,
+            ),
+        )
+    }
+
+    @Test
+    fun legacySchemaTwoStageFallbackRemainsReadable() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                checks = listOf(
+                    legacyCheck(
+                        id = "LEGACY_NETWORK_CHECK",
+                        stage = LegacyStage.NETWORK_CONTEXT,
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(DiagnosticStage.NETWORK_STATE, presentation.checks.single().stage)
+        assertEquals("已发现活动网络。", presentation.checks.single().summary)
+    }
+
+    @Test
+    fun historyNetworkSnapshotRetainsVpnContextForConservativeFakeIpText() {
+        val presentation = DiagnosticPresentationMapper.forHistory(
+            historyReport(
+                networkSnapshot = NetworkContext(
+                    connectionType = ConnectionType.WIFI,
+                    ipv4Address = "10.0.0.2",
+                    ipv6Address = null,
+                    gateway = "10.0.0.1",
+                    dnsServers = listOf("10.0.0.1"),
+                    vpnActive = true,
+                    wifiName = null,
+                    wifiSignalLevel = null,
+                ),
+            ),
+        )
+
+        assertTrue(
+            DiagnosticPresentationMapper
+                .fakeIpMessage(presentation.networkSummary?.vpnActive)
+                .contains("VPN 隧道后的网络环境"),
+        )
+    }
+
+    private fun historyReport(
+        checks: List<LegacyCheck> = emptyList(),
+        findings: List<LegacyFinding> = emptyList(),
+        overallStatus: DiagnosticOverallStatus = DiagnosticOverallStatus.HEALTHY,
+        overallSeverity: LegacySeverity = LegacySeverity.HEALTHY,
+        networkSnapshot: NetworkContext? = null,
+    ) = DiagnosticReportV2(
+        timestamp = 1_000L,
+        durationMs = 25L,
+        overallStatus = overallStatus,
+        overallSeverity = overallSeverity,
+        summary = "基础网络连接正常",
+        networkSnapshot = networkSnapshot,
+        checks = checks,
+        findings = findings,
+        recommendations = emptyList(),
+    )
+
+    private fun legacyCheck(
+        id: String,
+        stage: LegacyStage,
+        status: LegacyCheckStatus = LegacyCheckStatus.PASS,
+        severity: LegacySeverity = LegacySeverity.HEALTHY,
+        summary: String = "machine summary",
+        target: String? = null,
+        method: String? = "SYSTEM_REACHABILITY",
+    ) = LegacyCheck(
+        id = id,
+        stage = stage,
+        name = "legacy name",
+        status = status,
+        severity = severity,
+        summary = summary,
+        target = target,
+        method = method,
+    )
 
     private fun publicCheck(
         host: String,

@@ -47,6 +47,9 @@ import kotlin.math.round
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticStage
 import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.presentation.DiagnosticPresentationMapper
+import com.networktoolbox.feature.report.presentation.DiagnosticCheckPresentation
+import com.networktoolbox.feature.report.presentation.DiagnosticFindingPresentation
+import com.networktoolbox.feature.report.presentation.DiagnosticReportPresentation
 import com.networktoolbox.feature.report.presentation.DiagnosticStageSummary
 import com.networktoolbox.feature.report.presentation.ReportProgress
 import com.networktoolbox.feature.report.presentation.ReportStageStatus
@@ -198,19 +201,36 @@ private fun RunningContent(
 private fun AutomaticReportContent(
     result: AutomaticDiagnosticResult,
 ) {
-    val diagnosis = result.analysis.diagnosis
-    val stageSummaries = DiagnosticPresentationMapper.stageSummaries(result.evidence.checks)
-    val visibleFindings = DiagnosticPresentationMapper.visibleFindings(result.analysis.findings)
-    var detailsExpanded by rememberSaveable(result.evidence.startedAt) {
-        mutableStateOf(false)
-    }
+    UnifiedDiagnosticReportContent(
+        presentation = DiagnosticPresentationMapper.forLive(result),
+        stateKey = result.evidence.startedAt,
+    )
+}
+
+/**
+ * The live report and schema-2 history both render through this composable.
+ * Only the source adapter differs; the user-facing hierarchy is shared.
+ */
+@Composable
+private fun UnifiedDiagnosticReportContent(
+    presentation: DiagnosticReportPresentation,
+    stateKey: Long,
+) {
+    val stageSummaries = DiagnosticPresentationMapper.stageSummariesForPresentation(
+        presentation.checks,
+    )
+    val visibleFindings = DiagnosticPresentationMapper.visibleFindingPresentations(
+        presentation.findings,
+    )
+    val hasNoticeStage = stageSummaries.any { it.severity == AutomaticDiagnosticSeverity.NOTICE }
+    var detailsExpanded by rememberSaveable(stateKey) { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AutomaticOverview(diagnosis?.status)
+        AutomaticOverview(presentation.overallStatus)
 
         ReportSectionCard(title = "诊断结论") {
             Text(
-                text = diagnosis?.explanation ?: "本次检测没有形成可展示的整体结论。",
+                text = presentation.explanation,
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
@@ -223,23 +243,35 @@ private fun AutomaticReportContent(
             }
         }
 
-        ReportSectionCard(title = DiagnosticPresentationMapper.findingsTitle(visibleFindings)) {
-            if (visibleFindings.isEmpty()) {
-                Text("未发现需要关注的现象。")
-            } else {
-                visibleFindings
-                    .take(MAX_VISIBLE_FINDINGS)
-                    .forEach { finding -> AutomaticFindingItem(finding) }
+        // A healthy NETWORK_APPEARS_NORMAL finding is technical evidence, not
+        // a concise finding card. A notice-only stage still gets the shared,
+        // conservative empty wording so the user is not told that a fault was
+        // found when no material finding exists.
+        if (visibleFindings.isNotEmpty() || hasNoticeStage) {
+            ReportSectionCard(
+                title = DiagnosticPresentationMapper.findingsTitleForPresentation(
+                    visibleFindings,
+                    hasNoticeStage = hasNoticeStage,
+                ),
+            ) {
+                if (visibleFindings.isEmpty()) {
+                    Text(DiagnosticPresentationMapper.noMaterialFindingMessage())
+                } else {
+                    visibleFindings
+                        .take(MAX_VISIBLE_FINDINGS)
+                        .forEach { finding -> ReportFindingItem(finding) }
+                }
             }
         }
 
-        result.analysis.recommendations
+        presentation.recommendations
+            .sortedBy { it.priority }
             .take(MAX_VISIBLE_RECOMMENDATIONS)
             .takeIf(List<*>::isNotEmpty)
             ?.let { recommendations ->
                 ReportSectionCard(
                     title = DiagnosticPresentationMapper.recommendationSectionTitle(
-                        diagnosis?.status,
+                        presentation.overallStatus,
                     ),
                 ) {
                     recommendations.forEachIndexed { index, recommendation ->
@@ -247,11 +279,15 @@ private fun AutomaticReportContent(
                             text = "${index + 1}. ${recommendation.action}",
                             style = MaterialTheme.typography.bodyLarge,
                         )
-                        Text(
-                            text = recommendation.reason,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        recommendation.reason
+                            ?.takeIf(String::isNotBlank)
+                            ?.let { reason ->
+                                Text(
+                                    text = reason,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                     }
                 }
             }
@@ -263,8 +299,209 @@ private fun AutomaticReportContent(
             Text(if (detailsExpanded) "收起详细信息" else "查看详细信息")
         }
         if (detailsExpanded) {
-            AutomaticDiagnosticDetails(result)
+            UnifiedDiagnosticDetails(presentation)
         }
+    }
+}
+
+@Composable
+private fun ReportFindingItem(finding: DiagnosticFindingPresentation) {
+    val (marker, label, color) = finding.severity.findingDisplayInfo()
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = "$marker $label · ${finding.title}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+        )
+        Text(finding.description, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun UnifiedDiagnosticDetails(presentation: DiagnosticReportPresentation) {
+    val summary = presentation.networkSummary
+    ReportSectionCard(title = "网络环境") {
+        if (summary == null) {
+            Text("未获得网络环境信息。")
+        } else {
+            ResultRow("网络类型", summary.connectionType.displayName())
+            if (summary.localAddressSummary.isEmpty()) {
+                ResultRow("本机地址", "未检测到")
+            } else {
+                Text(
+                    "本机地址",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                summary.localAddressSummary.take(MAX_DETAIL_ADDRESSES).forEach { address ->
+                    Text(address, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            summary.prefixLength?.let { ResultRow("IPv4 前缀", "/$it") }
+            ResultRow("网关", summary.gateway ?: "未提供")
+            ResultRow("VPN", summary.vpnActive.toEnabledText())
+            ResultRow("私人 DNS", summary.privateDnsActive.toEnabledText())
+            summary.privateDnsServerName?.let { ResultRow("私人 DNS 名称", it) }
+            ResultRow("系统联网验证", summary.validated.toValidatedText())
+            Text(
+                "网络配置 DNS",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (summary.configuredDnsServers.isEmpty()) {
+                Text("未配置")
+            } else {
+                summary.configuredDnsServers.take(MAX_DETAIL_DNS).forEach { server ->
+                    Text(server, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+
+    presentation.checks
+        .filter { it.stage != AutomaticDiagnosticStage.NETWORK_STATE &&
+            it.stage != AutomaticDiagnosticStage.IP_CONFIGURATION
+        }
+        .take(MAX_DETAIL_CHECKS)
+        .groupBy { it.stage }
+        .forEach { (stage, checks) ->
+            ReportSectionCard(title = stage.detailDisplayName()) {
+                checks.forEach { check ->
+                    ResultRow("结果", check.status.displayName())
+                    DiagnosticPresentationMapper.targetDisplayName(check)?.let { target ->
+                        ResultRow("目标", target)
+                    }
+                    check.method?.let { method ->
+                        ResultRow("检测方式", DiagnosticPresentationMapper.methodDisplayName(method))
+                    }
+                    Text(
+                        check.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val observations = presentation.observations.filter {
+                        it.id in check.observationIds
+                    }
+                    DiagnosticObservationDetails(
+                        observations = observations,
+                        vpnActive = summary?.vpnActive,
+                    )
+                    DiagnosticRawDataDetails(
+                        check = check,
+                        vpnActive = summary?.vpnActive,
+                    )
+                }
+            }
+        }
+
+    presentation.findings
+        .take(MAX_VISIBLE_FINDINGS)
+        .takeIf(List<DiagnosticFindingPresentation>::isNotEmpty)
+        ?.let { findings ->
+            ReportSectionCard(title = "分析依据") {
+                findings.forEach { finding ->
+                    val evidence = listOfNotNull(
+                        finding.confidence?.displayName(),
+                        finding.evidenceLevel?.displayName(),
+                    ).joinToString(" · ")
+                    Text(
+                        listOf(finding.title, evidence)
+                            .filter(String::isNotBlank)
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (finding.confidence == null && finding.evidenceLevel == null) {
+                        Text(
+                            finding.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+}
+
+@Composable
+private fun DiagnosticRawDataDetails(
+    check: DiagnosticCheckPresentation,
+    vpnActive: Boolean?,
+) {
+    if (check.rawData.isEmpty()) return
+
+    when (check.stage) {
+        AutomaticDiagnosticStage.GATEWAY -> {
+            check.rawData["reason"]
+                ?.takeIf { it == "cellular_gateway_not_applicable" }
+                ?.let {
+                    Text(
+                        "当前网络不适用传统本地网关探测。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            check.rawData["avgLatencyMs"]?.let {
+                ResultRow("平均延迟", formatMilliseconds(it))
+            }
+        }
+
+        AutomaticDiagnosticStage.INTERNET -> {
+            check.rawData["targetOutcomes"]
+                ?.split(';')
+                ?.filter(String::isNotBlank)
+                ?.forEach { outcome -> Text(formatTargetOutcome(outcome)) }
+            check.rawData["domainAccess"]?.let {
+                ResultRow("实际域名访问", it.toStatusDisplayName())
+            }
+        }
+
+        AutomaticDiagnosticStage.DNS -> {
+            check.rawData["requestedTypes"]?.let { ResultRow("查询类型", it) }
+            check.rawData["recordCounts"]
+                ?.split(',')
+                ?.filter(String::isNotBlank)
+                ?.forEach { count ->
+                    val type = count.substringBefore('=')
+                    val value = count.substringAfter('=', "0")
+                    ResultRow("$type 记录", "$value 条")
+                }
+            check.rawData["durationMs"]?.let {
+                ResultRow("查询耗时", formatMilliseconds(it))
+            }
+            check.rawData["recordCount"]?.let { ResultRow("记录数量", it) }
+            check.rawData["fakeIpObserved"]
+                ?.toBooleanStrictOrNull()
+                ?.takeIf { it }
+                ?.let {
+                    Text(
+                        DiagnosticPresentationMapper.fakeIpMessage(vpnActive),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            check.rawData["error"]
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    Text(
+                        "查询未成功，请结合状态和建议判断。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+        }
+
+        AutomaticDiagnosticStage.TARGET -> {
+            check.rawData["addresses"]
+                ?.split(',')
+                ?.filter(String::isNotBlank)
+                ?.forEach { address -> Text("地址：$address") }
+        }
+
+        AutomaticDiagnosticStage.NETWORK_STATE,
+        AutomaticDiagnosticStage.IP_CONFIGURATION,
+        AutomaticDiagnosticStage.ADVANCED_PATH,
+        -> Unit
     }
 }
 
@@ -542,69 +779,16 @@ private fun StageProgressRow(
     Text("$marker $label", color = color)
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 private fun ReportContent(
     report: DiagnosticReportV2,
     restored: Boolean,
 ) {
-    var detailsExpanded by rememberSaveable(report.timestamp, restored) {
-        mutableStateOf(false)
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ReportOverview(report)
-
-        ReportSectionCard(title = "诊断结论") {
-            Text(report.summary, style = MaterialTheme.typography.bodyLarge)
-        }
-
-        ReportSectionCard(title = "排查结果") {
-            val checks = report.checks.filter { it.stage in DISPLAY_STAGES }
-            if (checks.isEmpty()) {
-                Text("暂无阶段结果。")
-            } else {
-                checks.forEach { check -> DiagnosticCheckRow(check) }
-            }
-        }
-
-        ReportSectionCard(title = "发现") {
-            if (report.findings.isEmpty()) {
-                Text("未发现需要关注的现象。")
-            } else {
-                report.findings.forEach { finding -> FindingItem(finding) }
-            }
-        }
-
-        if (report.shouldShowRecommendations()) {
-            ReportSectionCard(title = "建议") {
-                report.recommendations
-                    .sortedBy { it.priority }
-                    .take(3)
-                    .forEach { recommendation ->
-                        Text(
-                            "${recommendation.priority}. ${recommendation.action}",
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        recommendation.reason?.let {
-                            Text(
-                                it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-            }
-        }
-
-        TextButton(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { detailsExpanded = !detailsExpanded },
-        ) {
-            Text(if (detailsExpanded) "收起详细信息" else "查看详细信息")
-        }
-        if (detailsExpanded) {
-            DiagnosticDetails(report)
-        }
-    }
+    UnifiedDiagnosticReportContent(
+        presentation = DiagnosticPresentationMapper.forHistory(report),
+        stateKey = report.timestamp,
+    )
 }
 
 @Composable
