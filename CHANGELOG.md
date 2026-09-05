@@ -6,6 +6,26 @@
 
 - Updated GitHub Actions dependencies to remove deprecated Node.js 20 runtime warnings.
 
+## [0.4.0] - Ready for Release
+
+### Added
+
+- Automatic Diagnostics Phase 2 with progressive network, IP, gateway, public
+  connectivity, and DNS evidence collection.
+- Conservative evidence-driven diagnostic rules with VPN and Fake-IP context,
+  mobile gateway `NOT_APPLICABLE` handling, and public-probe conflict handling.
+- Retry / Verify for repeating a diagnostic and comparing the resulting evidence.
+- Diagnostic Report Phase 1 with complete in-app reports and schema 3 local
+  history snapshots.
+
+### Improved
+
+- Reopen diagnostic reports from local History without rerunning probes.
+- Copy report text, save PDF, and share PDF on explicit user action.
+- Local-only report generation with Chinese, English, and technical-token-safe
+  PDF wrapping.
+- Report privacy notice and related diagnostic presentation.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added
