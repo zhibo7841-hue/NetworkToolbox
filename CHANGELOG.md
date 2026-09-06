@@ -6,7 +6,7 @@
 
 - Updated GitHub Actions dependencies to remove deprecated Node.js 20 runtime warnings.
 
-## [0.4.0] - Ready for Release
+## [0.4.0] - 2026-09-06
 
 ### Added
 
