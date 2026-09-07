@@ -78,51 +78,10 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp, vertical = NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
         ) {
-            DashboardBrandHeader()
-
-            NetworkSummaryCard(uiState.networkContext)
-
-            NetworkCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
-                Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
-                    ) {
-                        ToolIconContainer(
-                            icon = Icons.Outlined.Assessment,
-                            accent = NetworkToolAccent.PRIMARY,
-                            contentDescription = null,
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                "自动诊断",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Text(
-                                "自动检查当前网络环境",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Text(
-                                "仅在本机执行，不上传诊断数据",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                    PrimaryActionButton(
-                        onClick = onOpenReport,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("开始网络诊断")
-                    }
-                }
-            }
+            NetworkSummaryCard(
+                context = uiState.networkContext,
+                onOpenReport = onOpenReport,
+            )
 
             SectionHeader(
                 title = "快速工具",
@@ -164,7 +123,10 @@ private fun DashboardToolGrid(items: List<DashboardToolDefinition>) {
 }
 
 @Composable
-internal fun NetworkSummaryCard(context: NetworkContext) {
+internal fun NetworkSummaryCard(
+    context: NetworkContext,
+    onOpenReport: () -> Unit,
+) {
     var showDetails by rememberSaveable { mutableStateOf(false) }
     val ipv6Addresses = NetworkStatusPresentation.ipv6Addresses(context)
     val ipv6Status = NetworkStatusPresentation.ipv6Status(ipv6Addresses)
@@ -348,6 +310,23 @@ internal fun NetworkSummaryCard(context: NetworkContext) {
                 DetailRow("VPN", context.vpnActive.vpnDisplayName())
                 DetailRow("系统联网验证", context.validated.validationDisplayName())
             }
+        }
+
+        HorizontalDivider()
+
+        Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
+            Text("网络诊断", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "本地诊断 · 不上传数据",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        PrimaryActionButton(
+            onClick = onOpenReport,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("开始网络诊断")
         }
     }
 }

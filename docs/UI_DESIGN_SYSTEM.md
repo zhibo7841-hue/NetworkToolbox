@@ -246,15 +246,16 @@ being introduced.
 ## Home pattern
 
 The Home destination is the compact entry point for current network context and
-the most-used checks. Its vertical order is stable:
+the most-used checks. It does not repeat the App Icon, App Name, or a large
+brand header after the user has entered NetworkToolbox. Its vertical order is
+stable:
 
-1. Compact brand header.
-2. Network summary card.
-3. Automatic diagnostic primary action.
-4. Quick Tools, limited to four existing tools.
-5. Recent Diagnosis.
+1. Network summary hero.
+2. Automatic diagnostic primary action within the hero card.
+3. Quick Tools, limited to four existing tools.
+4. Recent Diagnosis.
 
-The network summary card uses the shared `NetworkCard` and keeps the first view
+The network summary hero uses the shared `NetworkCard` and keeps the first view
 short. It shows a real network identity and a conservative connection status,
 then compact IPv4, gateway, DNS-count, IPv6-status, and Wi-Fi-signal values
 where those fields apply. Full addresses and other reliable technical values
@@ -263,10 +264,12 @@ Ethernet, IPv4-only, IPv6-only, large-font, and long-DNS-list states instead of
 forcing one fixed set of fields onto every network type.
 
 Automatic diagnosis is the single prominent action on Home and uses
-`PrimaryActionButton`. It keeps the existing navigation callback and does not
-start a second data source or a new background check. Recent Diagnosis is a
-compact real-data preview; an empty history uses `暂无诊断记录` rather than
-placeholder content.
+`PrimaryActionButton` inside the network hero. It keeps the existing navigation
+callback and does not start a second data source or a new background check.
+Supporting copy is intentionally short (`本地诊断 · 不上传数据`); complete
+privacy explanation remains in the appropriate diagnostics and settings
+surfaces. Recent Diagnosis is a compact real-data preview; an empty history
+uses `暂无诊断记录` rather than placeholder content.
 
 ## Tools pattern
 

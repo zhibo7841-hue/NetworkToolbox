@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -144,28 +143,5 @@ internal fun SummaryMetric(
                 MaterialTheme.typography.bodyLarge
             },
         )
-    }
-}
-
-@Composable
-internal fun DashboardBrandHeader() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
-    ) {
-        ToolIconContainer(
-            icon = Icons.Outlined.Lan,
-            accent = NetworkToolAccent.PRIMARY,
-            contentDescription = null,
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("NetworkToolbox", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "首页 · 网络状态与常用入口",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }

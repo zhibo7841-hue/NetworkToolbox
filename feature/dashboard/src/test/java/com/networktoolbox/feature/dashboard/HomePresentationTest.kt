@@ -1,10 +1,20 @@
 package com.networktoolbox.feature.dashboard
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HomePresentationTest {
+    @Test
+    fun homeUsesNetworkFirstOrderWithoutBrandHeader() {
+        assertEquals(
+            listOf("network", "diagnostic", "quick-tools", "recent-diagnosis"),
+            HomePresentation.sectionOrder,
+        )
+        assertFalse(HomePresentation.sectionOrder.contains("brand-header"))
+    }
+
     @Test
     fun emptyRecentDiagnosis_usesExplicitEmptyState() {
         assertEquals("暂无诊断记录", HomePresentation.recentDiagnosticBody(null))
