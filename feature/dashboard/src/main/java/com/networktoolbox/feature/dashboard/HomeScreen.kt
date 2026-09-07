@@ -1,6 +1,7 @@
 package com.networktoolbox.feature.dashboard
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,12 +10,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.SignalCellular4Bar
 import androidx.compose.material.icons.outlined.VpnKey
@@ -22,6 +28,7 @@ import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.Wifi1Bar
 import androidx.compose.material.icons.outlined.Wifi2Bar
 import androidx.compose.material.icons.outlined.WifiOff
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,7 +51,9 @@ import com.networktoolbox.core.designsystem.NetworkStatusChip
 import com.networktoolbox.core.designsystem.NetworkToolAccent
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
+import com.networktoolbox.core.designsystem.NetworkToolboxStatusVisuals
 import com.networktoolbox.core.designsystem.PrimaryActionButton
+import com.networktoolbox.core.designsystem.StatusVisualState
 import com.networktoolbox.core.designsystem.ToolIconContainer
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.dashboard.presentation.NetworkHeroIconKind
@@ -59,6 +68,7 @@ data class RecentHistoryPreview(
     val title: String,
     val summary: String,
     val timestamp: Long,
+    val status: RecentDiagnosticStatus = RecentDiagnosticStatus.UNKNOWN,
 )
 
 @Composable
@@ -114,23 +124,25 @@ fun HomeScreen(
 
 @Composable
 private fun DashboardToolGrid(items: List<DashboardToolDefinition>) {
-    items.chunked(2).forEach { rowItems ->
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
-        ) {
-            rowItems.forEach { item ->
-                QuickToolCard(
-                    icon = item.icon,
-                    title = item.title,
-                    description = item.description,
-                    accent = item.accent,
-                    onClick = item.onClick,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            if (rowItems.size == 1) {
-                Spacer(modifier = Modifier.weight(1f))
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+            ) {
+                rowItems.forEach { item ->
+                    QuickToolCard(
+                        icon = item.icon,
+                        title = item.title,
+                        description = item.description,
+                        accent = item.accent,
+                        onClick = item.onClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowItems.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }
@@ -409,6 +421,13 @@ private fun RecentDiagnosticCard(
     recentHistory: RecentHistoryPreview?,
     onOpenHistory: () -> Unit,
 ) {
+    val status = HomePresentation.recentDiagnosticStatus(recentHistory)
+    val statusState = status.toStatusVisualState()
+    val statusVisual = NetworkToolboxStatusVisuals.resolve(
+        state = statusState,
+        darkTheme = isSystemInDarkTheme(),
+    )
+
     NetworkCard(
         modifier = Modifier.clickable(
             role = androidx.compose.ui.semantics.Role.Button,
@@ -420,25 +439,48 @@ private fun RecentDiagnosticCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
-            ToolIconContainer(
-                icon = Icons.Outlined.Assessment,
-                accent = NetworkToolAccent.AMBER,
-                contentDescription = null,
-            )
+            if (recentHistory == null) {
+                ToolIconContainer(
+                    icon = Icons.Outlined.Assessment,
+                    accent = NetworkToolAccent.PRIMARY,
+                    contentDescription = null,
+                )
+            } else {
+                Icon(
+                    imageVector = status.icon(),
+                    contentDescription = "诊断状态：${statusVisual.label}",
+                    modifier = Modifier.size(24.dp),
+                    tint = statusVisual.foregroundColor,
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text("最近诊断", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    HomePresentation.recentDiagnosticBody(recentHistory),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (recentHistory == null) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
+                if (recentHistory == null) {
+                    Text(
+                        HomePresentation.recentDiagnosticBody(null),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        HomePresentation.recentDiagnosticBody(recentHistory),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    HomePresentation.recentDiagnosticSummary(recentHistory)?.let { summary ->
+                        Text(
+                            summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
             Column(
                 horizontalAlignment = Alignment.End,
@@ -458,14 +500,23 @@ private fun RecentDiagnosticCard(
                 )
             }
         }
-        HomePresentation.recentDiagnosticSummary(recentHistory)?.let { summary ->
-            Text(
-                summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
+}
+
+private fun RecentDiagnosticStatus.toStatusVisualState(): StatusVisualState = when (this) {
+    RecentDiagnosticStatus.NORMAL -> StatusVisualState.NORMAL
+    RecentDiagnosticStatus.NOTICE -> StatusVisualState.NOTICE
+    RecentDiagnosticStatus.WARNING -> StatusVisualState.WARNING
+    RecentDiagnosticStatus.ERROR -> StatusVisualState.ERROR
+    RecentDiagnosticStatus.UNKNOWN -> StatusVisualState.UNKNOWN
+}
+
+private fun RecentDiagnosticStatus.icon() = when (this) {
+    RecentDiagnosticStatus.NORMAL -> Icons.Outlined.CheckCircle
+    RecentDiagnosticStatus.NOTICE -> Icons.Outlined.Info
+    RecentDiagnosticStatus.WARNING -> Icons.Outlined.Warning
+    RecentDiagnosticStatus.ERROR -> Icons.Outlined.Error
+    RecentDiagnosticStatus.UNKNOWN -> Icons.AutoMirrored.Outlined.HelpOutline
 }
 
 private fun Boolean?.vpnDisplayName(): String = when (this) {

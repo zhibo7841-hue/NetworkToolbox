@@ -18,9 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -35,12 +32,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import android.widget.Toast
+import com.networktoolbox.core.common.diagnostic.DiagnosticDiagnosisStatus
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.core.designsystem.networkToolboxNavigationItemColors
 import com.networktoolbox.feature.dashboard.DashboardViewModel
 import com.networktoolbox.feature.dashboard.HomeScreen
 import com.networktoolbox.feature.dashboard.RecentHistoryPreview
+import com.networktoolbox.feature.dashboard.RecentDiagnosticStatus
 import com.networktoolbox.feature.dashboard.ToolsScreen
 import com.networktoolbox.feature.dns.presentation.DnsViewModel
 import com.networktoolbox.feature.dns.ui.DnsScreen
@@ -56,6 +55,7 @@ import com.networktoolbox.feature.port.presentation.TcpViewModel
 import com.networktoolbox.feature.port.ui.TcpScreen
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticReportV2
 import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticHistoryReportResolver
+import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticOverallStatus
 import com.networktoolbox.feature.report.diagnostic.v2.ResolvedDiagnosticHistory
 import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.presentation.ReportStatus
@@ -165,10 +165,11 @@ class MainActivity : ComponentActivity() {
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
             val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
-            var topLevelDestination by rememberSaveable {
-                mutableStateOf(TopLevelDestination.HOME)
+            var navigationState by rememberSaveable(stateSaver = AppNavigationState.Saver) {
+                mutableStateOf(AppNavigationState())
             }
-            var toolScreen by rememberSaveable { mutableStateOf(ToolScreen.NONE) }
+            val topLevelDestination = navigationState.topLevelDestination
+            val toolScreen = navigationState.toolScreen
             var restoredDiagnosticReport by remember {
                 mutableStateOf<DiagnosticReportV2?>(null)
             }
@@ -184,6 +185,9 @@ class MainActivity : ComponentActivity() {
                         title = record.title,
                         summary = record.summary,
                         timestamp = record.timestamp,
+                        status = DiagnosticHistoryReportResolver.resolve(record)
+                            ?.recentDiagnosticStatus()
+                            ?: RecentDiagnosticStatus.UNKNOWN,
                     )
                 }
 
@@ -196,14 +200,13 @@ class MainActivity : ComponentActivity() {
                 }
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
-                topLevelDestination = TopLevelDestination.TOOLS
-                toolScreen = screen
+                navigationState = navigationState.openTool(screen)
                 if (screen == ToolScreen.HISTORY) {
                     historyViewModel.load()
                 }
             }
 
-            fun openTopLevel(destination: TopLevelDestination) {
+            fun selectTopLevel(destination: TopLevelDestination) {
                 if (reportUiState.status is ReportStatus.Running) {
                     reportViewModel.stopCheck()
                 }
@@ -211,8 +214,19 @@ class MainActivity : ComponentActivity() {
                 tracerouteViewModel.stop()
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
-                topLevelDestination = destination
-                toolScreen = ToolScreen.NONE
+                navigationState = navigationState.selectTopLevel(destination)
+            }
+
+            fun goBack() {
+                if (toolScreen == ToolScreen.NONE) return
+                if (reportUiState.status is ReportStatus.Running) {
+                    reportViewModel.stopCheck()
+                }
+                lanScannerViewModel.stopScan()
+                tracerouteViewModel.stop()
+                restoredDiagnosticReport = null
+                restoredAutomaticDiagnosticResult = null
+                navigationState = navigationState.goBack()
             }
 
             fun openDiagnosticHistory(record: HistoryRecord) {
@@ -220,15 +234,13 @@ class MainActivity : ComponentActivity() {
                     is ResolvedDiagnosticHistory.Automatic -> {
                         restoredDiagnosticReport = null
                         restoredAutomaticDiagnosticResult = resolved.result
-                        topLevelDestination = TopLevelDestination.TOOLS
-                        toolScreen = ToolScreen.REPORT
+                        navigationState = navigationState.openTool(ToolScreen.REPORT)
                     }
 
                     is ResolvedDiagnosticHistory.Legacy -> {
                         restoredAutomaticDiagnosticResult = null
                         restoredDiagnosticReport = resolved.report
-                        topLevelDestination = TopLevelDestination.TOOLS
-                        toolScreen = ToolScreen.REPORT
+                        navigationState = navigationState.openTool(ToolScreen.REPORT)
                     }
 
                     null -> Unit
@@ -236,7 +248,7 @@ class MainActivity : ComponentActivity() {
             }
 
             BackHandler(enabled = toolScreen != ToolScreen.NONE) {
-                openTopLevel(TopLevelDestination.TOOLS)
+                goBack()
             }
 
             NetworkToolboxTheme {
@@ -251,7 +263,7 @@ class MainActivity : ComponentActivity() {
                             TopLevelDestination.entries.forEach { destination ->
                                 NavigationBarItem(
                                     selected = topLevelDestination == destination,
-                                    onClick = { openTopLevel(destination) },
+                                    onClick = { selectTopLevel(destination) },
                                     colors = navigationItemColors,
                                     icon = {
                                         Icon(
@@ -301,7 +313,7 @@ class MainActivity : ComponentActivity() {
                                 uiState = subnetUiState,
                                 onInputChanged = subnetViewModel::onInputChanged,
                                 onCalculate = subnetViewModel::calculate,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                             )
                             ToolScreen.PING -> PingScreen(
                                 uiState = pingUiState,
@@ -312,7 +324,7 @@ class MainActivity : ComponentActivity() {
                                 onIntervalChanged = pingViewModel::onIntervalChanged,
                                 onPing = pingViewModel::startPing,
                                 onStop = pingViewModel::stopPing,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                             )
                             ToolScreen.DNS -> DnsScreen(
                                 uiState = dnsUiState,
@@ -320,21 +332,21 @@ class MainActivity : ComponentActivity() {
                                 onLookup = dnsViewModel::lookup,
                                 onAdvancedSettingsToggle = dnsViewModel::toggleAdvancedSettings,
                                 onRecordTypeToggle = dnsViewModel::toggleRecordType,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                             )
                             ToolScreen.TCP -> TcpScreen(
                                 uiState = tcpUiState,
                                 onHostChanged = tcpViewModel::onHostChanged,
                                 onPortChanged = tcpViewModel::onPortChanged,
                                 onCheck = tcpViewModel::check,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                             )
                             ToolScreen.TRACEROUTE -> TracerouteScreen(
                                 uiState = tracerouteUiState,
                                 onTargetChanged = tracerouteViewModel::onTargetChanged,
                                 onStart = tracerouteViewModel::start,
                                 onStop = tracerouteViewModel::stop,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                             )
                             ToolScreen.REPORT -> ReportScreen(
                                 uiState = reportUiState,
@@ -347,9 +359,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onStopCheck = reportViewModel::stopCheck,
                                 onBack = {
-                                    restoredDiagnosticReport = null
-                                    restoredAutomaticDiagnosticResult = null
-                                    openTopLevel(TopLevelDestination.TOOLS)
+                                    goBack()
                                 },
                                 onCopyReport = ::copyDiagnosticReport,
                                 onSavePdf = ::saveDiagnosticReportPdf,
@@ -360,7 +370,7 @@ class MainActivity : ComponentActivity() {
                                 onLoad = historyViewModel::load,
                                 onDelete = historyViewModel::delete,
                                 onClear = historyViewModel::clear,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                                 onOpenReport = ::openDiagnosticHistory,
                                 canOpenReport = DiagnosticHistoryReportResolver::canOpen,
                             )
@@ -370,7 +380,7 @@ class MainActivity : ComponentActivity() {
                                 onStopScan = lanScannerViewModel::stopScan,
                                 onRetry = lanScannerViewModel::rescan,
                                 onModifyRange = lanScannerViewModel::modifyRange,
-                                onBack = { openTopLevel(TopLevelDestination.TOOLS) },
+                                onBack = ::goBack,
                                 onRangeModeChanged = lanScannerViewModel::selectRangeMode,
                                 onCustomStartAddressChanged = lanScannerViewModel::onCustomStartAddressChanged,
                                 onCustomEndAddressChanged = lanScannerViewModel::onCustomEndAddressChanged,
@@ -383,27 +393,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class TopLevelDestination(
-    val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-) {
-    HOME("首页", Icons.Outlined.Home),
-    TOOLS("工具", Icons.Outlined.Build),
-    SETTINGS("设置", Icons.Outlined.Settings),
-}
-
-private enum class ToolScreen {
-    NONE,
-    SUBNET,
-    PING,
-    DNS,
-    TCP,
-    TRACEROUTE,
-    REPORT,
-    HISTORY,
-    LAN_SCAN,
-}
-
 private fun HistoryType.displayName(): String = when (this) {
     HistoryType.PING -> "Ping"
     HistoryType.DNS -> "DNS Lookup"
@@ -411,4 +400,26 @@ private fun HistoryType.displayName(): String = when (this) {
     HistoryType.REPORT -> "Network Diagnostic"
     HistoryType.LAN_SCAN -> "LAN Scanner"
     HistoryType.UNKNOWN -> "Other"
+}
+
+private fun ResolvedDiagnosticHistory.recentDiagnosticStatus(): RecentDiagnosticStatus = when (this) {
+    is ResolvedDiagnosticHistory.Automatic -> result.analysis.diagnosis?.status
+        .toRecentDiagnosticStatus()
+    is ResolvedDiagnosticHistory.Legacy -> report.overallStatus.toRecentDiagnosticStatus()
+}
+
+private fun DiagnosticDiagnosisStatus?.toRecentDiagnosticStatus(): RecentDiagnosticStatus = when (this) {
+    DiagnosticDiagnosisStatus.NORMAL -> RecentDiagnosticStatus.NORMAL
+    DiagnosticDiagnosisStatus.ATTENTION -> RecentDiagnosticStatus.WARNING
+    DiagnosticDiagnosisStatus.LIMITED -> RecentDiagnosticStatus.NOTICE
+    DiagnosticDiagnosisStatus.UNKNOWN,
+    null,
+    -> RecentDiagnosticStatus.UNKNOWN
+}
+
+private fun DiagnosticOverallStatus.toRecentDiagnosticStatus(): RecentDiagnosticStatus = when (this) {
+    DiagnosticOverallStatus.HEALTHY -> RecentDiagnosticStatus.NORMAL
+    DiagnosticOverallStatus.ATTENTION -> RecentDiagnosticStatus.WARNING
+    DiagnosticOverallStatus.LIMITED -> RecentDiagnosticStatus.NOTICE
+    DiagnosticOverallStatus.UNKNOWN -> RecentDiagnosticStatus.UNKNOWN
 }

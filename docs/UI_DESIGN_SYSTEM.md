@@ -296,15 +296,24 @@ navigation callbacks so an entry cannot silently diverge between destinations.
 
 ## Quick tool pattern
 
-Quick Tools is a curated subset of at most four existing tools. A tool card is
+Quick Tools is a curated subset of at most four existing tools. It is rendered
+as a two-column grid with token-based vertical gaps so the Home destination
+does not spend most of its first screen on repeated whitespace. A tool card is
 clickable across its full surface and exposes one semantic action to
 accessibility services. The icon and trailing arrow are decorative when the
 card already supplies the label, so the same action is not announced twice.
 
-The compact card uses a 40 dp icon container, a title, a short explanation,
-and a trailing affordance. Titles may wrap to two lines with ellipsis, and the
-card retains a usable touch target. `ToolCard` and `QuickToolCard` share this
-layout; feature code supplies only the real callback and label data.
+Home `QuickToolCard` is a compact outlined surface: it uses the shared card
+shape, theme surface, outline-variant border, 40 dp icon container, title,
+short explanation, and trailing affordance. Its content is limited to the
+real four quick-tool definitions and has no demo values or filler content.
+The complete Tools destination may continue to use `ToolCard`; both variants
+receive real callbacks and label data from the shared catalog.
+
+Recent Diagnosis is a compact real-history card. It keeps the report title,
+one-line summary, relative time, and a status icon derived from the stored
+diagnostic result; an empty history shows only `暂无诊断记录` and does not
+invent a sample report. The card remains a route to local History.
 
 ## Network summary pattern
 
@@ -360,6 +369,12 @@ The App Shell continues to contain exactly three top-level destinations:
 - 首页 / Home
 - 工具 / Tools
 - 设置 / Settings
+
+Tool entry routes retain their caller in the app shell. A tool opened from Home
+returns to Home, while a tool opened from Tools returns to Tools; the Android
+system back action and each tool's visible back action use this same source-aware
+transition. Bottom navigation remains a direct top-level switch and does not
+create an additional back-stack layer.
 
 This task changes the top-level visual foundation only. It does not add a
 fourth tab, change navigation, or implement the LAN Device Center.

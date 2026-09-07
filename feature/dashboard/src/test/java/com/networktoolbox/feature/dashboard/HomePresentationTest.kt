@@ -19,6 +19,10 @@ class HomePresentationTest {
     fun emptyRecentDiagnosis_usesExplicitEmptyState() {
         assertEquals("暂无诊断记录", HomePresentation.recentDiagnosticBody(null))
         assertNull(HomePresentation.recentDiagnosticSummary(null))
+        assertEquals(
+            RecentDiagnosticStatus.UNKNOWN,
+            HomePresentation.recentDiagnosticStatus(null),
+        )
     }
 
     @Test
@@ -32,6 +36,10 @@ class HomePresentationTest {
 
         assertEquals("网络状态正常", HomePresentation.recentDiagnosticBody(preview))
         assertEquals("网关正常 · 公网正常 · DNS正常", HomePresentation.recentDiagnosticSummary(preview))
+        assertEquals(
+            RecentDiagnosticStatus.UNKNOWN,
+            HomePresentation.recentDiagnosticStatus(preview),
+        )
     }
 
     @Test
