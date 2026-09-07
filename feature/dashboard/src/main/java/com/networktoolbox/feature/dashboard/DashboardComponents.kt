@@ -142,6 +142,8 @@ internal fun SummaryMetric(
             } else {
                 MaterialTheme.typography.bodyLarge
             },
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

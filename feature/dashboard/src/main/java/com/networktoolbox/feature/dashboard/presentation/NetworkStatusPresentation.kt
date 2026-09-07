@@ -13,12 +13,39 @@ enum class Ipv6DisplayStatus {
     UNKNOWN,
 }
 
+enum class NetworkHeroIconKind {
+    WIFI_UNKNOWN,
+    WIFI_WEAK,
+    WIFI_MEDIUM,
+    WIFI_STRONG,
+    CELLULAR,
+    ETHERNET,
+    VPN,
+    DISCONNECTED,
+    OTHER,
+}
+
+enum class WifiSignalStrength {
+    UNKNOWN,
+    WEAK,
+    MEDIUM,
+    STRONG,
+}
+
+data class NetworkSummaryMetric(
+    val label: String,
+    val value: String,
+    val technical: Boolean,
+)
+
 data class PrimaryAddressSummary(
     val label: String,
     val value: String,
 )
 
 object NetworkStatusPresentation {
+    private const val UNAVAILABLE_VALUE = "—"
+
     fun ipv6Addresses(context: NetworkContext): List<String> =
         (context.ipv6Addresses.ifEmpty { listOfNotNull(context.ipv6Address) })
             .filter(String::isNotBlank)
@@ -76,6 +103,82 @@ object NetworkStatusPresentation {
         else -> "当前网络"
     }
 
+    fun networkIdentitySupportText(context: NetworkContext): String? {
+        if (context.activeNetworkAvailable == false) return null
+
+        val networkType = connectionTypeLabel(context.connectionType)
+        return if (context.vpnActive == true) {
+            if (context.connectionType == ConnectionType.VPN) {
+                "VPN 已启用"
+            } else {
+                "$networkType · VPN 已启用"
+            }
+        } else {
+            networkType
+        }
+    }
+
+    fun connectionTypeLabel(connectionType: ConnectionType): String = when (connectionType) {
+        ConnectionType.WIFI -> "Wi-Fi"
+        ConnectionType.CELLULAR -> "移动网络"
+        ConnectionType.ETHERNET -> "以太网"
+        ConnectionType.BLUETOOTH -> "蓝牙"
+        ConnectionType.VPN -> "VPN"
+        ConnectionType.UNKNOWN -> "未知网络"
+    }
+
+    fun wifiSignalStrength(signalLevel: Int?): WifiSignalStrength = when {
+        signalLevel == null || signalLevel <= 0 -> WifiSignalStrength.UNKNOWN
+        signalLevel == 1 -> WifiSignalStrength.WEAK
+        signalLevel == 2 -> WifiSignalStrength.MEDIUM
+        else -> WifiSignalStrength.STRONG
+    }
+
+    fun wifiSignalContentDescription(signalLevel: Int?): String = when (
+        wifiSignalStrength(signalLevel)
+    ) {
+        WifiSignalStrength.UNKNOWN -> "Wi-Fi 信号未知"
+        WifiSignalStrength.WEAK -> "Wi-Fi 信号弱"
+        WifiSignalStrength.MEDIUM -> "Wi-Fi 信号中等"
+        WifiSignalStrength.STRONG -> "Wi-Fi 信号强"
+    }
+
+    fun networkHeroIconKind(context: NetworkContext): NetworkHeroIconKind {
+        if (context.activeNetworkAvailable == false) return NetworkHeroIconKind.DISCONNECTED
+
+        return when (context.connectionType) {
+            ConnectionType.WIFI -> when (wifiSignalStrength(context.wifiSignalLevel)) {
+                WifiSignalStrength.UNKNOWN -> NetworkHeroIconKind.WIFI_UNKNOWN
+                WifiSignalStrength.WEAK -> NetworkHeroIconKind.WIFI_WEAK
+                WifiSignalStrength.MEDIUM -> NetworkHeroIconKind.WIFI_MEDIUM
+                WifiSignalStrength.STRONG -> NetworkHeroIconKind.WIFI_STRONG
+            }
+
+            ConnectionType.CELLULAR -> NetworkHeroIconKind.CELLULAR
+            ConnectionType.ETHERNET -> NetworkHeroIconKind.ETHERNET
+            ConnectionType.VPN -> NetworkHeroIconKind.VPN
+            ConnectionType.BLUETOOTH,
+            ConnectionType.UNKNOWN,
+            -> NetworkHeroIconKind.OTHER
+        }
+    }
+
+    fun networkHeroIconContentDescription(context: NetworkContext): String = when (
+        networkHeroIconKind(context)
+    ) {
+        NetworkHeroIconKind.WIFI_UNKNOWN,
+        NetworkHeroIconKind.WIFI_WEAK,
+        NetworkHeroIconKind.WIFI_MEDIUM,
+        NetworkHeroIconKind.WIFI_STRONG,
+        -> wifiSignalContentDescription(context.wifiSignalLevel)
+
+        NetworkHeroIconKind.CELLULAR -> "移动网络"
+        NetworkHeroIconKind.ETHERNET -> "以太网"
+        NetworkHeroIconKind.VPN -> "VPN 网络"
+        NetworkHeroIconKind.DISCONNECTED -> "无活动网络"
+        NetworkHeroIconKind.OTHER -> "当前网络"
+    }
+
     fun displayableWifiName(wifiName: String?): String? = wifiName
         ?.trim()
         ?.takeIf { it.isNotEmpty() && !it.equals("<unknown ssid>", ignoreCase = true) }
@@ -87,6 +190,67 @@ object NetworkStatusPresentation {
             .size
         return if (count == 0) "未配置" else "$count 个服务器"
     }
+
+    fun dnsSummaryValue(dnsServers: List<String>): String {
+        val configuredServers = dnsServers
+            .filter(String::isNotBlank)
+            .distinct()
+        return when (configuredServers.size) {
+            0 -> "未配置"
+            1 -> configuredServers.first()
+            else -> "${configuredServers.first()}\n+${configuredServers.size - 1} 个"
+        }
+    }
+
+    fun gatewaySummaryValue(context: NetworkContext): String {
+        if (context.activeNetworkAvailable == false) return UNAVAILABLE_VALUE
+
+        return when (context.connectionType) {
+            ConnectionType.CELLULAR -> "不适用"
+            ConnectionType.WIFI,
+            ConnectionType.ETHERNET,
+            -> context.gateway?.takeIf(String::isNotBlank) ?: UNAVAILABLE_VALUE
+
+            else -> context.gateway?.takeIf(String::isNotBlank) ?: UNAVAILABLE_VALUE
+        }
+    }
+
+    fun summaryMetrics(context: NetworkContext): List<NetworkSummaryMetric> {
+        val ipv4 = context.ipv4Address?.takeIf(String::isNotBlank)
+        val dnsServers = context.dnsServers
+            .filter(String::isNotBlank)
+            .distinct()
+        val dnsValue = dnsSummaryValue(dnsServers)
+        val subnetMask = ipv4?.let { ipv4PrefixToNetmask(context.ipv4PrefixLength) }
+
+        return listOf(
+            NetworkSummaryMetric(
+                label = "IPv4 地址",
+                value = ipv4 ?: "未配置",
+                technical = ipv4 != null,
+            ),
+            NetworkSummaryMetric(
+                label = "子网掩码",
+                value = subnetMask ?: UNAVAILABLE_VALUE,
+                technical = subnetMask != null,
+            ),
+            NetworkSummaryMetric(
+                label = "默认网关",
+                value = gatewaySummaryValue(context),
+                technical = context.connectionType != ConnectionType.CELLULAR &&
+                    context.gateway?.isNotBlank() == true &&
+                    context.activeNetworkAvailable != false,
+            ),
+            NetworkSummaryMetric(
+                label = "DNS",
+                value = dnsValue,
+                technical = dnsServers.isNotEmpty(),
+            ),
+        )
+    }
+
+    fun shouldUseTwoColumnHeroMetrics(screenWidthDp: Int, fontScale: Float): Boolean =
+        screenWidthDp < 520 || fontScale >= 1.15f
 
     fun ipv4PrefixToNetmask(prefixLength: Int?): String? {
         if (prefixLength == null || prefixLength !in 0..32) return null

@@ -255,21 +255,28 @@ stable:
 3. Quick Tools, limited to four existing tools.
 4. Recent Diagnosis.
 
-The network summary hero uses the shared `NetworkCard` and keeps the first view
-short. It shows a real network identity and a conservative connection status,
-then compact IPv4, gateway, DNS-count, IPv6-status, and Wi-Fi-signal values
-where those fields apply. Full addresses and other reliable technical values
-remain behind `查看详情`. The summary adapts to no-network, cellular,
-Ethernet, IPv4-only, IPv6-only, large-font, and long-DNS-list states instead of
-forcing one fixed set of fields onto every network type.
+The network summary hero is the Home Hero pattern. It uses the shared
+`NetworkCard`, a network-type icon with real Wi-Fi signal-strength mapping, a
+real SSID only when the existing permission boundary makes it available, and a
+conservative `已连接` / `未连接` / `状态未知` status chip. A chevron with an
+accessible content description opens the existing detail area. The summary has
+exactly four compact metrics in a fixed order: IPv4 address, subnet mask,
+default gateway, and DNS. IPv6 and numeric Wi-Fi signal details remain behind
+the chevron; IPv6 is not represented as a public-connectivity claim. Multiple
+DNS servers use the first address plus a short count in the summary, while the
+complete configured list remains in details. Cellular uses a non-misleading
+`不适用` gateway value and no Wi-Fi signal field; Ethernet uses the Ethernet
+identity and no Wi-Fi signal field. The metrics fall back to a readable two
+column layout for phone widths or larger font scales, rather than forcing tiny
+four-column text.
 
 Automatic diagnosis is the single prominent action on Home and uses
 `PrimaryActionButton` inside the network hero. It keeps the existing navigation
 callback and does not start a second data source or a new background check.
-Supporting copy is intentionally short (`本地诊断 · 不上传数据`); complete
-privacy explanation remains in the appropriate diagnostics and settings
-surfaces. Recent Diagnosis is a compact real-data preview; an empty history
-uses `暂无诊断记录` rather than placeholder content.
+The action is presented without an additional privacy helper block in the
+hero; complete privacy explanation remains in the appropriate diagnostics and
+settings surfaces. Recent Diagnosis is a compact real-data preview; an empty
+history uses `暂无诊断记录` rather than placeholder content.
 
 ## Tools pattern
 
@@ -303,20 +310,22 @@ layout; feature code supplies only the real callback and label data.
 
 The summary/detail boundary is intentional:
 
-- Summary: network identity, `已连接` / `未连接` / `状态未知`, IPv4 address,
-  IPv4 gateway where meaningful, DNS server count, IPv6 classification, and
-  Wi-Fi signal level where the system provides it.
+- Summary: network identity icon and name, `已连接` / `未连接` /
+  `状态未知`, IPv4 address, subnet mask, default gateway (or an explicit
+  cellular `不适用` value), and a concise DNS value.
 - Details: network type, interface, prefix and subnet mask when available,
   every IPv6 address, IPv4 gateway, each configured DNS server on its own
-  line, Private DNS values when present, VPN state, and system validation.
+  line, numeric Wi-Fi signal when present, Private DNS values when present, VPN
+  state, and system validation.
 
 IPv6 is labelled `未配置`, `仅链路本地`, `已配置`, or `未知`. `已配置` is
 not a claim that public IPv6 connectivity works. Wi-Fi and Ethernet prefer the
 IPv4 default gateway for the ordinary gateway summary; cellular does not show
-an internal next-hop as a user-facing gateway. DNS is a count in the summary
-and the full configured list in details. SSID is shown only when already
-available and meaningful; the Home migration adds no location or nearby-device
-permission and never displays `<unknown ssid>`.
+an internal next-hop as a user-facing gateway. DNS shows one address directly
+when there is one configured server, and the first address with a short count
+when there are multiple servers; the full configured list is in details. SSID
+is shown only when already available and meaningful; the Home migration adds no
+location or nearby-device permission and never displays `<unknown ssid>`.
 
 These values come from the shared `NetworkContext` provided by the existing
 network repository. Home does not parse Android `LinkProperties` or routes on

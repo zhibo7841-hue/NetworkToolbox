@@ -33,4 +33,10 @@ class HomePresentationTest {
         assertEquals("网络状态正常", HomePresentation.recentDiagnosticBody(preview))
         assertEquals("网关正常 · 公网正常 · DNS正常", HomePresentation.recentDiagnosticSummary(preview))
     }
+
+    @Test
+    fun networkDetailsAction_usesAccessibleChevronLabels() {
+        assertEquals("查看网络详情", HomePresentation.networkDetailsContentDescription(false))
+        assertEquals("收起网络详情", HomePresentation.networkDetailsContentDescription(true))
+    }
 }

@@ -14,4 +14,7 @@ internal object HomePresentation {
 
     fun recentDiagnosticSummary(preview: RecentHistoryPreview?): String? =
         preview?.summary?.takeIf(String::isNotBlank)
+
+    fun networkDetailsContentDescription(expanded: Boolean): String =
+        if (expanded) "收起网络详情" else "查看网络详情"
 }

@@ -13,8 +13,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.Lan
+import androidx.compose.material.icons.outlined.SignalCellular4Bar
+import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.Wifi1Bar
+import androidx.compose.material.icons.outlined.Wifi2Bar
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,6 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkCard
 import com.networktoolbox.core.designsystem.NetworkStatusChip
@@ -33,8 +46,9 @@ import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.PrimaryActionButton
 import com.networktoolbox.core.designsystem.ToolIconContainer
-import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.feature.dashboard.presentation.NetworkHeroIconKind
+import com.networktoolbox.feature.dashboard.presentation.NetworkSummaryMetric
 import com.networktoolbox.feature.dashboard.presentation.NetworkStatusPresentation
 import java.time.Instant
 import java.time.ZoneId
@@ -131,15 +145,14 @@ internal fun NetworkSummaryCard(
     val ipv6Addresses = NetworkStatusPresentation.ipv6Addresses(context)
     val ipv6Status = NetworkStatusPresentation.ipv6Status(ipv6Addresses)
     val showGateway = NetworkStatusPresentation.shouldShowGateway(context)
-    val showWifiSignal = NetworkStatusPresentation.shouldShowWifiSignal(context)
     val gateway = context.gateway?.takeIf(String::isNotBlank)
     val dnsServers = context.dnsServers
         .filter(String::isNotBlank)
         .distinct()
-    val ipv4Address = context.ipv4Address?.takeIf(String::isNotBlank) ?: "未配置"
     val ipv6Label = NetworkStatusPresentation.ipv6Label(ipv6Status)
     val connectionStatus = NetworkStatusPresentation.connectionStatusLabel(context)
     val statusState = NetworkStatusPresentation.connectionStatusVisualState(context)
+    val summaryMetrics = NetworkStatusPresentation.summaryMetrics(context)
 
     NetworkCard {
         Row(
@@ -147,6 +160,7 @@ internal fun NetworkSummaryCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
+            NetworkHeroIcon(context)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -154,91 +168,36 @@ internal fun NetworkSummaryCard(
                 Text(
                     NetworkStatusPresentation.networkIdentity(context),
                     style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    if (context.vpnActive == true) "当前通过 VPN 网络" else "当前网络连接",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                NetworkStatusPresentation.networkIdentitySupportText(context)?.let { supportText ->
+                    Text(
+                        supportText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             NetworkStatusChip(
                 status = statusState,
                 label = connectionStatus,
             )
-        }
-
-        if (context.activeNetworkAvailable == false) {
-            Text(
-                "请连接 Wi-Fi 或移动网络后重试。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        SummaryMetric(
-            label = "IPv4 地址",
-            value = ipv4Address,
-            modifier = Modifier.fillMaxWidth(),
-            technical = context.ipv4Address?.isNotBlank() == true,
-        )
-
-        if (showGateway) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+            IconButton(
+                onClick = { showDetails = !showDetails },
             ) {
-                SummaryMetric(
-                    label = "网关",
-                    value = gateway ?: "未获得",
-                    modifier = Modifier.weight(1f),
-                    technical = gateway != null,
-                )
-                SummaryMetric(
-                    label = "DNS",
-                    value = NetworkStatusPresentation.dnsSummary(dnsServers),
-                    modifier = Modifier.weight(1f),
+                Icon(
+                    imageVector = if (showDetails) {
+                        Icons.Outlined.ExpandLess
+                    } else {
+                        Icons.Outlined.ChevronRight
+                    },
+                    contentDescription = HomePresentation.networkDetailsContentDescription(showDetails),
                 )
             }
-        } else {
-            SummaryMetric(
-                label = "DNS",
-                value = NetworkStatusPresentation.dnsSummary(dnsServers),
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
 
-        if (showWifiSignal) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
-            ) {
-                SummaryMetric(
-                    label = "IPv6",
-                    value = ipv6Label,
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryMetric(
-                    label = "信号",
-                    value = context.wifiSignalLevel?.let { "$it / 4" } ?: "未获得",
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        } else {
-            SummaryMetric(
-                label = "IPv6",
-                value = ipv6Label,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            androidx.compose.material3.TextButton(onClick = { showDetails = !showDetails }) {
-                Text(if (showDetails) "收起详情" else "查看详情 >")
-            }
-        }
+        NetworkHeroMetrics(summaryMetrics)
 
         if (showDetails) {
             HorizontalDivider()
@@ -247,7 +206,10 @@ internal fun NetworkSummaryCard(
                 context.wifiName
                     ?.let(NetworkStatusPresentation::displayableWifiName)
                     ?.let { DetailRow("网络名称", it) }
-                DetailRow("网络类型", context.connectionType.displayName())
+                DetailRow(
+                    "网络类型",
+                    NetworkStatusPresentation.connectionTypeLabel(context.connectionType),
+                )
                 context.interfaceName?.let { DetailRow("接口", it) }
                 DetailRow(
                     "IPv4 地址",
@@ -274,6 +236,12 @@ internal fun NetworkSummaryCard(
                             Text(address, style = NetworkToolboxTextStyles.TechnicalData)
                         }
                     }
+                }
+                if (NetworkStatusPresentation.shouldShowWifiSignal(context)) {
+                    DetailRow(
+                        "Wi-Fi 信号",
+                        context.wifiSignalLevel?.let { "$it / 4" } ?: "未获得",
+                    )
                 }
             }
 
@@ -314,14 +282,6 @@ internal fun NetworkSummaryCard(
 
         HorizontalDivider()
 
-        Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
-            Text("网络诊断", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "本地诊断 · 不上传数据",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         PrimaryActionButton(
             onClick = onOpenReport,
             modifier = Modifier.fillMaxWidth(),
@@ -329,6 +289,83 @@ internal fun NetworkSummaryCard(
             Text("开始网络诊断")
         }
     }
+}
+
+@Composable
+private fun NetworkHeroMetrics(metrics: List<NetworkSummaryMetric>) {
+    val configuration = LocalConfiguration.current
+    val useTwoColumns = NetworkStatusPresentation.shouldUseTwoColumnHeroMetrics(
+        screenWidthDp = configuration.screenWidthDp,
+        fontScale = LocalDensity.current.fontScale,
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
+        if (useTwoColumns) {
+            metrics.chunked(2).forEach { rowMetrics ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+                ) {
+                    rowMetrics.forEach { metric ->
+                        SummaryMetric(
+                            label = metric.label,
+                            value = metric.value,
+                            modifier = Modifier.weight(1f),
+                            technical = metric.technical,
+                        )
+                    }
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+            ) {
+                metrics.forEach { metric ->
+                    SummaryMetric(
+                        label = metric.label,
+                        value = metric.value,
+                        modifier = Modifier.weight(1f),
+                        technical = metric.technical,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetworkHeroIcon(context: NetworkContext) {
+    val icon = when (NetworkStatusPresentation.networkHeroIconKind(context)) {
+        NetworkHeroIconKind.WIFI_UNKNOWN,
+        NetworkHeroIconKind.WIFI_STRONG,
+        -> Icons.Outlined.Wifi
+
+        NetworkHeroIconKind.WIFI_WEAK ->
+            Icons.Outlined.Wifi1Bar
+
+        NetworkHeroIconKind.WIFI_MEDIUM ->
+            Icons.Outlined.Wifi2Bar
+
+        NetworkHeroIconKind.CELLULAR ->
+            Icons.Outlined.SignalCellular4Bar
+
+        NetworkHeroIconKind.ETHERNET,
+        NetworkHeroIconKind.OTHER,
+        -> Icons.Outlined.Lan
+
+        NetworkHeroIconKind.VPN ->
+            Icons.Outlined.VpnKey
+
+        NetworkHeroIconKind.DISCONNECTED ->
+            Icons.Outlined.WifiOff
+    }
+
+    ToolIconContainer(
+        icon = icon,
+        accent = NetworkToolAccent.PRIMARY,
+        contentDescription = NetworkStatusPresentation.networkHeroIconContentDescription(context),
+    )
 }
 
 @Composable
@@ -429,15 +466,6 @@ private fun RecentDiagnosticCard(
             )
         }
     }
-}
-
-private fun ConnectionType.displayName(): String = when (this) {
-    ConnectionType.WIFI -> "Wi-Fi"
-    ConnectionType.CELLULAR -> "移动网络"
-    ConnectionType.ETHERNET -> "以太网"
-    ConnectionType.BLUETOOTH -> "蓝牙"
-    ConnectionType.VPN -> "VPN"
-    ConnectionType.UNKNOWN -> "未知网络"
 }
 
 private fun Boolean?.vpnDisplayName(): String = when (this) {
