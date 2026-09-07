@@ -18,6 +18,7 @@ rootProject.name = "NetworkToolbox"
 
 include(":app")
 include(":core:common")
+include(":core:designsystem")
 include(":core:network")
 include(":core:permission")
 include(":core:database")

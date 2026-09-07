@@ -195,6 +195,27 @@ NetworkToolbox v0.4.0 is **Released**. The published GitHub Release and the
 frozen `v0.4.0` tag contain this confirmed scope; no additional product scope
 is implied by the release status.
 
+### V0.5.x development line — Visual Refresh + LAN Device Management / Wake-on-LAN
+
+The next development line is confirmed as a visual and device-management
+refresh. It is intentionally expressed as a v0.5.x line rather than a locked
+minor-version breakdown.
+
+Core goals:
+
+- **Visual Refresh Phase 1:** establish and incrementally adopt one
+  NetworkToolbox design system across the app shell and existing screens.
+- **LAN Device Center Phase 1:** provide a focused home for managing already
+  discovered local devices, subject to a separate implementation plan.
+- **Wake-on-LAN:** add a local-device wake action only after its product,
+  permission, and safety details are separately confirmed.
+
+All new functionality must be introduced within the shared design system so
+that the project does not continue accumulating inconsistent page styles and
+visual debt. This line preserves the existing local-first, privacy, and
+evidence-based product principles; it does not authorize automatic repair,
+cloud analysis, or a new unrelated tool.
+
 ### V1.0
 
 Release scope and readiness criteria are not yet defined. The future directions listed above are not commitments for this release.

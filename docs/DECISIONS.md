@@ -163,3 +163,18 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Boundary: PDF uses the Android platform PDF API and the existing History
   schema. This decision does not authorize a PDF service, cloud report, new
   database columns, automatic repair, or any new diagnostic capability.
+
+## Decision: NetworkToolbox v0.5 visual direction
+
+- Date: 2026-09-07
+- Status: Accepted
+- Decision: The v0.5 development line adopts **Deep Network Blue** with a
+  **Dark-first** visual direction and a formal Compose visual foundation.
+- Brand keywords: Clear, Reliable, Focused, Professional, Calm, and Modern.
+  The intended Chinese semantics are 清晰、可信、克制、专业、现代、柔和。
+- Avoid: Hacker Terminal, Cyberpunk, Neon-heavy, game-like treatment,
+  excessive glow, dashboard information overload, and an engineering-demo
+  appearance.
+- Consequence: New pages and new functionality must use the shared visual
+  foundation. Existing screens will be migrated incrementally; this decision
+  does not authorize a Big Bang UI rewrite or change any network behavior.

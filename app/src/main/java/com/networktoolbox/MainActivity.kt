@@ -63,7 +63,7 @@ import com.networktoolbox.feature.subnet.presentation.SubnetViewModel
 import com.networktoolbox.feature.subnet.ui.SubnetScreen
 import com.networktoolbox.feature.traceroute.presentation.TracerouteViewModel
 import com.networktoolbox.feature.traceroute.ui.TracerouteScreen
-import com.networktoolbox.ui.theme.NetworkToolboxTheme
+import com.networktoolbox.core.designsystem.NetworkToolboxTheme
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 

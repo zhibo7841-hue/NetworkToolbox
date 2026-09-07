@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,7 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.networktoolbox.core.designsystem.NetworkCard
+import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 
 @Composable
@@ -37,10 +37,10 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .padding(horizontal = NetworkToolboxSpacing.XL, vertical = NetworkToolboxSpacing.XL),
+            verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XL),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
                 Text("设置", style = MaterialTheme.typography.headlineMedium)
                 Text(
                     "查看项目信息并管理本地数据。",
@@ -49,8 +49,9 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsCard(title = "关于") {
-                Text("NetworkToolbox", style = MaterialTheme.typography.titleMedium)
+            NetworkCard {
+                Text("关于", style = MaterialTheme.typography.titleMedium)
+                Text("NetworkToolbox", style = MaterialTheme.typography.bodyLarge)
                 Text("Open Source Network Analyzer")
                 Text(
                     AppVersionInfo.formatVersionName(BuildConfig.VERSION_NAME),
@@ -58,7 +59,8 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsCard(title = "数据管理") {
+            NetworkCard {
+                Text("数据管理", style = MaterialTheme.typography.titleMedium)
                 Text("检测历史仅保存在本机。")
                 Button(
                     modifier = Modifier.fillMaxWidth(),
@@ -75,7 +77,8 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsCard(title = "隐私保护") {
+            NetworkCard {
+                Text("隐私保护", style = MaterialTheme.typography.titleMedium)
                 Text("所有网络数据都保留在本机。")
                 Text(
                     "网络检测结果和历史记录不会上传。",
@@ -106,21 +109,5 @@ fun SettingsScreen(
                 }
             },
         )
-    }
-}
-
-@Composable
-private fun SettingsCard(
-    title: String,
-    content: @Composable () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
     }
 }
