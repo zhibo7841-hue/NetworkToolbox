@@ -279,6 +279,8 @@ class MainActivity : ComponentActivity() {
                                     onOpenDns = { openTool(ToolScreen.DNS) },
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
                                     onOpenHistory = { openTool(ToolScreen.HISTORY) },
+                                    onOpenTraceroute = { openTool(ToolScreen.TRACEROUTE) },
+                                    onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                 )
                                 TopLevelDestination.TOOLS -> ToolsScreen(
                                     onOpenPing = { openTool(ToolScreen.PING) },

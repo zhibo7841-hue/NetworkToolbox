@@ -1,11 +1,13 @@
 package com.networktoolbox.feature.dashboard
 
+import com.networktoolbox.core.designsystem.StatusVisualState
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.dashboard.presentation.Ipv6DisplayStatus
 import com.networktoolbox.feature.dashboard.presentation.NetworkStatusPresentation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -105,6 +107,7 @@ class NetworkStatusPresentationTest {
 
         assertFalse(NetworkStatusPresentation.shouldShowGateway(context))
         assertFalse(NetworkStatusPresentation.shouldShowWifiSignal(context))
+        assertEquals("移动网络", NetworkStatusPresentation.networkIdentity(context))
     }
 
     @Test
@@ -122,6 +125,49 @@ class NetworkStatusPresentationTest {
         assertEquals(ConnectionType.WIFI, context.connectionType)
         assertTrue(context.vpnActive == true)
         assertTrue(NetworkStatusPresentation.shouldShowGateway(context))
+    }
+
+    @Test
+    fun noActiveNetwork_mapsToExplicitDisconnectedState() {
+        val context = NetworkContext.noActiveNetwork()
+
+        assertEquals("当前没有活动网络", NetworkStatusPresentation.networkIdentity(context))
+        assertEquals("未连接", NetworkStatusPresentation.connectionStatusLabel(context))
+        assertEquals(
+            StatusVisualState.ERROR,
+            NetworkStatusPresentation.connectionStatusVisualState(context),
+        )
+        assertEquals("未配置", NetworkStatusPresentation.dnsSummary(context.dnsServers))
+    }
+
+    @Test
+    fun unknownNetwork_mapsToUnknownStatusWithoutInventingConnectivity() {
+        val context = NetworkContext.unknown()
+
+        assertEquals("状态未知", NetworkStatusPresentation.connectionStatusLabel(context))
+        assertEquals(
+            StatusVisualState.UNKNOWN,
+            NetworkStatusPresentation.connectionStatusVisualState(context),
+        )
+    }
+
+    @Test
+    fun dnsSummary_countsDistinctNonBlankServers() {
+        assertEquals(
+            "2 个服务器",
+            NetworkStatusPresentation.dnsSummary(
+                listOf("192.0.2.53", "192.0.2.53", "2001:db8::53", " "),
+            ),
+        )
+        assertEquals("1 个服务器", NetworkStatusPresentation.dnsSummary(listOf("192.0.2.53")))
+        assertEquals("未配置", NetworkStatusPresentation.dnsSummary(emptyList()))
+    }
+
+    @Test
+    fun unknownWifiName_isNotPresentedAsNetworkIdentity() {
+        assertNull(NetworkStatusPresentation.displayableWifiName("<unknown ssid>"))
+        assertNull(NetworkStatusPresentation.displayableWifiName("  "))
+        assertEquals("Lab Wi-Fi", NetworkStatusPresentation.displayableWifiName(" Lab Wi-Fi "))
     }
 
     private fun context(

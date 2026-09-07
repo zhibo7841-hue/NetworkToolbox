@@ -243,6 +243,104 @@ Existing feature-local components such as tool cards and section headers remain
 in place until their individual migration tasks. No generic UI framework is
 being introduced.
 
+## Home pattern
+
+The Home destination is the compact entry point for current network context and
+the most-used checks. Its vertical order is stable:
+
+1. Compact brand header.
+2. Network summary card.
+3. Automatic diagnostic primary action.
+4. Quick Tools, limited to four existing tools.
+5. Recent Diagnosis.
+
+The network summary card uses the shared `NetworkCard` and keeps the first view
+short. It shows a real network identity and a conservative connection status,
+then compact IPv4, gateway, DNS-count, IPv6-status, and Wi-Fi-signal values
+where those fields apply. Full addresses and other reliable technical values
+remain behind `查看详情`. The summary adapts to no-network, cellular,
+Ethernet, IPv4-only, IPv6-only, large-font, and long-DNS-list states instead of
+forcing one fixed set of fields onto every network type.
+
+Automatic diagnosis is the single prominent action on Home and uses
+`PrimaryActionButton`. It keeps the existing navigation callback and does not
+start a second data source or a new background check. Recent Diagnosis is a
+compact real-data preview; an empty history uses `暂无诊断记录` rather than
+placeholder content.
+
+## Tools pattern
+
+Tools is the complete entry point for currently implemented tools. It uses the
+following product-facing categories and preserves the existing callback
+routes:
+
+- `连通性检测`: Ping, DNS Lookup, TCP Port Check, Traceroute;
+- `网络工具`: IPv4 子网计算, 局域网扫描;
+- `诊断与记录`: 网络诊断, 历史记录.
+
+Each category is rendered as a compact two-column grid. The grid is part of the
+scrollable destination and respects the App Shell's safe-drawing and bottom
+navigation insets. Future concepts such as Wake-on-LAN are not shown until
+they are implemented. Home and Tools use the same tool definitions and
+navigation callbacks so an entry cannot silently diverge between destinations.
+
+## Quick tool pattern
+
+Quick Tools is a curated subset of at most four existing tools. A tool card is
+clickable across its full surface and exposes one semantic action to
+accessibility services. The icon and trailing arrow are decorative when the
+card already supplies the label, so the same action is not announced twice.
+
+The compact card uses a 40 dp icon container, a title, a short explanation,
+and a trailing affordance. Titles may wrap to two lines with ellipsis, and the
+card retains a usable touch target. `ToolCard` and `QuickToolCard` share this
+layout; feature code supplies only the real callback and label data.
+
+## Network summary pattern
+
+The summary/detail boundary is intentional:
+
+- Summary: network identity, `已连接` / `未连接` / `状态未知`, IPv4 address,
+  IPv4 gateway where meaningful, DNS server count, IPv6 classification, and
+  Wi-Fi signal level where the system provides it.
+- Details: network type, interface, prefix and subnet mask when available,
+  every IPv6 address, IPv4 gateway, each configured DNS server on its own
+  line, Private DNS values when present, VPN state, and system validation.
+
+IPv6 is labelled `未配置`, `仅链路本地`, `已配置`, or `未知`. `已配置` is
+not a claim that public IPv6 connectivity works. Wi-Fi and Ethernet prefer the
+IPv4 default gateway for the ordinary gateway summary; cellular does not show
+an internal next-hop as a user-facing gateway. DNS is a count in the summary
+and the full configured list in details. SSID is shown only when already
+available and meaningful; the Home migration adds no location or nearby-device
+permission and never displays `<unknown ssid>`.
+
+These values come from the shared `NetworkContext` provided by the existing
+network repository. Home does not parse Android `LinkProperties` or routes on
+its own. Missing or restricted data is represented as an explicit empty,
+unknown, or not-applicable state. The UI never invents latency, Wi-Fi speed,
+SSID, device counts, or health conclusions.
+
+## Tool accent policy
+
+Tool accents are a small, stable vocabulary mapped to existing theme tokens:
+
+- `PRIMARY`: primary blue for the main tool family and brand emphasis;
+- `CYAN`: restrained secondary cyan for network-information utilities;
+- `AMBER`: attention-oriented amber for diagnostics or port-oriented tools.
+
+Accents are decorative grouping cues, not result states. Result status must use
+the semantic `StatusVisualState` mapping. Cards must not introduce per-tool
+rainbow colors, hard-coded feature hex values, gradients, neon/glow effects,
+or heavy shadows. The same accent mapping is valid in both light and dark
+themes, with contrast supplied by the theme's paired foreground/container
+tokens.
+
+Concept art and mockups are direction only. Production Home and Tools render
+current repository data and real navigation callbacks; example values such as
+sample IP addresses, SSIDs, speeds, latency, or device counts must never be
+used as UI data.
+
 ## App shell and migration
 
 The App Shell continues to contain exactly three top-level destinations:
@@ -258,8 +356,8 @@ Migration follows a staged path rather than a Big Bang rewrite:
 
 1. Design foundation and launcher icon.
 2. App Shell.
-3. Home.
-4. Tools.
+3. Home visual migration (implemented for the current v0.5.x line).
+4. Tools visual migration (implemented for the current v0.5.x line).
 5. Automatic Diagnostics, Report, and History.
 6. Existing tool pages.
 7. LAN Device Center.
@@ -272,4 +370,6 @@ and Sony Android 16 smoke checks where applicable.
 
 This foundation does not modify Ping, DNS, TCP, Traceroute, LAN Scanner,
 Automatic Diagnostics, History, Report, Retry/Verify, or their data semantics.
-It also does not start Home visual migration, LAN Device Center, or Wake-on-LAN.
+The current Home and Tools work is a visual/presentation migration only; it
+does not start the later Automatic Diagnostics, LAN Device Center, or
+Wake-on-LAN work.

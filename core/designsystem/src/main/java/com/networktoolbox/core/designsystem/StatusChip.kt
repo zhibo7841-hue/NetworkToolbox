@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun NetworkStatusChip(
     status: StatusVisualState,
+    label: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val visual = NetworkToolboxStatusVisuals.resolve(
@@ -50,7 +51,7 @@ fun NetworkStatusChip(
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
             )
-            Text(visual.label, style = MaterialTheme.typography.labelLarge)
+            Text(label ?: visual.label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

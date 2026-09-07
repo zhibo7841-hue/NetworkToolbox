@@ -2,6 +2,7 @@ package com.networktoolbox.feature.dashboard.presentation
 
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.core.designsystem.StatusVisualState
 import java.net.Inet6Address
 import java.net.InetAddress
 
@@ -44,6 +45,47 @@ object NetworkStatusPresentation {
         Ipv6DisplayStatus.LINK_LOCAL_ONLY -> "仅链路本地"
         Ipv6DisplayStatus.CONFIGURED -> "已配置"
         Ipv6DisplayStatus.UNKNOWN -> "未知"
+    }
+
+    fun connectionStatusVisualState(context: NetworkContext): StatusVisualState = when {
+        context.activeNetworkAvailable == false -> StatusVisualState.ERROR
+        context.activeNetworkAvailable == true &&
+            context.validated == true &&
+            context.partialConnectivity != true -> StatusVisualState.NORMAL
+        context.activeNetworkAvailable == true -> StatusVisualState.NOTICE
+        context.activeNetworkAvailable == null &&
+            context.connectionType == ConnectionType.UNKNOWN -> StatusVisualState.UNKNOWN
+        else -> StatusVisualState.NOTICE
+    }
+
+    fun connectionStatusLabel(context: NetworkContext): String = when {
+        context.activeNetworkAvailable == false -> "未连接"
+        context.activeNetworkAvailable == null &&
+            context.connectionType == ConnectionType.UNKNOWN -> "状态未知"
+        else -> "已连接"
+    }
+
+    fun networkIdentity(context: NetworkContext): String = when {
+        context.activeNetworkAvailable == false -> "当前没有活动网络"
+        context.connectionType == ConnectionType.WIFI ->
+            displayableWifiName(context.wifiName) ?: "Wi-Fi"
+        context.connectionType == ConnectionType.CELLULAR -> "移动网络"
+        context.connectionType == ConnectionType.ETHERNET -> "以太网"
+        context.connectionType == ConnectionType.BLUETOOTH -> "蓝牙"
+        context.connectionType == ConnectionType.VPN -> "VPN"
+        else -> "当前网络"
+    }
+
+    fun displayableWifiName(wifiName: String?): String? = wifiName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() && !it.equals("<unknown ssid>", ignoreCase = true) }
+
+    fun dnsSummary(dnsServers: List<String>): String {
+        val count = dnsServers
+            .filter(String::isNotBlank)
+            .distinct()
+            .size
+        return if (count == 0) "未配置" else "$count 个服务器"
     }
 
     fun ipv4PrefixToNetmask(prefixLength: Int?): String? {
@@ -93,15 +135,7 @@ object NetworkStatusPresentation {
     fun shouldShowWifiSignal(context: NetworkContext): Boolean =
         context.connectionType == ConnectionType.WIFI
 
-    fun connectionStatus(context: NetworkContext): String = when {
-        context.activeNetworkAvailable == false -> "未连接"
-        context.activeNetworkAvailable == null &&
-            context.connectionType == ConnectionType.UNKNOWN -> "未知"
-        context.activeNetworkAvailable == true -> "已连接"
-        context.ipv4Address != null || ipv6Addresses(context).isNotEmpty() -> "已连接"
-        context.connectionType == ConnectionType.UNKNOWN -> "未知"
-        else -> "已连接"
-    }
+    fun connectionStatus(context: NetworkContext): String = connectionStatusLabel(context)
 
     private fun isIpv4Literal(value: String): Boolean {
         val parts = value.substringBefore('%').split('.')

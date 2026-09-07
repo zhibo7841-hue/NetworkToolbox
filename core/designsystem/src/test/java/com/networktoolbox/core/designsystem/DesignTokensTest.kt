@@ -91,6 +91,22 @@ class DesignTokensTest {
     }
 
     @Test
+    fun toolAccentsReuseStableThemeTokenFamilies() {
+        assertEquals(
+            NetworkToolboxColors.DarkPrimary,
+            NetworkToolAccents.resolve(NetworkToolAccent.PRIMARY, darkTheme = true).foreground,
+        )
+        assertEquals(
+            NetworkToolboxColors.LightSecondaryContainer,
+            NetworkToolAccents.resolve(NetworkToolAccent.CYAN, darkTheme = false).container,
+        )
+        assertEquals(
+            NetworkToolboxColors.DarkNotice,
+            NetworkToolAccents.resolve(NetworkToolAccent.AMBER, darkTheme = true).foreground,
+        )
+    }
+
+    @Test
     fun primaryActionContrastAndDestructiveSemanticsArePreserved() {
         val dark = networkToolboxDarkColorScheme()
         val light = networkToolboxLightColorScheme()
