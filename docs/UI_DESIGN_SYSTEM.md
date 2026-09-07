@@ -39,7 +39,14 @@ the current first-version tokens.
 | Background | `#0E1420` | App background |
 | Surface | `#151D2A` | Cards and primary surfaces |
 | Surface Variant | `#1C2635` | Elevated/secondary surfaces |
+| Surface Container Low | `#111A27` | Low tonal elevation |
+| Surface Container | `#151D2A` | Standard component container |
+| Surface Container High | `#1C2635` | Elevated component container |
+| Surface Container Highest | `#243246` | Highest local emphasis |
+| Surface Bright | `#212D3D` | Brightest dark surface |
 | Primary | `#4C8DFF` | Brand, primary action, selection |
+| On Primary | `#06204A` | High-contrast content on bright primary |
+| Primary Container | `#1B3560` | Tonal selection/secondary emphasis |
 | Secondary | `#76C8D2` | Restrained cyan accent |
 | Primary Text | `#F3F7FC` | Main readable text |
 | Secondary Text | `#AAB6C5` | Supporting text |
@@ -52,11 +59,18 @@ the current first-version tokens.
 | Background | `#F7F9FC` | App background |
 | Surface | `#FFFFFF` | Cards and primary surfaces |
 | Surface Variant | `#E9EEF5` | Elevated/secondary surfaces |
+| Surface Container Low | `#FBFCFE` | Low tonal elevation |
+| Surface Container | `#FFFFFF` | Standard component container |
+| Surface Container High | `#E9EEF5` | Elevated component container |
+| Surface Container Highest | `#DFE6EF` | Highest local emphasis |
 | Primary | `#2F6FED` | Brand, primary action, selection |
+| On Primary | `#FFFFFF` | High-contrast content on primary |
+| Primary Container | `#DCE8FF` | Tonal selection/secondary emphasis |
 | Secondary | `#2A7380` | Restrained cyan accent |
 | Primary Text | `#172033` | Main readable text |
 | Secondary Text | `#4F5E70` | Supporting text |
 | Outline | `#738197` | Dividers and outlines |
+| Outline Variant | `#C4CBD7` | Low-emphasis component outline |
 
 ### State colors
 
@@ -74,6 +88,13 @@ deliberate readability adjustment: the brighter brand-baseline values remain
 appropriate as dark-theme accents and are not used as low-contrast text on a
 light surface. Status containers and content colors are paired in the theme
 implementation so a state is not communicated by color alone.
+
+The dark surface hierarchy is intentionally blue-black rather than purple-gray:
+`#0E1420` (background) → `#151D2A` (surface/container) → `#1C2635`
+(elevated container) → `#243246` (highest container). All Material 3 surface,
+outline, secondary-container, and tertiary roles are explicitly mapped to these
+tokens or their approved blue/cyan tonal counterparts; the default purple-gray
+fallback is not used.
 
 Semantic rules:
 
@@ -133,6 +154,22 @@ Shared component guidance is:
 
 The result is soft and modern without making every element excessively round.
 
+## Action semantics
+
+The design system exposes three small action primitives:
+
+- `PrimaryActionButton`: filled `primary` container with `onPrimary` content
+  for the page's main action.
+- `SecondaryActionButton`: outlined, lower-emphasis action using the brand
+  primary for content and the shared outline for its border.
+- `DestructiveActionButton`: outlined error action for irreversible operations;
+  confirmation dialogs may use a low-emphasis error-colored text action.
+
+The current `onPrimary` values are intentional contrast choices. Dark theme
+uses `#06204A` over `#4C8DFF`, while light theme uses white over `#2F6FED`.
+The action role remains blue in both themes; error red is reserved for
+destructive and confirmed-error semantics.
+
 ## Icons
 
 Formal UI uses Material Icons / Material Symbols and a small number of
@@ -168,6 +205,11 @@ rounded-rectangle launcher masks do not clip the path or nodes.
 Icons and labels accompany color. A normal state must not be blue merely
 because blue is the brand color.
 
+Bottom Navigation follows the same separation: selected icon and label use the
+theme's primary blue, the selected indicator uses the primary container, and
+unselected content uses secondary text. Success green is never used for
+navigation selection.
+
 ## Theme architecture
 
 `NetworkToolboxTheme` lives in `core:designsystem` and supports:
@@ -180,6 +222,9 @@ The app currently uses the default `SYSTEM` mode and does not add a manual
 theme setting in v0.5 foundation work. Dark and light system-bar icon
 appearance is synchronized with the resolved theme, while the existing
 edge-to-edge and bottom navigation architecture remains unchanged.
+The App Shell supplies explicit NavigationBar colors so Material 3's
+secondary/teal selection default cannot override the NetworkToolbox primary
+selection semantics.
 
 ## Shared primitives
 
@@ -187,6 +232,10 @@ The foundation currently provides only stable primitives:
 
 - `NetworkCard`: shared card surface, shape, padding, and content spacing;
 - `NetworkStatusChip`: icon + label + semantic state color;
+- `PrimaryActionButton`, `SecondaryActionButton`, and
+  `DestructiveActionButton`: small semantic action wrappers;
+- `networkToolboxNavigationItemColors`: primary-blue selection and
+  secondary-text unselected navigation mapping;
 - `NetworkToolboxColors`, `NetworkToolboxSpacing`, component shapes, and
   technical text style tokens.
 

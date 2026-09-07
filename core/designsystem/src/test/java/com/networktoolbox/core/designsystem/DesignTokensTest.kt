@@ -1,7 +1,9 @@
 package com.networktoolbox.core.designsystem
 
+import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,9 +15,15 @@ class DesignTokensTest {
         assertEquals(NetworkToolboxColors.DarkBackground, scheme.background)
         assertEquals(NetworkToolboxColors.DarkSurface, scheme.surface)
         assertEquals(NetworkToolboxColors.DarkSurfaceVariant, scheme.surfaceVariant)
+        assertEquals(NetworkToolboxColors.DarkSurface, scheme.surfaceContainer)
+        assertEquals(NetworkToolboxColors.DarkSurfaceContainerHigh, scheme.surfaceContainerHigh)
+        assertEquals(NetworkToolboxColors.DarkOutlineVariant, scheme.outlineVariant)
         assertEquals(NetworkToolboxColors.DarkPrimary, scheme.primary)
+        assertEquals(NetworkToolboxColors.DarkPrimaryContainer, scheme.primaryContainer)
         assertEquals(NetworkToolboxColors.DarkPrimaryText, scheme.onSurface)
         assertEquals(NetworkToolboxColors.DarkSecondaryText, scheme.onSurfaceVariant)
+        assertNotEquals(Color(0xFF6750A4), scheme.primary)
+        assertNotEquals(Color(0xFF211F26), scheme.surfaceContainer)
     }
 
     @Test
@@ -24,7 +32,10 @@ class DesignTokensTest {
 
         assertEquals(NetworkToolboxColors.LightBackground, scheme.background)
         assertEquals(NetworkToolboxColors.LightSurface, scheme.surface)
+        assertEquals(NetworkToolboxColors.LightSurface, scheme.surfaceContainer)
+        assertEquals(NetworkToolboxColors.LightOutlineVariant, scheme.outlineVariant)
         assertEquals(NetworkToolboxColors.LightPrimary, scheme.primary)
+        assertEquals(NetworkToolboxColors.LightPrimaryContainer, scheme.primaryContainer)
         assertEquals(NetworkToolboxColors.LightPrimaryText, scheme.onSurface)
         assertEquals(NetworkToolboxColors.LightSecondaryText, scheme.onSurfaceVariant)
     }
@@ -55,5 +66,63 @@ class DesignTokensTest {
             NetworkToolboxColors.LightSuccess,
             NetworkToolboxStatusVisuals.resolve(StatusVisualState.NORMAL, false).foregroundColor,
         )
+        assertNotEquals(
+            NetworkToolboxColors.DarkPrimary,
+            NetworkToolboxStatusVisuals.resolve(StatusVisualState.NORMAL, true).foregroundColor,
+        )
+    }
+
+    @Test
+    fun navigationSelectionUsesPrimaryFamilyAndKeepsSuccessSeparate() {
+        val dark = NetworkToolboxNavigationColors.resolve(darkTheme = true)
+        val light = NetworkToolboxNavigationColors.resolve(darkTheme = false)
+
+        assertEquals(NetworkToolboxColors.DarkPrimary, dark.selectedIcon)
+        assertEquals(NetworkToolboxColors.DarkPrimary, dark.selectedLabel)
+        assertEquals(NetworkToolboxColors.DarkPrimaryContainer, dark.selectedIndicator)
+        assertEquals(NetworkToolboxColors.DarkSecondaryText, dark.unselectedIcon)
+        assertNotEquals(NetworkToolboxColors.DarkSuccess, dark.selectedIcon)
+
+        assertEquals(NetworkToolboxColors.LightPrimary, light.selectedIcon)
+        assertEquals(NetworkToolboxColors.LightPrimary, light.selectedLabel)
+        assertEquals(NetworkToolboxColors.LightPrimaryContainer, light.selectedIndicator)
+        assertEquals(NetworkToolboxColors.LightSecondaryText, light.unselectedLabel)
+        assertNotEquals(NetworkToolboxColors.LightSuccess, light.selectedLabel)
+    }
+
+    @Test
+    fun primaryActionContrastAndDestructiveSemanticsArePreserved() {
+        val dark = networkToolboxDarkColorScheme()
+        val light = networkToolboxLightColorScheme()
+
+        assertTrue(contrastRatio(dark.primary, dark.onPrimary) >= 4.5)
+        assertTrue(contrastRatio(light.primary, light.onPrimary) >= 4.5)
+        assertEquals(NetworkToolboxColors.DarkError, dark.error)
+        assertEquals(NetworkToolboxColors.LightError, light.error)
+        assertNotEquals(dark.primary, dark.error)
+        assertNotEquals(light.primary, light.error)
+    }
+
+    private fun contrastRatio(first: Color, second: Color): Double {
+        val firstLuminance = relativeLuminance(first)
+        val secondLuminance = relativeLuminance(second)
+        val lighter = maxOf(firstLuminance, secondLuminance)
+        val darker = minOf(firstLuminance, secondLuminance)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private fun relativeLuminance(color: Color): Double {
+        fun linearize(channel: Float): Double {
+            val value = channel.toDouble()
+            return if (value <= 0.03928) {
+                value / 12.92
+            } else {
+                Math.pow((value + 0.055) / 1.055, 2.4)
+            }
+        }
+
+        return (0.2126 * linearize(color.red)) +
+            (0.7152 * linearize(color.green)) +
+            (0.0722 * linearize(color.blue))
     }
 }

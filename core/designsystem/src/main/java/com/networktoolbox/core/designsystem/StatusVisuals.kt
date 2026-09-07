@@ -27,8 +27,8 @@ object NetworkToolboxStatusVisuals {
             StatusVisualState.NORMAL -> StatusVisual(
                 label = "正常",
                 foregroundColor = if (darkTheme) colors.DarkSuccess else colors.LightSuccess,
-                containerColor = if (darkTheme) Color(0xFF143D31) else Color(0xFFD7F5E8),
-                contentColor = if (darkTheme) Color(0xFFD4F9E7) else Color(0xFF0B3A29),
+                containerColor = if (darkTheme) colors.DarkSuccessContainer else colors.LightSuccessContainer,
+                contentColor = if (darkTheme) colors.DarkOnSuccessContainer else colors.LightOnSuccessContainer,
             )
 
             StatusVisualState.NOTICE,
@@ -36,43 +36,43 @@ object NetworkToolboxStatusVisuals {
             -> StatusVisual(
                 label = if (state == StatusVisualState.NOTICE) "提示" else "异常",
                 foregroundColor = if (darkTheme) colors.DarkNotice else colors.LightNotice,
-                containerColor = if (darkTheme) Color(0xFF403617) else Color(0xFFFFF1C2),
-                contentColor = if (darkTheme) Color(0xFFFFE8A6) else Color(0xFF4D3800),
+                containerColor = if (darkTheme) colors.DarkNoticeContainer else colors.LightNoticeContainer,
+                contentColor = if (darkTheme) colors.DarkOnNoticeContainer else colors.LightOnNoticeContainer,
             )
 
             StatusVisualState.ERROR -> StatusVisual(
                 label = "严重异常",
                 foregroundColor = if (darkTheme) colors.DarkError else colors.LightError,
-                containerColor = if (darkTheme) Color(0xFF491D28) else Color(0xFFFFDAD6),
-                contentColor = if (darkTheme) Color(0xFFFFDADF) else Color(0xFF601410),
+                containerColor = if (darkTheme) colors.DarkErrorContainer else colors.LightErrorContainer,
+                contentColor = if (darkTheme) colors.DarkOnErrorContainer else colors.LightOnErrorContainer,
             )
 
             StatusVisualState.UNKNOWN -> StatusVisual(
                 label = "未确定",
                 foregroundColor = if (darkTheme) colors.DarkUnknown else colors.LightUnknown,
-                containerColor = if (darkTheme) Color(0xFF283444) else Color(0xFFE7ECF3),
-                contentColor = if (darkTheme) Color(0xFFE2E8F0) else Color(0xFF273445),
+                containerColor = if (darkTheme) colors.DarkUnknownContainer else colors.LightUnknownContainer,
+                contentColor = if (darkTheme) colors.DarkOnUnknownContainer else colors.LightOnUnknownContainer,
             )
 
             StatusVisualState.RUNNING -> StatusVisual(
                 label = "进行中",
                 foregroundColor = if (darkTheme) colors.DarkPrimary else colors.LightPrimary,
-                containerColor = if (darkTheme) Color(0xFF1A3867) else Color(0xFFDCE8FF),
-                contentColor = if (darkTheme) Color(0xFFD9E7FF) else Color(0xFF0D2A63),
+                containerColor = if (darkTheme) colors.DarkPrimaryContainer else colors.LightPrimaryContainer,
+                contentColor = if (darkTheme) colors.DarkOnPrimaryContainer else colors.LightOnPrimaryContainer,
             )
 
             StatusVisualState.CANCELLED -> StatusVisual(
                 label = "已停止",
                 foregroundColor = if (darkTheme) colors.DarkUnknown else colors.LightUnknown,
-                containerColor = if (darkTheme) Color(0xFF283444) else Color(0xFFE7ECF3),
-                contentColor = if (darkTheme) Color(0xFFE2E8F0) else Color(0xFF273445),
+                containerColor = if (darkTheme) colors.DarkUnknownContainer else colors.LightUnknownContainer,
+                contentColor = if (darkTheme) colors.DarkOnUnknownContainer else colors.LightOnUnknownContainer,
             )
 
             StatusVisualState.NOT_EXECUTED -> StatusVisual(
                 label = "未执行",
                 foregroundColor = if (darkTheme) colors.DarkUnknown else colors.LightUnknown,
-                containerColor = if (darkTheme) Color(0xFF283444) else Color(0xFFE7ECF3),
-                contentColor = if (darkTheme) Color(0xFFE2E8F0) else Color(0xFF273445),
+                containerColor = if (darkTheme) colors.DarkUnknownContainer else colors.LightUnknownContainer,
+                contentColor = if (darkTheme) colors.DarkOnUnknownContainer else colors.LightOnUnknownContainer,
             )
         }
     }

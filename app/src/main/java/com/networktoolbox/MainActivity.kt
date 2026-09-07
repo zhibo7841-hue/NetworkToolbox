@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import android.widget.Toast
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
+import com.networktoolbox.core.designsystem.networkToolboxNavigationItemColors
 import com.networktoolbox.feature.dashboard.DashboardViewModel
 import com.networktoolbox.feature.dashboard.HomeScreen
 import com.networktoolbox.feature.dashboard.RecentHistoryPreview
@@ -242,11 +244,15 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     contentWindowInsets = WindowInsets.safeDrawing,
                     bottomBar = {
-                        NavigationBar {
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ) {
+                            val navigationItemColors = networkToolboxNavigationItemColors()
                             TopLevelDestination.entries.forEach { destination ->
                                 NavigationBarItem(
                                     selected = topLevelDestination == destination,
                                     onClick = { openTopLevel(destination) },
+                                    colors = navigationItemColors,
                                     icon = {
                                         Icon(
                                             imageVector = destination.icon,

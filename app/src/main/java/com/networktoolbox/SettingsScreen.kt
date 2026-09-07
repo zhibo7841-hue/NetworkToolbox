@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.networktoolbox.core.designsystem.DestructiveActionButton
 import com.networktoolbox.core.designsystem.NetworkCard
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.feature.history.presentation.HistoryUiState
@@ -62,7 +63,7 @@ fun SettingsScreen(
             NetworkCard {
                 Text("数据管理", style = MaterialTheme.typography.titleMedium)
                 Text("检测历史仅保存在本机。")
-                Button(
+                DestructiveActionButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { showClearDialog = true },
                     enabled = !isClearing,
@@ -99,6 +100,9 @@ fun SettingsScreen(
                         showClearDialog = false
                         onClearHistory()
                     },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
                 ) {
                     Text("删除")
                 }
