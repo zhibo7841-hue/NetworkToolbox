@@ -73,7 +73,69 @@ class HistoryRecordPresentationTest {
     }
 
     @Test
-    fun toolStatusesUseStructuredSuccessOrDnsStatus() {
+    fun pingSessionQualityLevelDrivesToolScopedStatus() {
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NORMAL, "正常"),
+            HistoryRecordPresentation.status(
+                record(
+                    HistoryType.PING,
+                    """{"qualityLevel":"EXCELLENT","sentPackets":5,"receivedPackets":5,"packetLoss":0.0}""",
+                ),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NORMAL, "正常"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.PING, """{"qualityLevel":"GOOD"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NOTICE, "需关注"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.PING, """{"qualityLevel":"FAIR"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NOTICE, "需关注"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.PING, """{"qualityLevel":"POOR"}"""),
+            ),
+        )
+    }
+
+    @Test
+    fun pingNoResponseAndUnknownAreDistinguishedWithoutSummaryParsing() {
+        val noResponse = HistoryRecordPresentation.status(
+            record(
+                HistoryType.PING,
+                """{"qualityLevel":"UNKNOWN","sentPackets":5,"receivedPackets":0,"packetLoss":100.0}""",
+                summary = "网络连接稳定，未检测到明显丢包。",
+            ),
+        )
+        val insufficient = HistoryRecordPresentation.status(
+            record(
+                HistoryType.PING,
+                """{"qualityLevel":"UNKNOWN","sentPackets":0,"receivedPackets":0}""",
+                summary = "网络质量较差，检测到明显延迟或丢包。",
+            ),
+        )
+
+        assertEquals(HistoryStatusVisual(StatusVisualState.NOTICE, "未响应"), noResponse)
+        assertEquals(HistoryStatusVisual(StatusVisualState.UNKNOWN, "未确定"), insufficient)
+    }
+
+    @Test
+    fun pingCancellationUsesNeutralStructuredStatus() {
+        val visual = HistoryRecordPresentation.status(
+            record(HistoryType.PING, """{"status":"CANCELLED"}"""),
+        )
+
+        assertEquals(StatusVisualState.CANCELLED, visual.state)
+        assertEquals("已停止", visual.label)
+    }
+
+    @Test
+    fun legacyToolRecordsRemainConservativeWhenFailureReasonIsMissing() {
         assertEquals(
             StatusVisualState.NORMAL,
             HistoryRecordPresentation.status(
@@ -81,7 +143,7 @@ class HistoryRecordPresentationTest {
             ).state,
         )
         assertEquals(
-            StatusVisualState.WARNING,
+            StatusVisualState.UNKNOWN,
             HistoryRecordPresentation.status(
                 record(HistoryType.TCP, "{\"success\":false}"),
             ).state,
@@ -92,6 +154,84 @@ class HistoryRecordPresentationTest {
                 record(HistoryType.DNS, "{\"status\":\"NO_RECORDS\"}"),
             ).state,
         )
+        assertEquals(
+            StatusVisualState.NORMAL,
+            HistoryRecordPresentation.status(
+                record(HistoryType.DNS, "{\"success\":true}"),
+            ).state,
+        )
+        assertEquals(
+            StatusVisualState.UNKNOWN,
+            HistoryRecordPresentation.status(
+                record(HistoryType.DNS, "{\"success\":false}"),
+            ).state,
+        )
+    }
+
+    @Test
+    fun dnsStructuredStatusesStayScopedToDnsLookup() {
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NORMAL, "正常"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.DNS, """{"status":"SUCCESS"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.WARNING, "域名不存在"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.DNS, """{"status":"NXDOMAIN"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.ERROR, "严重异常"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.DNS, """{"status":"TIMEOUT"}"""),
+            ),
+        )
+    }
+
+    @Test
+    fun tcpOutcomePreservesTargetScopedSemantics() {
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NORMAL, "正常"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.TCP, """{"outcome":"CONNECT_SUCCESS"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NOTICE, "需关注"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.TCP, """{"outcome":"CONNECTION_REFUSED"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.NOTICE, "未响应"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.TCP, """{"outcome":"TIMEOUT"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.ERROR, "无法到达"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.TCP, """{"outcome":"NO_ROUTE"}"""),
+            ),
+        )
+        assertEquals(
+            HistoryStatusVisual(StatusVisualState.ERROR, "无法到达"),
+            HistoryRecordPresentation.status(
+                record(HistoryType.TCP, """{"outcome":"NETWORK_UNREACHABLE"}"""),
+            ),
+        )
+    }
+
+    @Test
+    fun malformedToolPayloadsSafelyRemainUnknown() {
+        listOf(HistoryType.PING, HistoryType.DNS, HistoryType.TCP).forEach { type ->
+            assertEquals(
+                HistoryStatusVisual(StatusVisualState.UNKNOWN, "未确定"),
+                HistoryRecordPresentation.status(record(type, "not-json")),
+            )
+        }
     }
 
     @Test

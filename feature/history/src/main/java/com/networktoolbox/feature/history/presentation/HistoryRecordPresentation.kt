@@ -7,6 +7,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 internal data class HistoryCardContent(
     val title: String,
@@ -60,14 +61,10 @@ internal object HistoryRecordPresentation {
 
     fun status(record: HistoryRecord): HistoryStatusVisual = when (record.type) {
         HistoryType.REPORT -> reportStatus(record.detailJson)
-        HistoryType.PING -> record.detailJson.readJsonBoolean("success")?.let { success ->
-            if (success) normal() else warning("异常")
-        } ?: unknown()
+        HistoryType.PING -> pingStatus(record.detailJson)
 
         HistoryType.DNS -> dnsStatus(record.detailJson)
-        HistoryType.TCP -> record.detailJson.readJsonBoolean("success")?.let { success ->
-            if (success) normal() else warning("异常")
-        } ?: unknown()
+        HistoryType.TCP -> tcpStatus(record.detailJson)
 
         // A completed LAN scan is itself a successful local operation. There
         // is no network fault status in the LAN scan history contract.
@@ -95,18 +92,69 @@ internal object HistoryRecordPresentation {
             ?: json.readJsonString("overallStatus"),
     )
 
-    private fun dnsStatus(json: String): HistoryStatusVisual {
-        val status = json.readJsonString("status")?.uppercase() ?: return unknown()
-        return when (status) {
-            "SUCCESS" -> normal()
-            "NO_RECORDS" -> notice("无记录")
-            "NXDOMAIN" -> warning("域名不存在")
-            "PARTIAL" -> warning("部分完成")
-            "TIMEOUT", "NETWORK_ERROR", "INVALID_RESPONSE", "FAILED", "INVALID_QUERY" ->
-                error("严重异常")
-
-            else -> unknown()
+    private fun pingStatus(json: String): HistoryStatusVisual {
+        when (json.readJsonString("status")?.uppercase(Locale.ROOT)) {
+            "CANCELLED" -> return cancelled()
         }
+
+        val qualityLevel = json.readJsonString("qualityLevel")?.uppercase(Locale.ROOT)
+        if (qualityLevel != null) {
+            return when (qualityLevel) {
+                "EXCELLENT", "GOOD" -> normal()
+                "FAIR", "POOR" -> notice("需关注")
+                "UNKNOWN" -> if (json.hasNoResponses()) notice("未响应") else unknown()
+                else -> unknown()
+            }
+        }
+
+        // Legacy single-probe records only provide a boolean. A failed legacy
+        // record has no reliable failure classification, so keep it unknown.
+        return json.readJsonBoolean("success")?.let { success ->
+            if (success) normal() else unknown()
+        } ?: unknown()
+    }
+
+    private fun tcpStatus(json: String): HistoryStatusVisual {
+        val outcome = json.readJsonString("outcome")?.uppercase(Locale.ROOT)
+        if (outcome != null) {
+            return when (outcome) {
+                "CONNECT_SUCCESS" -> normal()
+                "CONNECTION_REFUSED" -> notice("需关注")
+                "TIMEOUT" -> notice("未响应")
+                "NO_ROUTE", "NETWORK_UNREACHABLE" -> error("无法到达")
+                "UNKNOWN" -> unknown()
+                else -> unknown()
+            }
+        }
+
+        // Legacy TCP records have no typed outcome. Do not turn a generic
+        // false value into a whole-network failure or invent a reason.
+        return json.readJsonBoolean("success")?.let { success ->
+            if (success) normal() else unknown()
+        } ?: unknown()
+    }
+
+    private fun dnsStatus(json: String): HistoryStatusVisual {
+        val status = json.readJsonString("status")?.uppercase(Locale.ROOT)
+        if (status != null) {
+            return when (status) {
+                "SUCCESS" -> normal()
+                "NO_RECORDS" -> notice("无记录")
+                "NXDOMAIN" -> warning("域名不存在")
+                "PARTIAL" -> warning("部分完成")
+                "TIMEOUT", "NETWORK_ERROR", "INVALID_RESPONSE", "FAILED", "INVALID_QUERY" ->
+                    error("严重异常")
+
+                else -> unknown()
+            }
+        }
+
+        // Legacy DNS records only distinguish success/failure. A false value
+        // is intentionally conservative because its exact resolver outcome is
+        // not persisted.
+        return json.readJsonBoolean("success")?.let { success ->
+            if (success) normal() else unknown()
+        } ?: unknown()
     }
 
     private fun statusVisual(raw: String?): HistoryStatusVisual = when (raw?.uppercase()) {
@@ -126,6 +174,8 @@ internal object HistoryRecordPresentation {
 
     private fun error(label: String) = HistoryStatusVisual(StatusVisualState.ERROR, label)
 
+    private fun cancelled() = HistoryStatusVisual(StatusVisualState.CANCELLED, "已停止")
+
     private fun unknown() = HistoryStatusVisual(StatusVisualState.UNKNOWN, "未确定")
 }
 
@@ -137,6 +187,21 @@ private fun String.readJsonBoolean(key: String): Boolean? {
         startsWith("false", valueStart) -> false
         else -> null
     }
+}
+
+private fun String.hasNoResponses(): Boolean {
+    val sentPackets = readJsonNumber("sentPackets")?.toIntOrNull()
+    val receivedPackets = readJsonNumber("receivedPackets")?.toIntOrNull()
+    val packetLoss = readJsonNumber("packetLoss")?.toDoubleOrNull()
+    return (sentPackets != null && sentPackets > 0 && receivedPackets == 0) ||
+        (packetLoss != null && packetLoss >= 100.0)
+}
+
+private fun String.readJsonNumber(key: String): String? {
+    val marker = "\"$key\":"
+    val valueStart = indexOf(marker).takeIf { it >= 0 }?.plus(marker.length) ?: return null
+    val valueEnd = indexOfAny(charArrayOf(',', '}'), valueStart).takeIf { it >= 0 } ?: length
+    return substring(valueStart, valueEnd).trim().takeUnless { it == "null" || it.isEmpty() }
 }
 
 private fun String.readJsonString(key: String): String? {

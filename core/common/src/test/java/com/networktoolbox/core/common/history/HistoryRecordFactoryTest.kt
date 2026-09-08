@@ -111,6 +111,7 @@ class HistoryRecordFactoryTest {
             success = false,
             latencyMs = null,
             errorMessage = "Connection refused",
+            outcome = "CONNECTION_REFUSED",
         )
         val report = HistoryRecordFactory.report(
             timestamp = 1L,
@@ -123,6 +124,7 @@ class HistoryRecordFactoryTest {
         assertTrue(tcp.summary == "TCP 端口检测失败")
         assertTrue(tcp.detailJson.contains("\"port\":443"))
         assertTrue(tcp.detailJson.contains("Connection refused"))
+        assertTrue(tcp.detailJson.contains("\"outcome\":\"CONNECTION_REFUSED\""))
         assertTrue(report.type == HistoryType.REPORT)
         assertTrue(report.title == "网络诊断")
         assertTrue(report.detailJson.contains("\"findings\":[{"))

@@ -156,6 +156,7 @@ object HistoryRecordFactory {
         success: Boolean,
         latencyMs: Long?,
         errorMessage: String?,
+        outcome: String? = null,
     ): HistoryRecord = HistoryRecord(
         timestamp = timestamp,
         type = HistoryType.TCP,
@@ -167,6 +168,7 @@ object HistoryRecordFactory {
             "success" to success.toString(),
             "latencyMs" to jsonNumber(latencyMs),
             "errorMessage" to jsonNullableString(errorMessage),
+            "outcome" to jsonNullableString(outcome),
         ),
     )
 

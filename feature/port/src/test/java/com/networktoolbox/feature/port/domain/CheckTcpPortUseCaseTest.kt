@@ -4,6 +4,7 @@ import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.core.network.tcp.TcpProbeResult
+import com.networktoolbox.core.common.diagnostic.DiagnosticTcpOutcome
 import com.networktoolbox.feature.port.FakeTcpPortChecker
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,6 +19,7 @@ class CheckTcpPortUseCaseTest {
             success = true,
             latencyMs = 8,
             errorMessage = null,
+            outcome = DiagnosticTcpOutcome.CONNECT_SUCCESS,
         )
         val checker = FakeTcpPortChecker(expected)
         val savedRecords = mutableListOf<HistoryRecord>()
@@ -35,6 +37,10 @@ class CheckTcpPortUseCaseTest {
         assertEquals(1_500, checker.receivedTimeoutMs)
         assertEquals(HistoryType.TCP, savedRecords.single().type)
         assertEquals("TCP · 192.0.2.10:443", savedRecords.single().title)
+        assertEquals(
+            true,
+            savedRecords.single().detailJson.contains("\"outcome\":\"CONNECT_SUCCESS\""),
+        )
     }
 
     @Test

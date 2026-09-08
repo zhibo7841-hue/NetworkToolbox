@@ -48,6 +48,7 @@ class CheckTcpPortUseCase @Inject constructor(
                 success = result.success,
                 latencyMs = result.latencyMs,
                 errorMessage = result.errorMessage,
+                outcome = result.outcome?.name,
             ),
         )
     }
