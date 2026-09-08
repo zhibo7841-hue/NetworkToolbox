@@ -29,6 +29,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core:common"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:network"))
     implementation(platform(libs.androidx.compose.bom))
@@ -41,4 +42,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     kapt(libs.com.google.dagger.hilt.compiler)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

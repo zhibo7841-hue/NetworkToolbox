@@ -157,6 +157,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val dashboardUiState by dashboardViewModel.uiState.collectAsState()
+            val recentDiagnosisRecord by dashboardViewModel.recentDiagnosis.collectAsState()
             val dnsUiState by dnsViewModel.uiState.collectAsState()
             val historyUiState by historyViewModel.uiState.collectAsState()
             val pingUiState by pingViewModel.uiState.collectAsState()
@@ -176,20 +177,17 @@ class MainActivity : ComponentActivity() {
             var restoredAutomaticDiagnosticResult by remember {
                 mutableStateOf<AutomaticDiagnosticResult?>(null)
             }
-            val recentHistory = (historyUiState as? HistoryUiState.Success)
-                ?.records
-                ?.firstOrNull { it.type == HistoryType.REPORT }
-                ?.let { record ->
-                    RecentHistoryPreview(
-                        type = record.type.displayName(),
-                        title = record.title,
-                        summary = record.summary,
-                        timestamp = record.timestamp,
-                        status = DiagnosticHistoryReportResolver.resolve(record)
-                            ?.recentDiagnosticStatus()
-                            ?: RecentDiagnosticStatus.UNKNOWN,
-                    )
-                }
+            val recentHistory = recentDiagnosisRecord?.let { record ->
+                RecentHistoryPreview(
+                    type = record.type.displayName(),
+                    title = record.title,
+                    summary = record.summary,
+                    timestamp = record.timestamp,
+                    status = DiagnosticHistoryReportResolver.resolve(record)
+                        ?.recentDiagnosticStatus()
+                        ?: RecentDiagnosticStatus.UNKNOWN,
+                )
+            }
 
             fun openTool(screen: ToolScreen) {
                 if (toolScreen == ToolScreen.LAN_SCAN && screen != ToolScreen.LAN_SCAN) {

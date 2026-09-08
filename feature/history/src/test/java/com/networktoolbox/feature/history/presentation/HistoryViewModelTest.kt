@@ -8,6 +8,8 @@ import com.networktoolbox.feature.history.domain.DeleteHistoryUseCase
 import com.networktoolbox.feature.history.domain.GetHistoryUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -110,6 +112,8 @@ private class FakeHistoryRepository(
     }
 
     override suspend fun getHistory(): List<HistoryRecord> = records.toList()
+
+    override fun observeHistory(): Flow<List<HistoryRecord>> = flowOf(records.toList())
 
     override suspend fun delete(id: Long) {
         deletedIds += id

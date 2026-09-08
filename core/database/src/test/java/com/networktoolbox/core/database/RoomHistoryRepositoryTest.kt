@@ -2,6 +2,9 @@ package com.networktoolbox.core.database
 
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -71,6 +74,18 @@ class RoomHistoryRepositoryTest {
         assertTrue(repository.getHistory().isEmpty())
     }
 
+    @Test
+    fun observeHistoryEmitsCurrentAndInsertedRecords() = runBlocking {
+        val repository = RoomHistoryRepository(FakeHistoryDao())
+        val record = historyRecord(title = "Observed")
+
+        assertTrue(repository.observeHistory().first().isEmpty())
+
+        repository.save(record)
+
+        assertEquals("Observed", repository.observeHistory().first().single().title)
+    }
+
     private fun historyRecord(
         timestamp: Long = 100L,
         type: HistoryType = HistoryType.REPORT,
@@ -86,23 +101,34 @@ class RoomHistoryRepositoryTest {
 
 private class FakeHistoryDao : HistoryDao {
     private val records = mutableListOf<HistoryEntity>()
+    private val historyFlow = MutableStateFlow<List<HistoryEntity>>(emptyList())
     private var nextId = 1L
 
     override suspend fun insert(record: HistoryEntity): Long {
         val stored = record.copy(id = record.id.takeIf { it > 0 } ?: nextId++)
         records.removeAll { it.id == stored.id }
         records += stored
+        publish()
         return stored.id
     }
 
     override suspend fun getAll(): List<HistoryEntity> = records
         .sortedWith(compareByDescending<HistoryEntity> { it.timestamp }.thenByDescending { it.id })
 
+    override fun observeAll(): Flow<List<HistoryEntity>> = historyFlow
+
     override suspend fun deleteById(id: Long) {
         records.removeAll { it.id == id }
+        publish()
     }
 
     override suspend fun clear() {
         records.clear()
+        publish()
+    }
+
+    private fun publish() {
+        historyFlow.value = records
+            .sortedWith(compareByDescending<HistoryEntity> { it.timestamp }.thenByDescending { it.id })
     }
 }
