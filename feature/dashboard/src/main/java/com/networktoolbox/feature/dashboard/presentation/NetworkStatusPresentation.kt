@@ -195,10 +195,12 @@ object NetworkStatusPresentation {
         val configuredServers = dnsServers
             .filter(String::isNotBlank)
             .distinct()
-        return when (configuredServers.size) {
-            0 -> "未配置"
-            1 -> configuredServers.first()
-            else -> "${configuredServers.first()}\n+${configuredServers.size - 1} 个"
+        val preferredServer = preferredDnsForSummary(configuredServers)
+        return when {
+            preferredServer == null && configuredServers.isEmpty() -> "未配置"
+            preferredServer == null -> UNAVAILABLE_VALUE
+            configuredServers.size == 1 -> preferredServer
+            else -> "$preferredServer\n+${configuredServers.size - 1} 个"
         }
     }
 

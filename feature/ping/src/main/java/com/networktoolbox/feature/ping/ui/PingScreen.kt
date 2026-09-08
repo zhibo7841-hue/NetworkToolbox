@@ -25,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import com.networktoolbox.core.designsystem.DestructiveActionButton
-import com.networktoolbox.core.designsystem.NetworkCard
 import com.networktoolbox.core.designsystem.NetworkToolAccent
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
@@ -36,6 +35,7 @@ import com.networktoolbox.core.designsystem.ToolInputSection
 import com.networktoolbox.core.designsystem.ToolMetric
 import com.networktoolbox.core.designsystem.ToolMetricGrid
 import com.networktoolbox.core.designsystem.ToolResultRow
+import com.networktoolbox.core.designsystem.ToolRunningSection
 import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.core.designsystem.ToolScreenLayout
 import com.networktoolbox.core.designsystem.ToolStatusSummary
@@ -213,7 +213,7 @@ private fun RunningCard(
     status: PingStatus.Running,
     onStop: () -> Unit,
 ) {
-    NetworkCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+    ToolRunningSection {
         ToolStatusSummary(
             title = if (status.expectedCount == null) "正在连续检测" else "正在检测",
             status = StatusVisualState.RUNNING,

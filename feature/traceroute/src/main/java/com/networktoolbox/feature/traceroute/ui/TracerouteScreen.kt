@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.DestructiveActionButton
-import com.networktoolbox.core.designsystem.NetworkCard
 import com.networktoolbox.core.designsystem.NetworkToolAccent
 import com.networktoolbox.core.designsystem.NetworkToolboxComponentShapes
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
@@ -35,6 +34,7 @@ import com.networktoolbox.core.designsystem.StatusVisualState
 import com.networktoolbox.core.designsystem.ToolInputSection
 import com.networktoolbox.core.designsystem.ToolResultRow
 import com.networktoolbox.core.designsystem.ToolResultSection
+import com.networktoolbox.core.designsystem.ToolRunningSection
 import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.core.designsystem.ToolScreenLazyLayout
 import com.networktoolbox.core.designsystem.ToolStatusSummary
@@ -174,7 +174,7 @@ private fun TargetInputSection(
 
 @Composable
 private fun RunningCard(status: TracerouteUiStatus.Running, onStop: () -> Unit) {
-    NetworkCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+    ToolRunningSection {
         ToolStatusSummary(
             title = "正在追踪",
             status = StatusVisualState.RUNNING,

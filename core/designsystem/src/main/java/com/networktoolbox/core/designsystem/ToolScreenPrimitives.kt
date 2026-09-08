@@ -126,6 +126,21 @@ fun ToolInputSection(
     }
 }
 
+/**
+ * Shared lightweight container for an operation that is currently running.
+ *
+ * Running is a process state, not a completed result, so it uses the same
+ * outlined surface language as ordinary tool sections instead of a heavy
+ * filled brand surface.
+ */
+@Composable
+fun ToolRunningSection(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    OutlinedNetworkCard(modifier = modifier, content = content)
+}
+
 @Composable
 fun ToolResultSection(
     modifier: Modifier = Modifier,

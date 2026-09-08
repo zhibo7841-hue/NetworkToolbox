@@ -208,10 +208,16 @@ class NetworkStatusPresentationTest {
     }
 
     @Test
-    fun dnsSummaryValue_showsFirstAddressAndShortCount() {
+    fun dnsSummaryValue_prefersIpv4AndKeepsShortCount() {
         assertEquals(
             "192.0.2.53",
             NetworkStatusPresentation.dnsSummaryValue(listOf("192.0.2.53")),
+        )
+        assertEquals(
+            "192.0.2.53\n+1 个",
+            NetworkStatusPresentation.dnsSummaryValue(
+                listOf("2001:db8::53", "192.0.2.53"),
+            ),
         )
         assertEquals(
             "192.0.2.53\n+1 个",
@@ -220,6 +226,14 @@ class NetworkStatusPresentationTest {
             ),
         )
         assertEquals("未配置", NetworkStatusPresentation.dnsSummaryValue(emptyList()))
+    }
+
+    @Test
+    fun dnsSummaryValue_fallsBackToIpv6WhenNoIpv4Exists() {
+        assertEquals(
+            "2001:db8::53",
+            NetworkStatusPresentation.dnsSummaryValue(listOf("2001:db8::53")),
+        )
     }
 
     @Test

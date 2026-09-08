@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import com.networktoolbox.core.common.diagnostic.DiagnosticTcpOutcome
-import com.networktoolbox.core.designsystem.NetworkCard
 import com.networktoolbox.core.designsystem.NetworkToolAccent
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.OutlinedNetworkCard
@@ -21,6 +20,7 @@ import com.networktoolbox.core.designsystem.ToolInputSection
 import com.networktoolbox.core.designsystem.ToolMetric
 import com.networktoolbox.core.designsystem.ToolMetricGrid
 import com.networktoolbox.core.designsystem.ToolResultRow
+import com.networktoolbox.core.designsystem.ToolRunningSection
 import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.core.designsystem.ToolScreenLayout
 import com.networktoolbox.core.designsystem.ToolStatusSummary
@@ -96,7 +96,7 @@ fun TcpScreen(
 
 @Composable
 private fun LoadingMessage(host: String, port: String) {
-    NetworkCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+    ToolRunningSection {
         ToolStatusSummary(
             title = "正在检测",
             status = StatusVisualState.RUNNING,

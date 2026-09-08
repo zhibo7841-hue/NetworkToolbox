@@ -470,10 +470,10 @@ source-aware navigation path; it does not re-run or re-analyze the report.
 ### Outlined surface policy and hero boundary
 
 Use `OutlinedNetworkCard` for ordinary sections, check groups, findings,
-recommendation groups, technical details, history records, and idle/error
-information. Use a filled or tonal `NetworkCard` only where the surface
-itself establishes hierarchy: a running hero, a completed overall-status
-hero, or another explicitly primary diagnosis surface. Do not place a Card
+recommendation groups, technical details, history records, idle/error
+information, and running tool state. Use a filled or tonal `NetworkCard` only
+where the surface itself establishes hierarchy: a completed overall-status
+hero or another explicitly primary diagnosis surface. Do not place a Card
 inside another Card. A `NetworkStatusChip` may appear inside a hero or an
 outlined group as the compact semantic status indicator.
 
@@ -506,9 +506,10 @@ The core network tools use one predictable Compose reading order:
 3. **Primary action** — one shared `PrimaryActionButton` starts the existing
    operation. Stop or retry actions use the appropriate secondary or
    destructive style and do not change the operation semantics.
-4. **Running state** — a compact tonal `NetworkCard` shows real progress or
-   live values supplied by the existing ViewModel. It never uses fake timers,
-   simulated progress, or a full-screen loading treatment.
+4. **Running state** — the shared `ToolRunningSection` uses an outlined (or,
+   if a future screen needs it, very light tonal) surface to show real
+   progress or live values supplied by the existing ViewModel. It never uses
+   fake timers, simulated progress, or a full-screen loading treatment.
 5. **Result summary** — the first result surface shows the localized status,
    the target, and the most important conclusion. Tool status is not promoted
    into a claim about the entire network.
@@ -537,3 +538,28 @@ their current parameters, detection/calculation rules, limits, history
 behavior, and source-aware navigation. This pattern changes only their
 Compose presentation; it does not add a network protocol, alter a timeout,
 or redefine a result.
+
+## Running State Pattern
+
+All core tools with a visible in-flight operation use the shared
+`ToolRunningSection`. Its default surface is `OutlinedNetworkCard` with the
+existing Deep Network Blue theme surfaces and outline variant. The process
+accent is `StatusVisualState.RUNNING` / primary blue; it is never rendered as
+healthy green, attention amber, or error red. Progress indicators consume the
+real progress supplied by the current ViewModel and use primary blue on a
+low-contrast track. Existing compact metrics remain visible without turning
+each metric into a filled card. Ping and Traceroute keep their outlined
+destructive stop action; DNS and TCP retain their existing short loading state
+without inventing a stop control. A running surface is intentionally weaker
+than a completed result hero.
+
+## Home Network Summary Preference
+
+The Home Hero DNS value is a presentation-only compact summary. It selects the
+first valid IPv4 configured DNS address, then falls back to the first valid
+IPv6 address when no IPv4 address exists. With multiple configured servers it
+shows only that preferred address plus the existing short count. An empty or
+unrecognized list uses the existing unavailable wording. The full configured
+DNS list remains unchanged in Network Detail, and Automatic Diagnostics and
+DNS Lookup continue to consume the complete `NetworkContext`/DNS result rather
+than this Home-only preference.
