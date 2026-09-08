@@ -492,3 +492,48 @@ Automatic Diagnostics, History, Report, Retry/Verify, or their data semantics.
 The current Home and Tools work is a visual/presentation migration only; it
 does not start the later Automatic Diagnostics, LAN Device Center, or
 Wake-on-LAN work.
+
+## Core Tool Screen Pattern
+
+The core network tools use one predictable Compose reading order:
+
+1. **Tool header** — a source-aware back action, the tool icon, the tool name,
+   and one short description. Core screens do not repeat the NetworkToolbox
+   brand header.
+2. **Input / target** — one `OutlinedNetworkCard` groups the target fields and
+   any optional parameters. Each input uses the Material 3
+   `OutlinedTextField`; validation remains inline and user-readable.
+3. **Primary action** — one shared `PrimaryActionButton` starts the existing
+   operation. Stop or retry actions use the appropriate secondary or
+   destructive style and do not change the operation semantics.
+4. **Running state** — a compact tonal `NetworkCard` shows real progress or
+   live values supplied by the existing ViewModel. It never uses fake timers,
+   simulated progress, or a full-screen loading treatment.
+5. **Result summary** — the first result surface shows the localized status,
+   the target, and the most important conclusion. Tool status is not promoted
+   into a claim about the entire network.
+6. **Key metrics** — related values use the compact `ToolMetricGrid` instead
+   of one large card per metric. Details use shared key/value rows and the
+   technical-data style for addresses, hostnames, and other raw values.
+7. **Detailed result** — secondary fields, per-record/per-hop rows, and
+   technical information stay in the same clear hierarchy and may be
+   collapsed where the existing tool already supports it.
+
+Ordinary input, result, detail, and list sections use outlined surfaces. Filled
+or tonal surfaces are reserved for the primary action context, running state,
+or an explicitly primary overall result. Cards are not nested inside cards.
+The shared spacing tokens (`XS`, `SM`, `MD`, `LG`, `XL`, `XXL`) and Material 3
+typography are used instead of screen-specific spacing values.
+
+The common status vocabulary is localized for ordinary users: `NORMAL` is
+shown as 正常, `NOTICE` as 提示, `WARNING` as 异常, `ERROR` as 严重异常,
+`UNKNOWN` as 未确定, and `CANCELLED` as 已停止. Raw enum names, exception
+strings, and machine codes are not displayed as ordinary result labels. The
+technical meaning of each tool result remains owned by its existing engine,
+UseCase, and presentation mapping.
+
+Ping, DNS Lookup, TCP Port Check, Traceroute, and IPv4 Subnet Calculator keep
+their current parameters, detection/calculation rules, limits, history
+behavior, and source-aware navigation. This pattern changes only their
+Compose presentation; it does not add a network protocol, alter a timeout,
+or redefine a result.

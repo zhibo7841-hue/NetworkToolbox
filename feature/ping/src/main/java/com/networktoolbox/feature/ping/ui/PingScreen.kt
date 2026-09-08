@@ -1,23 +1,19 @@
 package com.networktoolbox.feature.ping.ui
 
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.WifiTethering
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,7 +24,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
+import com.networktoolbox.core.designsystem.DestructiveActionButton
+import com.networktoolbox.core.designsystem.NetworkCard
+import com.networktoolbox.core.designsystem.NetworkToolAccent
+import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
+import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
+import com.networktoolbox.core.designsystem.OutlinedNetworkCard
+import com.networktoolbox.core.designsystem.PrimaryActionButton
+import com.networktoolbox.core.designsystem.StatusVisualState
+import com.networktoolbox.core.designsystem.ToolInputSection
+import com.networktoolbox.core.designsystem.ToolMetric
+import com.networktoolbox.core.designsystem.ToolMetricGrid
+import com.networktoolbox.core.designsystem.ToolResultRow
+import com.networktoolbox.core.designsystem.ToolScreenHeader
+import com.networktoolbox.core.designsystem.ToolScreenLayout
+import com.networktoolbox.core.designsystem.ToolStatusSummary
 import com.networktoolbox.core.network.ping.PingMethod
 import com.networktoolbox.core.network.ping.PingProtocol
 import com.networktoolbox.core.network.ping.PingQualityLevel
@@ -61,94 +71,70 @@ fun PingScreen(
         }
     }
 
-    Surface(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            TextButton(onClick = onBack, enabled = !isRunning) {
-                Text("返回工具")
-            }
-            Text(
-                text = "Ping",
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Text(
-                text = "分析目标的可达性与网络质量",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    ToolScreenLayout(modifier = modifier) {
+        ToolScreenHeader(
+            title = "Ping",
+            description = "分析目标的可达性与网络质量",
+            icon = Icons.Outlined.WifiTethering,
+            accent = NetworkToolAccent.PRIMARY,
+            onBack = onBack,
+            backEnabled = !isRunning,
+        )
 
-            if (isRunning) {
-                RunningCard(
-                    status = uiState.status as PingStatus.Running,
-                    onStop = onStop,
+        if (isRunning) {
+            RunningCard(
+                status = uiState.status as PingStatus.Running,
+                onStop = onStop,
+            )
+        } else {
+            ToolInputSection(title = "目标") {
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = uiState.targetInput,
+                    onValueChange = onTargetChanged,
+                    label = { Text("目标地址或域名") },
+                    singleLine = true,
+                    isError = uiState.status.isTargetInputError(),
                 )
-            } else {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text("目标", style = MaterialTheme.typography.titleMedium)
-                        OutlinedTextField(
-                            modifier = Modifier.fillMaxWidth(),
-                            value = uiState.targetInput,
-                            onValueChange = onTargetChanged,
-                            label = { Text("目标地址或域名") },
-                            singleLine = true,
-                            isError = uiState.status.isTargetInputError(),
-                        )
-                        if (inputErrorMessage != null) {
-                            Text(
-                                inputErrorMessage,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = onPing,
-                        ) {
-                            Text("开始检测")
-                        }
-
-                        TextButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { advancedSettingsExpanded = !advancedSettingsExpanded },
-                        ) {
-                            Text(
-                                if (advancedSettingsExpanded) {
-                                    "收起高级设置"
-                                } else {
-                                    "高级设置 >"
-                                },
-                            )
-                        }
-
-                        if (advancedSettingsExpanded) {
-                            AdvancedSettings(
-                                uiState = uiState,
-                                onModeChanged = onModeChanged,
-                                onProtocolChanged = onProtocolChanged,
-                                onCountChanged = onCountChanged,
-                                onIntervalChanged = onIntervalChanged,
-                            )
-                        }
-                    }
+                inputErrorMessage?.let { message ->
+                    Text(
+                        message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
 
-                when (val status = uiState.status) {
-                    PingStatus.Idle -> Unit
-                    is PingStatus.Success -> PingResultCard(status.result)
-                    is PingStatus.Failed -> PingResultCard(status.result)
-                    is PingStatus.Cancelled -> CancelledCard(status.target)
-                    is PingStatus.Running -> Unit
+                PrimaryActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onPing,
+                ) {
+                    Text("开始检测")
                 }
+
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { advancedSettingsExpanded = !advancedSettingsExpanded },
+                ) {
+                    Text(if (advancedSettingsExpanded) "收起高级设置" else "高级设置 >")
+                }
+
+                if (advancedSettingsExpanded) {
+                    AdvancedSettings(
+                        uiState = uiState,
+                        onModeChanged = onModeChanged,
+                        onProtocolChanged = onProtocolChanged,
+                        onCountChanged = onCountChanged,
+                        onIntervalChanged = onIntervalChanged,
+                    )
+                }
+            }
+
+            when (val status = uiState.status) {
+                PingStatus.Idle -> Unit
+                is PingStatus.Success -> PingResultCard(status.result)
+                is PingStatus.Failed -> PingResultCard(status.result)
+                is PingStatus.Cancelled -> CancelledCard(status.target)
+                is PingStatus.Running -> Unit
             }
         }
     }
@@ -162,7 +148,7 @@ private fun AdvancedSettings(
     onCountChanged: (String) -> Unit,
     onIntervalChanged: (String) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
         Text("检测模式", style = MaterialTheme.typography.labelLarge)
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             SegmentedButton(
@@ -198,7 +184,7 @@ private fun AdvancedSettings(
         }
 
         if (uiState.mode == PingDetectionMode.CONTINUOUS) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
                     value = uiState.countInput,
@@ -227,85 +213,64 @@ private fun RunningCard(
     status: PingStatus.Running,
     onStop: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                if (status.expectedCount == null) "正在连续检测" else "正在检测",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(status.target)
-            status.expectedCount?.let { expectedCount ->
-                val progress = if (expectedCount == 0) {
-                    0f
-                } else {
-                    (status.completedCount.toFloat() / expectedCount).coerceIn(0f, 1f)
-                }
-                Text("已完成：${status.completedCount} / $expectedCount")
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+    NetworkCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+        ToolStatusSummary(
+            title = if (status.expectedCount == null) "正在连续检测" else "正在检测",
+            status = StatusVisualState.RUNNING,
+            label = "检测中",
+        )
+        Text(status.target, style = NetworkToolboxTextStyles.TechnicalData)
+        status.expectedCount?.let { expectedCount ->
+            val progress = if (expectedCount == 0) {
+                0f
+            } else {
+                (status.completedCount.toFloat() / expectedCount).coerceIn(0f, 1f)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MetricBlock(
-                    label = "当前",
-                    value = status.latestLatencyMs?.let { "$it ms" } ?: "未收到",
-                    modifier = Modifier.weight(1f),
-                )
-                MetricBlock(
-                    label = "平均",
-                    value = status.avgLatencyMs.latencyText(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MetricBlock(
-                    label = "最低",
-                    value = status.minLatencyMs?.let { "$it ms" } ?: "未收到",
-                    modifier = Modifier.weight(1f),
-                )
-                MetricBlock(
-                    label = "最高",
-                    value = status.maxLatencyMs?.let { "$it ms" } ?: "未收到",
-                    modifier = Modifier.weight(1f),
-                )
-                MetricBlock(
-                    label = "丢包",
-                    value = status.packetLoss.percentText(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Text(
-                "检测过程中可随时停止。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(
+            Text("已完成：${status.completedCount} / $expectedCount")
+            LinearProgressIndicator(
+                progress = { progress },
                 modifier = Modifier.fillMaxWidth(),
-                onClick = onStop,
-            ) {
-                Text("停止检测")
-            }
+            )
+        }
+        ToolMetricGrid(
+            metrics = listOf(
+                ToolMetric("当前", status.latestLatencyMs?.let { "$it ms" } ?: "未收到"),
+                ToolMetric("平均", status.avgLatencyMs.latencyText()),
+                ToolMetric("最低", status.minLatencyMs?.let { "$it ms" } ?: "未收到"),
+                ToolMetric("最高", status.maxLatencyMs?.let { "$it ms" } ?: "未收到"),
+                ToolMetric("丢包", status.packetLoss.percentText()),
+            ),
+        )
+        Text(
+            "检测过程中可随时停止。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DestructiveActionButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onStop,
+        ) {
+            Text("停止检测")
         }
     }
 }
 
 @Composable
 private fun CancelledCard(target: String) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("检测已停止", style = MaterialTheme.typography.titleMedium)
-            Text("目标：${target.ifBlank { "未知" }}")
-            Text(
-                "本次未生成完整结果，也不会写入历史记录。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = "检测已停止",
+            status = StatusVisualState.CANCELLED,
+            label = "已停止",
+        )
+        ToolResultRow(
+            label = "目标",
+            value = target.ifBlank { "未知" },
+            valueStyle = NetworkToolboxTextStyles.TechnicalData,
+        )
+        Text(
+            "本次未生成完整结果，也不会写入历史记录。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -316,152 +281,85 @@ private fun PingResultCard(result: PingSessionResult) {
     }
     val completed = result.receivedPackets > 0
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                "${result.target.ifBlank { "未知" }} · ${if (completed) "已完成" else "无法访问"}",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            QualityBadge(result.qualityLevel)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MetricBlock(
-                    label = "平均延迟",
-                    value = result.avgLatencyMs.latencyText(),
-                    modifier = Modifier.weight(1f),
-                )
-                MetricBlock(
-                    label = "丢包率",
-                    value = result.packetLoss.percentText(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Text(result.localizedSummary())
-            if (!completed) {
-                result.errorMessage
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { errorMessage ->
-                        ResultRow("原因", errorMessage.displayMessage())
-                        errorMessage.toExplanation()?.let { explanation ->
-                            Text(
-                                explanation,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-            }
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = "${result.target.ifBlank { "未知" }} · ${if (completed) "已完成" else "无法访问"}",
+            status = result.qualityLevel.statusVisualState(),
+            label = result.qualityLevel.statusLabel(),
+        )
+        ToolMetricGrid(
+            metrics = listOf(
+                ToolMetric("平均延迟", result.avgLatencyMs.latencyText()),
+                ToolMetric("丢包率", result.packetLoss.percentText()),
+            ),
+        )
+        Text(result.localizedSummary())
 
-            TextButton(onClick = { advancedExpanded = !advancedExpanded }) {
-                Text(if (advancedExpanded) "收起详细信息" else "查看详细信息")
-            }
-            if (advancedExpanded) {
-                Text("基本信息", style = MaterialTheme.typography.labelLarge)
-                ResultRow("检测协议", result.protocol.displayName())
-                ResultRow("地址", result.address ?: "未解析")
-                ResultRow("检测方式", result.method.displayName())
-                Text("数据包", style = MaterialTheme.typography.labelLarge)
-                ResultRow("发送", result.sentPackets.toString())
-                ResultRow("接收", result.receivedPackets.toString())
-                ResultRow("丢包", "${result.lostPackets}（${result.packetLoss.percentText()}）")
-                Text("延迟", style = MaterialTheme.typography.labelLarge)
-                ResultRow("最低延迟", result.minLatencyMs?.let { "$it ms" } ?: "未检测到")
-                ResultRow("平均延迟", result.avgLatencyMs.latencyText())
-                ResultRow("最高延迟", result.maxLatencyMs?.let { "$it ms" } ?: "未检测到")
-                ResultRow("抖动", result.jitterMs.latencyText())
-            }
+        if (!completed) {
+            result.errorMessage
+                ?.takeIf { it.isNotBlank() }
+                ?.let { errorMessage ->
+                    ToolResultRow("原因", errorMessage.displayMessage())
+                    errorMessage.toExplanation()?.let { explanation ->
+                        Text(
+                            explanation,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+        }
+
+        TextButton(onClick = { advancedExpanded = !advancedExpanded }) {
+            Text(if (advancedExpanded) "收起详细信息" else "查看详细信息")
+        }
+        if (advancedExpanded) {
+            HorizontalDivider()
+            Text("基本信息", style = MaterialTheme.typography.labelLarge)
+            ToolResultRow("检测协议", result.protocol.displayName())
+            ToolResultRow(
+                "地址",
+                result.address ?: "未解析",
+                valueStyle = NetworkToolboxTextStyles.TechnicalData,
+            )
+            ToolResultRow("检测方式", result.method.displayName())
+            Text("数据包", style = MaterialTheme.typography.labelLarge)
+            ToolResultRow("发送", result.sentPackets.toString())
+            ToolResultRow("接收", result.receivedPackets.toString())
+            ToolResultRow("丢包", "${result.lostPackets}（${result.packetLoss.percentText()}）")
+            Text("延迟", style = MaterialTheme.typography.labelLarge)
+            ToolResultRow("最低延迟", result.minLatencyMs?.let { "$it ms" } ?: "未检测到")
+            ToolResultRow("平均延迟", result.avgLatencyMs.latencyText())
+            ToolResultRow("最高延迟", result.maxLatencyMs?.let { "$it ms" } ?: "未检测到")
+            ToolResultRow("抖动", result.jitterMs.latencyText())
         }
     }
 }
 
-@Composable
-private fun MetricBlock(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
+private fun PingQualityLevel.statusVisualState(): StatusVisualState = when (this) {
+    PingQualityLevel.EXCELLENT,
+    PingQualityLevel.GOOD,
+    -> StatusVisualState.NORMAL
+
+    PingQualityLevel.FAIR,
+    PingQualityLevel.POOR,
+    -> StatusVisualState.NOTICE
+
+    PingQualityLevel.UNKNOWN -> StatusVisualState.UNKNOWN
 }
 
-@Composable
-private fun QualityBadge(level: PingQualityLevel) {
-    val containerColor = when (level) {
-        PingQualityLevel.EXCELLENT,
-        PingQualityLevel.GOOD,
-        -> MaterialTheme.colorScheme.primaryContainer
-        PingQualityLevel.FAIR -> MaterialTheme.colorScheme.secondaryContainer
-        PingQualityLevel.POOR -> MaterialTheme.colorScheme.errorContainer
-        PingQualityLevel.UNKNOWN -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val contentColor = when (level) {
-        PingQualityLevel.EXCELLENT,
-        PingQualityLevel.GOOD,
-        -> MaterialTheme.colorScheme.onPrimaryContainer
-        PingQualityLevel.FAIR -> MaterialTheme.colorScheme.onSecondaryContainer
-        PingQualityLevel.POOR -> MaterialTheme.colorScheme.onErrorContainer
-        PingQualityLevel.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
-        color = containerColor,
-        contentColor = contentColor,
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Text(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            text = "${level.emoji()} 网络质量${level.displayName()}",
-            style = MaterialTheme.typography.titleMedium,
-        )
-    }
-}
-
-@Composable
-private fun ResultRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            modifier = Modifier.weight(0.4f),
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            modifier = Modifier.weight(0.6f),
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
+private fun PingQualityLevel.statusLabel(): String = when (this) {
+    PingQualityLevel.EXCELLENT -> "网络质量优秀"
+    PingQualityLevel.GOOD -> "网络质量良好"
+    PingQualityLevel.FAIR -> "网络质量一般"
+    PingQualityLevel.POOR -> "网络质量较差"
+    PingQualityLevel.UNKNOWN -> "网络质量未确定"
 }
 
 private fun PingProtocol.displayName(): String = when (this) {
     PingProtocol.AUTO -> "自动选择"
     PingProtocol.IPV4 -> "IPv4"
     PingProtocol.IPV6 -> "IPv6"
-}
-
-private fun PingQualityLevel.displayName(): String = when (this) {
-    PingQualityLevel.EXCELLENT -> "优秀"
-    PingQualityLevel.GOOD -> "良好"
-    PingQualityLevel.FAIR -> "一般"
-    PingQualityLevel.POOR -> "较差"
-    PingQualityLevel.UNKNOWN -> "暂无评价"
-}
-
-private fun PingQualityLevel.emoji(): String = when (this) {
-    PingQualityLevel.EXCELLENT, PingQualityLevel.GOOD -> "🟢"
-    PingQualityLevel.FAIR -> "🟡"
-    PingQualityLevel.POOR -> "🔴"
-    PingQualityLevel.UNKNOWN -> "⚪"
 }
 
 private fun PingSessionResult.localizedSummary(): String = when (qualityLevel) {
