@@ -393,6 +393,86 @@ Migration follows a staged path rather than a Big Bang rewrite:
 Each stage must preserve business semantics and pass unit tests, lint, build,
 and Sony Android 16 smoke checks where applicable.
 
+## Diagnostics, Report, and History patterns
+
+The v0.5 visual migration applies a two-tier surface rule to these existing
+destinations. Filled or tonal surfaces are reserved for a hero, an overall
+status, a primary diagnosis, an important attention state, or the single
+primary action. Tool/action entries and ordinary grouped information use the
+shared outlined surface. This keeps emphasis meaningful without introducing a
+new visual language.
+
+### Automatic Diagnostics pattern
+
+The idle state is concise: a short explanation, the local-only privacy note,
+and one primary `开始诊断` action in an outlined information surface. The
+running state uses one overall running hero, compact real check rows, a real
+stage progress indicator, and a secondary `停止诊断` action. It does not
+render six large parameter cards. The completed state follows this order:
+status hero, diagnosis conclusion, findings, recommendations, stage checks,
+optional technical details, and export actions.
+
+`NORMAL` is shown with the green normal visual, `ATTENTION`/`NOTICE` with an
+amber notice visual, `ERROR` with the red error visual, and `UNKNOWN` with the
+neutral visual. These visuals are applied to the relevant hero, chip, or row;
+the entire page is never tinted. A normal report with no material findings
+does not repeat a second “network normal” finding. NOTICE findings use an
+outlined, low-emphasis treatment; warning and error findings use the shared
+semantic status visual without turning every section into an error banner.
+The UI shows at most the current analyzer recommendation limit and never adds
+recommendations of its own. VPN, Fake-IP context, a gateway timeout with
+successful Internet evidence, and similar conservative notices remain
+informational rather than being promoted to a fault.
+
+Technical details are the lowest-priority expandable group. They use readable
+Chinese labels and key/value rows, preserve long addresses without forced
+single-line alignment, and never expose raw enum names or machine codes in
+ordinary content. Retry/Verify remains a compact comparison section and does
+not become a second hero; the existing retry and verification semantics are
+unchanged.
+
+### Report pattern
+
+Live reports and restored History reports use the same
+`DiagnosticReportPresentation` adapter and the same visual hierarchy. The
+header carries the report title, time, and available network type. A compact
+overall status hero is followed by the diagnosis conclusion, findings,
+recommendations, stage checks, expandable technical details, and export
+actions. Copy, save-PDF, and share-PDF remain available through the existing
+renderer and FileProvider flow; export is an outlined or tonal secondary
+action, not a competing primary action. Restoring a report displays the saved
+snapshot and never reruns analysis.
+
+### History pattern
+
+History uses compact outlined surfaces with a semantic status chip derived from
+the stored structured result, followed by the record type, title/target,
+summary, available network context, date, and an explicit report affordance
+when a report snapshot is restorable. The status is never inferred from a
+free-form summary string. Delete and clear remain lower-emphasis actions, and
+clear-history confirmation semantics are unchanged. Empty, loading, and error
+states use the same compact outlined treatment and the shared local-history
+wording. A report card opens the exact saved snapshot through the existing
+source-aware navigation path; it does not re-run or re-analyze the report.
+
+### Outlined surface policy and hero boundary
+
+Use `OutlinedNetworkCard` for ordinary sections, check groups, findings,
+recommendation groups, technical details, history records, and idle/error
+information. Use a filled or tonal `NetworkCard` only where the surface
+itself establishes hierarchy: a running hero, a completed overall-status
+hero, or another explicitly primary diagnosis surface. Do not place a Card
+inside another Card. A `NetworkStatusChip` may appear inside a hero or an
+outlined group as the compact semantic status indicator.
+
+This boundary applies in both light and dark themes. Spacing uses the shared
+`NetworkToolboxSpacing` tokens, typography uses Material 3 plus the shared
+technical-data style for addresses and other raw values, and status icons use
+the shared semantic mapping. Components must remain readable at large font
+scales and on narrow phones; long addresses wrap within their value area
+instead of forcing horizontal overflow. Existing navigation, system back,
+history snapshot, export, and business rules are outside this visual layer.
+
 ## Scope boundary
 
 This foundation does not modify Ping, DNS, TCP, Traceroute, LAN Scanner,

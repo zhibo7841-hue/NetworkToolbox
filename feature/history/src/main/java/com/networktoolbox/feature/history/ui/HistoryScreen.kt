@@ -27,7 +27,11 @@ import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.PingHistorySummary
 import com.networktoolbox.core.common.history.HistoryType
+import com.networktoolbox.core.designsystem.NetworkStatusChip
+import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
+import com.networktoolbox.core.designsystem.OutlinedNetworkCard
 import com.networktoolbox.feature.history.presentation.HistoryUiState
+import com.networktoolbox.feature.history.presentation.HistoryRecordPresentation
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -51,8 +55,8 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(NetworkToolboxSpacing.LG),
+            verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
         ) {
             TextButton(onClick = onBack, enabled = uiState !is HistoryUiState.Loading) {
                 Text("返回工具")
@@ -152,6 +156,8 @@ private fun HistoryRecordCard(
         else -> pingDetails?.target ?: dnsDetails?.domain ?: record.title
     }
     val reportActionAvailable = canShowReportAction(record, canOpenReport)
+    val statusVisual = HistoryRecordPresentation.status(record)
+    val networkLabel = HistoryRecordPresentation.networkLabel(record)
     val displaySummary = if (record.type == HistoryType.PING) {
         PingHistorySummary.fromQualityLevel(
             qualityLevel = pingDetails?.qualityLevel.orEmpty(),
@@ -161,28 +167,40 @@ private fun HistoryRecordCard(
         dnsDetails?.summary ?: record.summary.localizedHistorySummary()
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    OutlinedNetworkCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(record.type.displayName(), style = MaterialTheme.typography.titleMedium)
+                NetworkStatusChip(
+                    statusVisual.state,
+                    label = statusVisual.label,
+                    modifier = Modifier.padding(end = NetworkToolboxSpacing.SM),
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS),
+                ) {
+                    Text(record.type.displayName(), style = MaterialTheme.typography.titleMedium)
+                    Text(displayTitle, style = MaterialTheme.typography.bodyMedium)
+                }
                 Text(
                     record.timestamp.toDisplayTime(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(displayTitle, style = MaterialTheme.typography.bodyLarge)
             Text(displaySummary, style = MaterialTheme.typography.bodyMedium)
             diagnosticHistorySummary?.let { summary ->
                 Text(
                     summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            networkLabel?.let { label ->
+                Text(
+                    label,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -212,27 +230,21 @@ private fun HistoryRecordCard(
                     Text("删除")
                 }
             }
-        }
     }
 }
 
 @Composable
 private fun EmptyHistoryCard() {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("暂无历史记录", style = MaterialTheme.typography.titleMedium)
-            Text("执行一次网络检测即可创建记录。")
-        }
+    OutlinedNetworkCard {
+        Text("暂无历史记录", style = MaterialTheme.typography.titleMedium)
+        Text("执行一次网络检测即可创建记录。")
     }
 }
 
 @Composable
 private fun StatusCard(status: String) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Text(status, modifier = Modifier.padding(16.dp))
+    OutlinedNetworkCard {
+        Text(status)
     }
 }
 
@@ -241,16 +253,11 @@ private fun ErrorCard(
     message: String,
     onRetry: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("状态：失败", style = MaterialTheme.typography.titleMedium)
-            Text(message)
-            TextButton(onClick = onRetry) {
-                Text("重试")
-            }
+    OutlinedNetworkCard {
+        Text("状态：失败", style = MaterialTheme.typography.titleMedium)
+        Text(message)
+        TextButton(onClick = onRetry) {
+            Text("重试")
         }
     }
 }

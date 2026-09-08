@@ -25,6 +25,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.networktoolbox.core.designsystem.NetworkCard
+import com.networktoolbox.core.designsystem.NetworkStatusChip
+import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
+import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
+import com.networktoolbox.core.designsystem.OutlinedNetworkCard
+import com.networktoolbox.core.designsystem.PrimaryActionButton
+import com.networktoolbox.core.designsystem.SecondaryActionButton
+import com.networktoolbox.core.designsystem.StatusVisualState
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheck as AutomaticDiagnosticCheck
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus as AutomaticDiagnosticCheckStatus
@@ -56,6 +64,7 @@ import com.networktoolbox.feature.report.presentation.DiagnosticReportPresentati
 import com.networktoolbox.feature.report.presentation.DiagnosticReportPdfRenderer
 import com.networktoolbox.feature.report.presentation.DiagnosticReportTextFormatter
 import com.networktoolbox.feature.report.presentation.DiagnosticStageSummary
+import com.networktoolbox.feature.report.presentation.DiagnosticStatusPresentation
 import com.networktoolbox.feature.report.presentation.ReportProgress
 import com.networktoolbox.feature.report.presentation.ReportStageStatus
 import com.networktoolbox.feature.report.presentation.ReportStatus
@@ -63,6 +72,9 @@ import com.networktoolbox.feature.report.presentation.ReportUiState
 import com.networktoolbox.feature.report.presentation.diagnosticStages
 import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationResult
 import com.networktoolbox.feature.report.diagnostic.v4.DiagnosticVerificationStatus
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun ReportScreen(
@@ -85,13 +97,18 @@ fun ReportScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = NetworkToolboxSpacing.LG, vertical = NetworkToolboxSpacing.SM),
+            verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
         ) {
             TextButton(onClick = onBack, enabled = !isRunning) {
-                Text("返回工具")
+                Text("返回")
             }
-            Text("网络诊断", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                if (hasRestoredReport || uiState.status is ReportStatus.Completed ||
+                    uiState.status is ReportStatus.Success
+                ) "网络诊断报告" else "网络诊断",
+                style = MaterialTheme.typography.headlineSmall,
+            )
             Text(
                 "自动检查当前网络环境并定位常见连接问题。",
                 style = MaterialTheme.typography.bodyMedium,
@@ -173,28 +190,23 @@ private fun StartDiagnosticCard(
     onRunCheck: () -> Unit,
 ) {
     val completed = status is ReportStatus.Success || status is ReportStatus.Completed
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    OutlinedNetworkCard {
+        Text(
+            DiagnosticPresentationMapper.startCardTitle(completed),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            "检测将在本机完成，不上传诊断数据。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        PrimaryActionButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onRunCheck,
         ) {
             Text(
-                DiagnosticPresentationMapper.startCardTitle(completed),
-                style = MaterialTheme.typography.titleMedium,
+                DiagnosticPresentationMapper.startCardActionLabel(completed),
             )
-            Text(
-                "检测将在本机完成，不上传诊断数据。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onRunCheck,
-            ) {
-                Text(
-                    DiagnosticPresentationMapper.startCardActionLabel(completed),
-                )
-            }
         }
     }
 }
@@ -204,25 +216,48 @@ private fun RunningContent(
     progress: ReportProgress,
     onStopCheck: () -> Unit,
 ) {
-    Text("正在诊断…", style = MaterialTheme.typography.titleLarge)
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    NetworkCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
+                Text("正在诊断…", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "逐步检查当前网络环境",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            NetworkStatusChip(StatusVisualState.RUNNING)
+        }
+        val completed = progress.stageStates.values.count { it == ReportStageStatus.COMPLETED }
+        Text(
+            "已完成 $completed / ${diagnosticStages.size} 个阶段",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (diagnosticStages.isNotEmpty()) {
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = {
+                    (completed.toFloat() / diagnosticStages.size.toFloat()).coerceIn(0f, 1f)
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+    OutlinedNetworkCard {
             diagnosticStages.forEach { stage ->
                 StageProgressRow(
                     stage = stage,
                     status = progress.stageStates[stage] ?: ReportStageStatus.PENDING,
                 )
             }
-            Button(
+            SecondaryActionButton(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onStopCheck,
             ) {
                 Text("停止诊断")
             }
-        }
     }
 }
 
@@ -266,7 +301,8 @@ private fun UnifiedDiagnosticReportContent(
     val hasNoticeStage = stageSummaries.any { it.severity == AutomaticDiagnosticSeverity.NOTICE }
     var detailsExpanded by rememberSaveable(stateKey) { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD)) {
+        ReportMetadata(presentation)
         AutomaticOverview(presentation.overallStatus)
 
         comparison?.let { verification ->
@@ -278,14 +314,6 @@ private fun UnifiedDiagnosticReportContent(
                 text = presentation.explanation,
                 style = MaterialTheme.typography.bodyLarge,
             )
-        }
-
-        ReportSectionCard(title = "检查结果") {
-            if (stageSummaries.isEmpty()) {
-                Text("暂无阶段结果。")
-            } else {
-                stageSummaries.forEach { summary -> AutomaticStageSummaryRow(summary) }
-            }
         }
 
         // A healthy NETWORK_APPEARS_NORMAL finding is supporting evidence, not
@@ -337,6 +365,14 @@ private fun UnifiedDiagnosticReportContent(
                 }
             }
 
+        ReportSectionCard(title = "检查结果") {
+            if (stageSummaries.isEmpty()) {
+                Text("暂无阶段结果。")
+            } else {
+                stageSummaries.forEach { summary -> AutomaticStageSummaryRow(summary) }
+            }
+        }
+
         TextButton(
             modifier = Modifier.fillMaxWidth(),
             onClick = { detailsExpanded = !detailsExpanded },
@@ -361,24 +397,10 @@ private fun UnifiedDiagnosticReportContent(
 private fun DiagnosticVerificationCard(
     comparison: DiagnosticVerificationResult,
 ) {
-    val (statusLabel, statusColor) = comparison.status.displayInfo()
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    val visual = DiagnosticStatusPresentation.verification(comparison.status)
+    OutlinedNetworkCard {
             Text("与上次相比", style = MaterialTheme.typography.titleMedium)
-            Surface(
-                color = statusColor.copy(alpha = 0.14f),
-                contentColor = statusColor,
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    text = statusLabel,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
+            NetworkStatusChip(visual.state, label = visual.label)
             Text(comparison.summary, style = MaterialTheme.typography.bodyLarge)
 
             comparison.resolvedFindingCodes.forEach { code ->
@@ -408,7 +430,6 @@ private fun DiagnosticVerificationCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
     }
 }
 
@@ -575,13 +596,16 @@ private fun ReportExportActions(
 
 @Composable
 private fun ReportFindingItem(finding: DiagnosticFindingPresentation) {
-    val (marker, label, color) = finding.severity.findingDisplayInfo()
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(
-            text = "$marker $label · ${finding.title}",
-            style = MaterialTheme.typography.bodyLarge,
-            color = color,
-        )
+    val visual = DiagnosticStatusPresentation.severity(finding.severity)
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+        ) {
+            NetworkStatusChip(visual.state, label = visual.label)
+            Text(finding.title, style = MaterialTheme.typography.bodyLarge)
+        }
         Text(finding.description, style = MaterialTheme.typography.bodyMedium)
     }
 }
@@ -778,26 +802,32 @@ private fun DiagnosticRawDataDetails(
 }
 
 @Composable
-private fun AutomaticOverview(status: DiagnosticDiagnosisStatus?) {
-    val (label, color) = status.overviewDisplayInfo()
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("诊断完成", style = MaterialTheme.typography.titleLarge)
-            Surface(
-                color = color.copy(alpha = 0.14f),
-                contentColor = color,
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    text = label,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
+private fun ReportMetadata(presentation: DiagnosticReportPresentation) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            formatReportTimestamp(presentation.timestamp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        presentation.networkSummary?.connectionType?.let { type ->
+            Text(
+                type.displayName(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+    }
+}
+
+@Composable
+private fun AutomaticOverview(status: DiagnosticDiagnosisStatus?) {
+    val visual = DiagnosticStatusPresentation.diagnosis(status)
+    NetworkCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Text("诊断完成", style = MaterialTheme.typography.titleLarge)
+        NetworkStatusChip(visual.state, label = visual.label)
     }
 }
 
@@ -823,15 +853,18 @@ private fun AutomaticCheckRow(check: AutomaticDiagnosticCheck) {
 
 @Composable
 private fun AutomaticStageSummaryRow(summary: DiagnosticStageSummary) {
-    val (marker, label, color) = summary.displayInfo()
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(modifier = Modifier.fillMaxWidth()) {
+    val visual = DiagnosticStatusPresentation.check(summary.status, summary.severity)
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(
-                text = "$marker ${summary.stage.checkDisplayName()}",
+                text = summary.stage.checkDisplayName(),
                 style = MaterialTheme.typography.bodyLarge,
             )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(label, color = color, style = MaterialTheme.typography.bodyMedium)
+            NetworkStatusChip(visual.state, label = visual.label)
         }
         Text(
             text = summary.summary,
@@ -997,22 +1030,23 @@ private fun NetworkChangedContent(
     result: AutomaticDiagnosticResult,
     onRunCheck: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    OutlinedNetworkCard {
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
-            Text("检测过程中网络发生变化", style = MaterialTheme.typography.titleMedium)
-            Text(
-                result.analysis.diagnosis?.explanation
-                    ?: "部分结果可能来自不同网络环境，暂时无法合并判断。",
-            )
-            Text(
-                "建议在网络稳定后重新执行诊断。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = onRunCheck) { Text("重新诊断") }
+            NetworkStatusChip(StatusVisualState.NOTICE, label = "检测环境已变化")
+            Text("本次结果需谨慎解读", style = MaterialTheme.typography.titleMedium)
         }
+        Text(
+            result.analysis.diagnosis?.explanation
+                ?: "部分结果可能来自不同网络环境，暂时无法合并判断。",
+        )
+        Text(
+            "建议在网络稳定后重新执行诊断。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SecondaryActionButton(onClick = onRunCheck) { Text("重新诊断") }
     }
 }
 
@@ -1021,16 +1055,17 @@ private fun FailedContent(
     status: ReportStatus.Failed,
     onRetry: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    OutlinedNetworkCard {
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
+            NetworkStatusChip(StatusVisualState.ERROR, label = "无法完成")
             Text("诊断无法完成", style = MaterialTheme.typography.titleMedium)
-            Text(status.message)
-            status.result?.analysis?.diagnosis?.explanation?.let { Text(it) }
-            TextButton(onClick = onRetry) { Text("重新诊断") }
         }
+        Text(status.message)
+        status.result?.analysis?.diagnosis?.explanation?.let { Text(it) }
+        SecondaryActionButton(onClick = onRetry) { Text("重新诊断") }
     }
 }
 
@@ -1232,37 +1267,36 @@ private fun ReportSectionCard(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
+    OutlinedNetworkCard {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        content()
     }
 }
 
 @Composable
 private fun ResultRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Spacer(modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, style = NetworkToolboxTextStyles.TechnicalData)
     }
 }
 
 @Composable
 private fun CancelledContent(onRunCheck: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    OutlinedNetworkCard {
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
+            NetworkStatusChip(StatusVisualState.CANCELLED, label = "已停止")
             Text("诊断已停止", style = MaterialTheme.typography.titleMedium)
-            Text("本次未生成完整报告，也不会写入历史记录。")
-            TextButton(onClick = onRunCheck) { Text("重新诊断") }
         }
+        Text("本次未生成完整报告，也不会写入历史记录。")
+        SecondaryActionButton(onClick = onRunCheck) { Text("重新诊断") }
     }
 }
 
@@ -1271,15 +1305,16 @@ private fun ErrorContent(
     message: String,
     onRetry: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    OutlinedNetworkCard {
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
+            NetworkStatusChip(StatusVisualState.ERROR, label = "无法完成")
             Text("诊断无法完成", style = MaterialTheme.typography.titleMedium)
-            Text(message)
-            TextButton(onClick = onRetry) { Text("重试") }
         }
+        Text(message)
+        SecondaryActionButton(onClick = onRetry) { Text("重试") }
     }
 }
 
@@ -1289,6 +1324,13 @@ private const val MAX_DETAIL_CHECKS = 16
 private const val MAX_DETAIL_ADDRESSES = 16
 private const val MAX_DETAIL_DNS = 16
 private const val MAX_DETAIL_DNS_RECORDS = 12
+
+private fun formatReportTimestamp(timestamp: Long): String = runCatching {
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    Instant.ofEpochMilli(timestamp)
+        .atZone(ZoneId.systemDefault())
+        .format(formatter)
+}.getOrDefault("时间未记录")
 
 private fun AutomaticDiagnosticStage.displayName(): String = when (this) {
     AutomaticDiagnosticStage.NETWORK_STATE -> "获取网络状态"
