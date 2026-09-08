@@ -455,6 +455,18 @@ states use the same compact outlined treatment and the shared local-history
 wording. A report card opens the exact saved snapshot through the existing
 source-aware navigation path; it does not re-run or re-analyze the report.
 
+#### History List Pattern
+
+- Each item is a compact outlined surface rather than a filled heavy card.
+- The card itself is the primary open action for a restorable report and uses a
+  trailing chevron as its affordance.
+- Destructive actions remain secondary and are kept out of the open-action
+  hierarchy.
+- A type title is shown once; target, diagnosis summary, network context, and
+  metrics occupy the supporting lines only when they are available.
+- The stable reading order is status, title, time, summary, and compact
+  metadata. Spacing uses the shared tokens and lets long text wrap naturally.
+
 ### Outlined surface policy and hero boundary
 
 Use `OutlinedNetworkCard` for ordinary sections, check groups, findings,

@@ -13,8 +13,28 @@ class HistoryRecordActionPolicyTest {
     }
 
     @Test
+    fun openableReportUsesCardClickAndChevronWithoutTextAction() {
+        val interaction = historyCardInteraction(reportRecord(), canOpenReport = { true })
+
+        assertTrue(interaction.isClickable)
+        assertTrue(interaction.showChevron)
+        assertFalse(interaction.showExplicitOpenAction)
+        assertTrue(interaction.showDeleteAction)
+    }
+
+    @Test
     fun reportWithoutRestorablePayloadHidesReportAction() {
         assertFalse(canShowReportAction(reportRecord(), canOpenReport = { false }))
+    }
+
+    @Test
+    fun legacyReportRemainsReadableAndDeletableWithoutOpenAffordance() {
+        val interaction = historyCardInteraction(reportRecord(), canOpenReport = { false })
+
+        assertFalse(interaction.isClickable)
+        assertFalse(interaction.showChevron)
+        assertFalse(interaction.showExplicitOpenAction)
+        assertTrue(interaction.showDeleteAction)
     }
 
     @Test
@@ -22,6 +42,18 @@ class HistoryRecordActionPolicyTest {
         val ping = reportRecord().copy(type = HistoryType.PING)
 
         assertFalse(canShowReportAction(ping, canOpenReport = { true }))
+    }
+
+    @Test
+    fun nonReportRecordStaysReadableAndDeletable() {
+        val interaction = historyCardInteraction(
+            reportRecord().copy(type = HistoryType.PING),
+            canOpenReport = { true },
+        )
+
+        assertFalse(interaction.isClickable)
+        assertFalse(interaction.showChevron)
+        assertTrue(interaction.showDeleteAction)
     }
 
     private fun reportRecord(): HistoryRecord = HistoryRecord(

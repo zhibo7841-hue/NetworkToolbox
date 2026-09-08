@@ -3,6 +3,17 @@ package com.networktoolbox.feature.history.presentation
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.core.designsystem.StatusVisualState
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+internal data class HistoryCardContent(
+    val title: String,
+    val secondaryTitle: String?,
+    val summary: String,
+    val metadata: String?,
+)
 
 /**
  * Maps stored, structured history payloads to compact UI semantics.
@@ -17,6 +28,36 @@ internal data class HistoryStatusVisual(
 )
 
 internal object HistoryRecordPresentation {
+    fun cardContent(
+        typeTitle: String,
+        titleCandidate: String?,
+        summary: String,
+        metadata: List<String>,
+    ): HistoryCardContent = HistoryCardContent(
+        title = typeTitle,
+        secondaryTitle = titleCandidate
+            ?.takeIf { it.isNotBlank() && it != typeTitle },
+        summary = summary,
+        metadata = metadata
+            .filter(String::isNotBlank)
+            .joinToString(" · ")
+            .takeIf(String::isNotBlank),
+    )
+
+    fun timeLabel(
+        timestamp: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(zone),
+    ): String {
+        val dateTime = Instant.ofEpochMilli(timestamp).atZone(zone)
+        val time = DateTimeFormatter.ofPattern("HH:mm").format(dateTime)
+        return when (dateTime.toLocalDate()) {
+            today -> "今天 $time"
+            today.minusDays(1) -> "昨天 $time"
+            else -> DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(dateTime)
+        }
+    }
+
     fun status(record: HistoryRecord): HistoryStatusVisual = when (record.type) {
         HistoryType.REPORT -> reportStatus(record.detailJson)
         HistoryType.PING -> record.detailJson.readJsonBoolean("success")?.let { success ->

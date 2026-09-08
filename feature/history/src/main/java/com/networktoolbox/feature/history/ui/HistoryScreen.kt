@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.history.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,7 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,19 +25,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.PingHistorySummary
 import com.networktoolbox.core.common.history.HistoryType
 import com.networktoolbox.core.designsystem.NetworkStatusChip
+import com.networktoolbox.core.designsystem.NetworkToolboxChevron
+import com.networktoolbox.core.designsystem.NetworkToolboxDeleteIcon
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.OutlinedNetworkCard
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 import com.networktoolbox.feature.history.presentation.HistoryRecordPresentation
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun HistoryScreen(
@@ -155,7 +157,7 @@ private fun HistoryRecordCard(
         isReport -> "网络诊断"
         else -> pingDetails?.target ?: dnsDetails?.domain ?: record.title
     }
-    val reportActionAvailable = canShowReportAction(record, canOpenReport)
+    val cardInteraction = historyCardInteraction(record, canOpenReport)
     val statusVisual = HistoryRecordPresentation.status(record)
     val networkLabel = HistoryRecordPresentation.networkLabel(record)
     val displaySummary = if (record.type == HistoryType.PING) {
@@ -166,70 +168,72 @@ private fun HistoryRecordCard(
     } else {
         dnsDetails?.summary ?: record.summary.localizedHistorySummary()
     }
+    val cardContent = HistoryRecordPresentation.cardContent(
+        typeTitle = record.type.displayName(),
+        titleCandidate = displayTitle.takeUnless { isReport },
+        summary = displaySummary,
+        metadata = buildList {
+            networkLabel?.let(::add)
+            diagnosticHistorySummary?.let(::add)
+            pingDetails?.metricsText()?.let(::add)
+            dnsDetails?.metricsText()?.let(::add)
+        },
+    )
+    val cardModifier = if (cardInteraction.isClickable) {
+        Modifier
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "查看网络诊断报告",
+                onClick = { onOpenReport(record) },
+            )
+            .semantics {
+                contentDescription = "查看网络诊断报告"
+            }
+    } else {
+        Modifier
+    }
 
-    OutlinedNetworkCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                NetworkStatusChip(
-                    statusVisual.state,
-                    label = statusVisual.label,
-                    modifier = Modifier.padding(end = NetworkToolboxSpacing.SM),
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS),
+    OutlinedNetworkCard(modifier = cardModifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+        ) {
+            NetworkStatusChip(statusVisual.state, label = statusVisual.label)
+            Text(
+                cardContent.title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                HistoryRecordPresentation.timeLabel(record.timestamp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (cardInteraction.showChevron) {
+                NetworkToolboxChevron()
+            }
+            if (cardInteraction.showDeleteAction) {
+                IconButton(
+                    onClick = { onDelete(record.id) },
                 ) {
-                    Text(record.type.displayName(), style = MaterialTheme.typography.titleMedium)
-                    Text(displayTitle, style = MaterialTheme.typography.bodyMedium)
-                }
-                Text(
-                    record.timestamp.toDisplayTime(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(displaySummary, style = MaterialTheme.typography.bodyMedium)
-            diagnosticHistorySummary?.let { summary ->
-                Text(
-                    summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            networkLabel?.let { label ->
-                Text(
-                    label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            pingDetails?.metricsText()?.let { metrics ->
-                Text(
-                    metrics,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            dnsDetails?.metricsText()?.let { metrics ->
-                Text(
-                    metrics,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Row(modifier = Modifier.fillMaxWidth()) {
-                if (reportActionAvailable) {
-                    TextButton(onClick = { onOpenReport(record) }) {
-                        Text("查看报告")
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                TextButton(onClick = { onDelete(record.id) }) {
-                    Text("删除")
+                    NetworkToolboxDeleteIcon(
+                        contentDescription = "删除${record.type.displayName()}记录",
+                    )
                 }
             }
+        }
+        cardContent.secondaryTitle?.let { title ->
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(cardContent.summary, style = MaterialTheme.typography.bodyMedium)
+        cardContent.metadata?.let { metadata ->
+            Text(
+                metadata,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -410,17 +414,4 @@ private fun HistoryType.displayName(): String = when (this) {
     HistoryType.REPORT -> "网络诊断"
     HistoryType.LAN_SCAN -> "局域网扫描"
     HistoryType.UNKNOWN -> "其他"
-}
-
-private fun Long.toDisplayTime(): String {
-    val zone = ZoneId.systemDefault()
-    val dateTime = Instant.ofEpochMilli(this).atZone(zone)
-    val today = LocalDate.now(zone)
-    val time = DateTimeFormatter.ofPattern("HH:mm").format(dateTime)
-
-    return when (dateTime.toLocalDate()) {
-        today -> "今天 $time"
-        today.minusDays(1) -> "昨天 $time"
-        else -> DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(dateTime)
-    }
 }
