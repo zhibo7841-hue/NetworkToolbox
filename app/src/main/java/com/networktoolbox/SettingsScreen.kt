@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Lan
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -31,6 +32,7 @@ import com.networktoolbox.core.designsystem.SettingsInfoRow
 import com.networktoolbox.core.designsystem.SettingsRow
 import com.networktoolbox.core.designsystem.SettingsSection
 import com.networktoolbox.core.designsystem.ToolIconContainer
+import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 
 @Composable
@@ -38,6 +40,7 @@ fun SettingsScreen(
     historyUiState: HistoryUiState,
     onClearHistory: () -> Unit,
     modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
 ) {
     var showClearDialog by rememberSaveable { mutableStateOf(false) }
     val isClearing = historyUiState is HistoryUiState.Loading
@@ -55,17 +58,13 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
-                Text(
-                    SettingsPresentation.screenTitle,
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-                Text(
-                    SettingsPresentation.screenDescription,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            ToolScreenHeader(
+                title = SettingsPresentation.screenTitle,
+                description = SettingsPresentation.screenDescription,
+                icon = Icons.Outlined.Settings,
+                accent = NetworkToolAccent.PRIMARY,
+                onBack = onBack,
+            )
 
             SettingsSection(SettingsPresentation.aboutSectionTitle) {
                 Row(

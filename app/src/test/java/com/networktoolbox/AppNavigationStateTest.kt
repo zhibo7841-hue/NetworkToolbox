@@ -40,6 +40,47 @@ class AppNavigationStateTest {
     }
 
     @Test
+    fun topLevelDestinations_areHomeToolsAndDevices() {
+        assertEquals(
+            listOf("首页", "工具", "设备"),
+            TopLevelDestination.entries.map(TopLevelDestination::label),
+        )
+        assertEquals(3, TopLevelDestination.entries.size)
+        assertEquals(null, TopLevelDestination.entries.find { it.name == "SETTINGS" })
+    }
+
+    @Test
+    fun settingsIsSecondaryAndBackReturnsToItsCaller() {
+        listOf(
+            TopLevelDestination.HOME,
+            TopLevelDestination.TOOLS,
+            TopLevelDestination.DEVICES,
+        ).forEach { caller ->
+            val state = AppNavigationState()
+                .selectTopLevel(caller)
+                .openSettings()
+
+            assertEquals(ToolScreen.SETTINGS, state.toolScreen)
+            assertEquals(caller, state.goBack().topLevelDestination)
+            assertEquals(ToolScreen.NONE, state.goBack().toolScreen)
+        }
+    }
+
+    @Test
+    fun drawerIsAvailableOnlyForTopLevelDestinations() {
+        assertEquals(true, AppShellPresentation.canShowDrawer(AppNavigationState()))
+        assertEquals(
+            false,
+            AppShellPresentation.canShowDrawer(AppNavigationState().openTool(ToolScreen.PING)),
+        )
+        assertEquals(
+            false,
+            AppShellPresentation.canShowDrawer(AppNavigationState().openSettings()),
+        )
+        assertEquals(listOf("设置"), AppShellPresentation.drawerItems)
+    }
+
+    @Test
     fun reportOpenedFromHistory_preservesOriginalHomeOrigin() {
         val state = AppNavigationState()
             .openTool(ToolScreen.HISTORY)
@@ -62,9 +103,9 @@ class AppNavigationStateTest {
     fun selectingBottomTab_closesToolAndDoesNotCreateBackStack() {
         val state = AppNavigationState()
             .openTool(ToolScreen.PING)
-            .selectTopLevel(TopLevelDestination.SETTINGS)
+            .selectTopLevel(TopLevelDestination.DEVICES)
 
-        assertEquals(TopLevelDestination.SETTINGS, state.topLevelDestination)
+        assertEquals(TopLevelDestination.DEVICES, state.topLevelDestination)
         assertEquals(ToolScreen.NONE, state.toolScreen)
         assertEquals(state, state.goBack())
     }

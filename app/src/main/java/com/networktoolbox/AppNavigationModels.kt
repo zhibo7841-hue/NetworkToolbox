@@ -3,7 +3,7 @@ package com.networktoolbox
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 internal enum class NavigationOrigin {
     HOME,
     TOOLS,
+    DEVICES,
 }
 
 internal enum class TopLevelDestination(
@@ -19,7 +20,7 @@ internal enum class TopLevelDestination(
 ) {
     HOME("首页", Icons.Outlined.Home),
     TOOLS("工具", Icons.Outlined.Build),
-    SETTINGS("设置", Icons.Outlined.Settings),
+    DEVICES("设备", Icons.Outlined.Lan),
 }
 
 internal enum class ToolScreen {
@@ -32,22 +33,23 @@ internal enum class ToolScreen {
     REPORT,
     HISTORY,
     LAN_SCAN,
+    SETTINGS,
 }
 
 internal fun TopLevelDestination.navigationOrigin(): NavigationOrigin = when (this) {
     TopLevelDestination.HOME -> NavigationOrigin.HOME
-    TopLevelDestination.TOOLS,
-    TopLevelDestination.SETTINGS,
-    -> NavigationOrigin.TOOLS
+    TopLevelDestination.TOOLS -> NavigationOrigin.TOOLS
+    TopLevelDestination.DEVICES -> NavigationOrigin.DEVICES
 }
 
 internal fun NavigationOrigin.backDestination(): TopLevelDestination = when (this) {
     NavigationOrigin.HOME -> TopLevelDestination.HOME
     NavigationOrigin.TOOLS -> TopLevelDestination.TOOLS
+    NavigationOrigin.DEVICES -> TopLevelDestination.DEVICES
 }
 
 /**
- * The app shell has one tool surface but two real callers: Home and Tools.
+ * The app shell has one tool surface with source-aware top-level callers.
  * Keeping the origin beside the tool destination prevents each feature screen
  * from inventing its own back behavior.
  */
@@ -59,6 +61,15 @@ internal data class AppNavigationState(
     fun openTool(screen: ToolScreen): AppNavigationState = copy(
         topLevelDestination = TopLevelDestination.TOOLS,
         toolScreen = screen,
+        toolOrigin = if (toolScreen == ToolScreen.NONE) {
+            topLevelDestination.navigationOrigin()
+        } else {
+            toolOrigin
+        },
+    )
+
+    fun openSettings(): AppNavigationState = copy(
+        toolScreen = ToolScreen.SETTINGS,
         toolOrigin = if (toolScreen == ToolScreen.NONE) {
             topLevelDestination.navigationOrigin()
         } else {

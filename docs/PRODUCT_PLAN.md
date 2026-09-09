@@ -210,6 +210,20 @@ Core goals:
 - **Wake-on-LAN:** add a local-device wake action only after its product,
   permission, and safety details are separately confirmed.
 
+The v0.5 app shell uses three top-level destinations: **Home**, **Tools**, and
+**Devices**. Home remains the concise network-status entry point, Tools remains
+the home for the confirmed network utilities (including Wi-Fi Analyzer when it
+is separately implemented), and Devices is the long-term entry point for the
+LAN Device Center. Until that center has its own approved implementation, the
+Devices destination hosts the existing LAN Scanner content and state rather
+than a placeholder or a duplicate device-management feature. Settings is a
+secondary destination opened from the shared app Drawer and is not a fourth
+bottom-navigation tab.
+
+This app-shell change does not authorize Favorites, Wake-on-LAN, MAC/OUI,
+device management, or any new discovery behavior. Those capabilities remain
+subject to their existing product and implementation decisions.
+
 All new functionality must be introduced within the shared design system so
 that the project does not continue accumulating inconsistent page styles and
 visual debt. This line preserves the existing local-first, privacy, and

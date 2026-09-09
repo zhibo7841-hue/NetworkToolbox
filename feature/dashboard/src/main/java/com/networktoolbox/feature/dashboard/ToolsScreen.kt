@@ -9,12 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 
 @Composable
@@ -28,6 +27,7 @@ fun ToolsScreen(
     onOpenReport: () -> Unit,
     onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenMenu: () -> Unit = {},
 ) {
     val callbacks = DashboardNavigationCallbacks(
         onOpenPing = onOpenPing,
@@ -48,14 +48,11 @@ fun ToolsScreen(
                 .padding(horizontal = 20.dp, vertical = NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("工具", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "选择一个工具执行本地网络检测。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            NetworkToolboxTopLevelHeader(
+                title = "工具",
+                description = "选择一个工具执行本地网络检测。",
+                onOpenMenu = onOpenMenu,
+            )
 
             dashboardToolSections(callbacks).forEach { section ->
                 Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {

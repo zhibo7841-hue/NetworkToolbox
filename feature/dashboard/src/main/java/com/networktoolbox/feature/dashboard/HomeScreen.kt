@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkCard
 import com.networktoolbox.core.designsystem.NetworkStatusChip
 import com.networktoolbox.core.designsystem.NetworkToolAccent
+import com.networktoolbox.core.designsystem.NetworkToolboxMenuButton
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.NetworkToolboxStatusVisuals
@@ -79,9 +80,10 @@ fun HomeScreen(
     onOpenDns: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenHistory: () -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenMenu: () -> Unit = {},
     onOpenTraceroute: () -> Unit = {},
     onOpenLanScan: () -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val callbacks = DashboardNavigationCallbacks(
         onOpenPing = onOpenPing,
@@ -102,6 +104,8 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp, vertical = NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
         ) {
+            NetworkToolboxMenuButton(onClick = onOpenMenu)
+
             NetworkSummaryCard(
                 context = uiState.networkContext,
                 onOpenReport = onOpenReport,

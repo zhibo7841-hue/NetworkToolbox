@@ -178,3 +178,29 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Consequence: New pages and new functionality must use the shared visual
   foundation. Existing screens will be migrated incrementally; this decision
   does not authorize a Big Bang UI rewrite or change any network behavior.
+
+## Decision: v0.5 App Shell navigation and Devices entry
+
+- Date: 2026-09-09
+- Status: Accepted
+- Decision: The v0.5 app shell uses three top-level destinations: Home, Tools,
+  and Devices. Settings is removed from bottom navigation and is opened as a
+  secondary route from a shared Drawer available on those three destinations.
+- Devices boundary: Devices is a real, usable top-level entry by reusing the
+  existing LAN Scanner screen, ViewModel, and state. It is not a placeholder,
+  fake device list, or second discovery implementation. A future LAN Device
+  Center, Favorites, and Wake-on-LAN flow require separate implementation
+  approval.
+- Tool placement: Wi-Fi Analyzer remains part of Tools when it is implemented;
+  it does not become a fourth top-level destination.
+- Navigation: Secondary pages use source-aware Back navigation. Settings
+  returns to the Home, Tools, or Devices caller that opened the Drawer, and
+  secondary pages do not expose the top-level Drawer action.
+- Affordances: Tool cards and Home quick-tool cards do not require a trailing
+  chevron. Chevrons remain only where they communicate a meaningful detail or
+  open action, including the Home Network Hero and existing History/Report
+  affordances.
+- Consequence: This information-architecture change does not modify LAN
+  discovery, probe semantics, network tools, history storage, or any business
+  logic. It only provides a stable shell for the current features and a future
+  Devices evolution.

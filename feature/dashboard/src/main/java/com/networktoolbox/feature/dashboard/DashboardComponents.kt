@@ -6,13 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,12 +70,6 @@ internal fun ToolCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -132,12 +122,6 @@ internal fun QuickToolCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

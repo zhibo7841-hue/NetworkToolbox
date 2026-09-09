@@ -24,10 +24,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -68,6 +71,7 @@ import com.networktoolbox.feature.traceroute.ui.TracerouteScreen
 import com.networktoolbox.core.designsystem.NetworkToolboxTheme
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -171,6 +175,8 @@ class MainActivity : ComponentActivity() {
             }
             val topLevelDestination = navigationState.topLevelDestination
             val toolScreen = navigationState.toolScreen
+            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+            val drawerScope = rememberCoroutineScope()
             var restoredDiagnosticReport by remember {
                 mutableStateOf<DiagnosticReportV2?>(null)
             }
@@ -185,11 +191,20 @@ class MainActivity : ComponentActivity() {
                     timestamp = record.timestamp,
                     status = DiagnosticHistoryReportResolver.resolve(record)
                         ?.recentDiagnosticStatus()
-                        ?: RecentDiagnosticStatus.UNKNOWN,
+                    ?: RecentDiagnosticStatus.UNKNOWN,
                 )
             }
 
+            fun openDrawer() {
+                drawerScope.launch { drawerState.open() }
+            }
+
+            fun closeDrawer() {
+                drawerScope.launch { drawerState.close() }
+            }
+
             fun openTool(screen: ToolScreen) {
+                closeDrawer()
                 if (toolScreen == ToolScreen.LAN_SCAN && screen != ToolScreen.LAN_SCAN) {
                     lanScannerViewModel.stopScan()
                 }
@@ -205,6 +220,7 @@ class MainActivity : ComponentActivity() {
             }
 
             fun selectTopLevel(destination: TopLevelDestination) {
+                closeDrawer()
                 if (reportUiState.status is ReportStatus.Running) {
                     reportViewModel.stopCheck()
                 }
@@ -216,6 +232,7 @@ class MainActivity : ComponentActivity() {
             }
 
             fun goBack() {
+                closeDrawer()
                 if (toolScreen == ToolScreen.NONE) return
                 if (reportUiState.status is ReportStatus.Running) {
                     reportViewModel.stopCheck()
@@ -225,6 +242,11 @@ class MainActivity : ComponentActivity() {
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
                 navigationState = navigationState.goBack()
+            }
+
+            fun openSettings() {
+                closeDrawer()
+                navigationState = navigationState.openSettings()
             }
 
             fun openDiagnosticHistory(record: HistoryRecord) {
@@ -245,46 +267,56 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            BackHandler(enabled = toolScreen != ToolScreen.NONE) {
+            BackHandler(enabled = drawerState.isOpen) {
+                closeDrawer()
+            }
+
+            BackHandler(enabled = !drawerState.isOpen && toolScreen != ToolScreen.NONE) {
                 goBack()
             }
 
             NetworkToolboxTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    contentWindowInsets = WindowInsets.safeDrawing,
-                    bottomBar = {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ) {
-                            val navigationItemColors = networkToolboxNavigationItemColors()
-                            TopLevelDestination.entries.forEach { destination ->
-                                NavigationBarItem(
-                                    selected = topLevelDestination == destination,
-                                    onClick = { selectTopLevel(destination) },
-                                    colors = navigationItemColors,
-                                    icon = {
-                                        Icon(
-                                            imageVector = destination.icon,
-                                            contentDescription = destination.label,
-                                        )
-                                    },
-                                    label = { Text(destination.label) },
-                                )
+                AppShellDrawer(
+                    drawerState = drawerState,
+                    gesturesEnabled = AppShellPresentation.canShowDrawer(navigationState),
+                    onOpenSettings = ::openSettings,
+                ) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        contentWindowInsets = WindowInsets.safeDrawing,
+                        bottomBar = {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ) {
+                                val navigationItemColors = networkToolboxNavigationItemColors()
+                                TopLevelDestination.entries.forEach { destination ->
+                                    NavigationBarItem(
+                                        selected = topLevelDestination == destination,
+                                        onClick = { selectTopLevel(destination) },
+                                        colors = navigationItemColors,
+                                        icon = {
+                                            Icon(
+                                                imageVector = destination.icon,
+                                                contentDescription = destination.label,
+                                            )
+                                        },
+                                        label = { Text(destination.label) },
+                                    )
+                                }
                             }
-                        }
-                    },
-                ) { contentPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(contentPadding),
-                    ) {
-                        when (toolScreen) {
+                        },
+                    ) { contentPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(contentPadding),
+                        ) {
+                            when (toolScreen) {
                             ToolScreen.NONE -> when (topLevelDestination) {
                                 TopLevelDestination.HOME -> HomeScreen(
                                     uiState = dashboardUiState,
                                     recentHistory = recentHistory,
+                                    onOpenMenu = ::openDrawer,
                                     onOpenPing = { openTool(ToolScreen.PING) },
                                     onOpenDns = { openTool(ToolScreen.DNS) },
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
@@ -293,6 +325,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                 )
                                 TopLevelDestination.TOOLS -> ToolsScreen(
+                                    onOpenMenu = ::openDrawer,
                                     onOpenPing = { openTool(ToolScreen.PING) },
                                     onOpenDns = { openTool(ToolScreen.DNS) },
                                     onOpenTcp = { openTool(ToolScreen.TCP) },
@@ -302,11 +335,25 @@ class MainActivity : ComponentActivity() {
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
                                     onOpenHistory = { openTool(ToolScreen.HISTORY) },
                                 )
-                                TopLevelDestination.SETTINGS -> SettingsScreen(
-                                    historyUiState = historyUiState,
-                                    onClearHistory = historyViewModel::clear,
+                                TopLevelDestination.DEVICES -> LanScannerScreen(
+                                    uiState = lanScannerUiState,
+                                    onStartScan = lanScannerViewModel::startScan,
+                                    onStopScan = lanScannerViewModel::stopScan,
+                                    onRetry = lanScannerViewModel::rescan,
+                                    onModifyRange = lanScannerViewModel::modifyRange,
+                                    onBack = {},
+                                    onRangeModeChanged = lanScannerViewModel::selectRangeMode,
+                                    onCustomStartAddressChanged = lanScannerViewModel::onCustomStartAddressChanged,
+                                    onCustomEndAddressChanged = lanScannerViewModel::onCustomEndAddressChanged,
+                                    isTopLevelDestination = true,
+                                    onOpenMenu = ::openDrawer,
                                 )
                             }
+                            ToolScreen.SETTINGS -> SettingsScreen(
+                                    historyUiState = historyUiState,
+                                    onClearHistory = historyViewModel::clear,
+                                    onBack = ::goBack,
+                                )
                             ToolScreen.SUBNET -> SubnetScreen(
                                 uiState = subnetUiState,
                                 onInputChanged = subnetViewModel::onInputChanged,
@@ -389,6 +436,8 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
 }
 
 private fun HistoryType.displayName(): String = when (this) {

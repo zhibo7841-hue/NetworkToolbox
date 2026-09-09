@@ -30,6 +30,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core:common"))
+    implementation(project(":core:designsystem"))
     implementation(project(":core:network"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.foundation)

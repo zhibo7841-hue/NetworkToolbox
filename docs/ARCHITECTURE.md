@@ -55,3 +55,31 @@ Permission behavior will follow the Android API requirements applicable to the s
 The minimum supported Android version is API 31. The application is Android Native and should use platform capabilities available on the supported range, with compatibility handling where required. Higher-version behavior must not silently redefine the V0.1 scope.
 
 Build configuration, target SDK selection, and compatibility details belong to the Android implementation phase and are intentionally not created in this task.
+
+## App shell navigation
+
+The current app shell has three formal top-level destinations:
+
+- `HOME` / 首页 — current network status, recent checks, and quick actions.
+- `TOOLS` / 工具 — the complete set of existing network tools.
+- `DEVICES` / 设备 — the current LAN Scanner as the usable device-discovery
+  entry point until a separate LAN Device Center is approved and implemented.
+
+`SETTINGS` is a secondary route, not a bottom-navigation destination. A shared
+Material 3 Drawer is available from each top-level destination and currently
+contains the Settings entry. About, local data management, and privacy remain
+inside the single Settings screen; the Drawer does not duplicate the Tools
+catalog.
+
+Tool routes retain their source-aware caller. A tool opened from Home or Tools
+returns to that caller, while a route opened from Devices can return to
+Devices. Settings follows the same rule: Back returns to the top-level
+destination from which the Drawer was opened. Secondary pages expose their
+Back action and do not expose the top-level Drawer action.
+
+The navigation state uses named top-level and tool destinations rather than
+integer indexes, and its saveable representation preserves the selected
+destination and caller across configuration changes. The Devices screen reuses
+the existing LAN Scanner ViewModel and state; it does not create a second
+discovery pipeline or introduce LAN Device Center, Favorites, or Wake-on-LAN
+behavior.

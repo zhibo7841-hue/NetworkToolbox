@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
@@ -38,12 +39,14 @@ fun LanScannerScreen(
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     onRetry: () -> Unit = onStartScan,
     onModifyRange: () -> Unit = {},
     onRangeModeChanged: (LanScanRangeMode) -> Unit = {},
     onCustomStartAddressChanged: (String) -> Unit = {},
     onCustomEndAddressChanged: (String) -> Unit = {},
-    modifier: Modifier = Modifier,
+    isTopLevelDestination: Boolean = false,
+    onOpenMenu: () -> Unit = {},
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
@@ -53,15 +56,23 @@ fun LanScannerScreen(
                 .padding(horizontal = 20.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            TextButton(onClick = onBack) {
-                Text("返回工具")
+            if (isTopLevelDestination) {
+                NetworkToolboxTopLevelHeader(
+                    title = "设备",
+                    description = "发现并查看局域网设备。",
+                    onOpenMenu = onOpenMenu,
+                )
+            } else {
+                TextButton(onClick = onBack) {
+                    Text("返回工具")
+                }
+                Text("局域网扫描", style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    "扫描当前局域网中的在线设备。",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Text("局域网扫描", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "扫描当前局域网中的在线设备。",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
 
             when (val state = uiState) {
                 LanScannerUiState.Idle -> LoadingCard()

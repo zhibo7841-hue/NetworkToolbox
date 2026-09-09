@@ -295,6 +295,9 @@ scrollable destination and respects the App Shell's safe-drawing and bottom
 navigation insets. Future concepts such as Wake-on-LAN are not shown until
 they are implemented. Home and Tools use the same tool definitions and
 navigation callbacks so an entry cannot silently diverge between destinations.
+Tool entry cards are fully clickable surfaces and do not require a trailing
+chevron; the card's label, touch target, and interaction feedback provide the
+action semantics.
 
 ## Quick tool pattern
 
@@ -302,13 +305,14 @@ Quick Tools is a curated subset of at most four existing tools. It is rendered
 as a two-column grid with token-based vertical gaps so the Home destination
 does not spend most of its first screen on repeated whitespace. A tool card is
 clickable across its full surface and exposes one semantic action to
-accessibility services. The icon and trailing arrow are decorative when the
-card already supplies the label, so the same action is not announced twice.
+accessibility services. It does not use a trailing arrow for the same action;
+the card already supplies the label and interaction feedback.
 
 Home `QuickToolCard` is a compact outlined surface: it uses the shared card
 shape, theme surface, outline-variant border, 40 dp icon container, title,
-short explanation, and trailing affordance. Its content is limited to the
-real four quick-tool definitions and has no demo values or filler content.
+short explanation, and balanced end padding without a trailing affordance. Its
+content is limited to the real four quick-tool definitions and has no demo
+values or filler content.
 The complete Tools destination may continue to use `ToolCard`; both variants
 receive real callbacks and label data from the shared catalog.
 
@@ -366,11 +370,11 @@ used as UI data.
 
 ## App shell and migration
 
-The App Shell continues to contain exactly three top-level destinations:
+The App Shell contains exactly three top-level destinations:
 
 - 首页 / Home
 - 工具 / Tools
-- 设置 / Settings
+- 设备 / Devices
 
 Tool entry routes retain their caller in the app shell. A tool opened from Home
 returns to Home, while a tool opened from Tools returns to Tools; the Android
@@ -378,8 +382,13 @@ system back action and each tool's visible back action use this same source-awar
 transition. Bottom navigation remains a direct top-level switch and does not
 create an additional back-stack layer.
 
-This task changes the top-level visual foundation only. It does not add a
-fourth tab, change navigation, or implement the LAN Device Center.
+Settings is a secondary app-level destination opened from the shared Drawer and
+keeps the caller's top-level destination for Back navigation. The Drawer is
+available from Home, Tools, and Devices, but not from secondary tool pages.
+Devices currently hosts the existing LAN Scanner screen and its existing
+ViewModel; it is a real entry point, not a placeholder or a second scanner
+state. The later LAN Device Center, Favorites, and Wake-on-LAN work remains a
+separate implementation stage.
 
 Migration follows a staged path rather than a Big Bang rewrite:
 
@@ -489,11 +498,11 @@ history snapshot, export, and business rules are outside this visual layer.
 
 ## Scope boundary
 
-This foundation does not modify Ping, DNS, TCP, Traceroute, LAN Scanner,
-Automatic Diagnostics, History, Report, Retry/Verify, or their data semantics.
-The current Home and Tools work is a visual/presentation migration only; it
-does not start the later Automatic Diagnostics, LAN Device Center, or
-Wake-on-LAN work.
+This foundation does not modify Ping, DNS, TCP, Traceroute, LAN Scanner
+discovery, Automatic Diagnostics, History, Report, Retry/Verify, or their data
+semantics. The App Shell change only hosts the existing LAN Scanner under the
+Devices top-level destination; it does not implement the later LAN Device
+Center, Favorites, or Wake-on-LAN work.
 
 ## Core Tool Screen Pattern
 
