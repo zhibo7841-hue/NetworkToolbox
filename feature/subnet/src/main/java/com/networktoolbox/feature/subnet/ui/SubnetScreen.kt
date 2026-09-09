@@ -33,8 +33,8 @@ fun SubnetScreen(
 ) {
     ToolScreenLayout(modifier = modifier) {
         ToolScreenHeader(
-            title = "IPv4 Subnet Calculator",
-            description = "根据 IPv4 地址和 CIDR 计算网络范围",
+            title = "IPv4 子网计算",
+            description = null,
             icon = Icons.Outlined.AccountTree,
             accent = NetworkToolAccent.CYAN,
             onBack = onBack,

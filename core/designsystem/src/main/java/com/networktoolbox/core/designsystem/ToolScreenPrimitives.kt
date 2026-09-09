@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,7 +74,7 @@ fun ToolScreenLazyLayout(
 @Composable
 fun ToolScreenHeader(
     title: String,
-    description: String,
+    description: String? = null,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     accent: NetworkToolAccent,
     onBack: () -> Unit,
@@ -105,12 +106,44 @@ fun ToolScreenHeader(
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS),
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            description?.let { text ->
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Lightweight header shared by app-level secondary information pages. */
+@Composable
+fun SecondaryInformationHeader(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailingContent: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "返回",
             )
         }
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        trailingContent()
     }
 }
 

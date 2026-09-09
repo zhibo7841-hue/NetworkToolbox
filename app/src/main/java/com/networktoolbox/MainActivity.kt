@@ -28,6 +28,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -232,7 +233,6 @@ class MainActivity : ComponentActivity() {
             }
 
             fun goBack() {
-                closeDrawer()
                 if (toolScreen == ToolScreen.NONE) return
                 if (reportUiState.status is ReportStatus.Running) {
                     reportViewModel.stopCheck()
@@ -253,7 +253,10 @@ class MainActivity : ComponentActivity() {
                 tracerouteViewModel.stop()
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
-                navigationState = navigationState.openSecondaryDestination(destination)
+                navigationState = navigationState.openSecondaryDestination(
+                    screen = destination,
+                    source = SecondaryNavigationSource.DRAWER,
+                )
                 if (destination == ToolScreen.HISTORY) {
                     historyViewModel.load()
                 }
@@ -283,6 +286,13 @@ class MainActivity : ComponentActivity() {
 
             BackHandler(enabled = !drawerState.isOpen && toolScreen != ToolScreen.NONE) {
                 goBack()
+            }
+
+            LaunchedEffect(navigationState.reopenDrawerRequest) {
+                if (navigationState.reopenDrawerRequest) {
+                    drawerState.open()
+                    navigationState = navigationState.consumeDrawerReopenRequest()
+                }
             }
 
             NetworkToolboxTheme {
@@ -450,11 +460,11 @@ class MainActivity : ComponentActivity() {
 
 private fun HistoryType.displayName(): String = when (this) {
     HistoryType.PING -> "Ping"
-    HistoryType.DNS -> "DNS Lookup"
-    HistoryType.TCP -> "TCP Port Check"
-    HistoryType.REPORT -> "Network Diagnostic"
-    HistoryType.LAN_SCAN -> "LAN Scanner"
-    HistoryType.UNKNOWN -> "Other"
+    HistoryType.DNS -> "DNS 查询"
+    HistoryType.TCP -> "TCP 端口检测"
+    HistoryType.REPORT -> "网络诊断"
+    HistoryType.LAN_SCAN -> "局域网扫描"
+    HistoryType.UNKNOWN -> "其他"
 }
 
 private fun ResolvedDiagnosticHistory.recentDiagnosticStatus(): RecentDiagnosticStatus = when (this) {

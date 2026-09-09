@@ -112,12 +112,11 @@ fun HomeScreen(
             )
 
             SectionHeader(
-                title = "快速工具",
-                subtitle = "常用网络检测",
+                title = HomePresentation.quickToolsTitle,
             )
             DashboardToolGrid(quickToolDefinitions(callbacks))
 
-            SectionHeader(title = "最近诊断")
+            SectionHeader(title = HomePresentation.recentDiagnosisTitle)
             RecentDiagnosticCard(
                 recentHistory = recentHistory,
                 onOpenHistory = onOpenHistory,

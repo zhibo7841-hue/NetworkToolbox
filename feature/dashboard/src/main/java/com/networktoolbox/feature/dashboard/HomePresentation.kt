@@ -10,6 +10,9 @@ enum class RecentDiagnosticStatus {
 
 /** Pure display mapping for the Home recent-diagnosis preview. */
 internal object HomePresentation {
+    const val quickToolsTitle = "快速工具"
+    const val recentDiagnosisTitle = "最近诊断"
+
     val sectionOrder: List<String> = listOf(
         "network",
         "diagnostic",

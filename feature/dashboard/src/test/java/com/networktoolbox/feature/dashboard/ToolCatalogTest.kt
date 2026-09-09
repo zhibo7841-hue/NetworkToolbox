@@ -30,7 +30,8 @@ class ToolCatalogTest {
 
     @Test
     fun homeQuickTools_areLimitedToFourExistingTools() {
-        val quickIds = quickToolDefinitions(callbacks()).map(DashboardToolDefinition::id)
+        val quickTools = quickToolDefinitions(callbacks())
+        val quickIds = quickTools.map(DashboardToolDefinition::id)
 
         assertEquals(
             listOf(
@@ -42,6 +43,8 @@ class ToolCatalogTest {
             quickIds,
         )
         assertEquals(4, quickIds.size)
+        assertTrue(quickTools.all { it.description.isNotBlank() })
+        assertFalse(quickTools.any { it.description == "常用网络检测" })
         assertFalse(dashboardToolDefinitions(callbacks()).any { it.title.contains("Wake") })
     }
 

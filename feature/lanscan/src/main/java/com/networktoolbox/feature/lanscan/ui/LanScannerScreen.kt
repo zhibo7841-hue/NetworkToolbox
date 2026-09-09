@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,7 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.networktoolbox.core.designsystem.NetworkToolAccent
 import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
+import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
@@ -63,14 +67,12 @@ fun LanScannerScreen(
                     onOpenMenu = onOpenMenu,
                 )
             } else {
-                TextButton(onClick = onBack) {
-                    Text("返回工具")
-                }
-                Text("局域网扫描", style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    "扫描当前局域网中的在线设备。",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ToolScreenHeader(
+                    title = "局域网扫描",
+                    description = null,
+                    icon = Icons.Outlined.Lan,
+                    accent = NetworkToolAccent.PRIMARY,
+                    onBack = onBack,
                 )
             }
 
@@ -452,7 +454,7 @@ private fun UnsupportedContent(
             "当前网络不可用"
         },
         content = {
-            Text("LAN Scanner 用于扫描 Wi-Fi 或以太网局域网。")
+            Text("局域网扫描用于扫描 Wi-Fi 或以太网局域网。")
         },
     )
 }
@@ -462,7 +464,7 @@ private fun VpnBlockedContent() {
     StatusCard(
         title = "当前检测到 VPN 网络",
         content = {
-            Text("第一版 LAN Scanner 暂不在 VPN 网络下自动扫描，以避免扫描错误的虚拟网段。")
+            Text("第一版局域网扫描暂不在 VPN 网络下自动扫描，以避免扫描错误的虚拟网段。")
         },
     )
 }

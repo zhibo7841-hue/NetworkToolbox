@@ -60,8 +60,8 @@ fun DnsScreen(
 
     ToolScreenLayout(modifier = modifier) {
         ToolScreenHeader(
-            title = "DNS Lookup",
-            description = "检查域名解析结果",
+            title = "DNS 查询",
+            description = null,
             icon = Icons.Outlined.Dns,
             accent = NetworkToolAccent.CYAN,
             onBack = onBack,

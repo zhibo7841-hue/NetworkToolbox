@@ -516,9 +516,10 @@ Center, Favorites, or Wake-on-LAN work.
 
 The core network tools use one predictable Compose reading order:
 
-1. **Tool header** — a source-aware back action, the tool icon, the tool name,
-   and one short description. Core screens do not repeat the NetworkToolbox
-   brand header.
+1. **Tool header** — a source-aware back action, the tool icon, and the tool
+   name. Tool headers do not show a subtitle; tool explanations remain in the
+   content area where they are useful. Core screens do not repeat the
+   NetworkToolbox brand header.
 2. **Input / target** — one `OutlinedNetworkCard` groups the target fields and
    any optional parameters. Each input uses the Material 3
    `OutlinedTextField`; validation remains inline and user-readable.
@@ -552,7 +553,7 @@ strings, and machine codes are not displayed as ordinary result labels. The
 technical meaning of each tool result remains owned by its existing engine,
 UseCase, and presentation mapping.
 
-Ping, DNS Lookup, TCP Port Check, Traceroute, and IPv4 Subnet Calculator keep
+Ping, DNS 查询, TCP 端口检测, Traceroute, and IPv4 子网计算 keep
 their current parameters, detection/calculation rules, limits, history
 behavior, and source-aware navigation. This pattern changes only their
 Compose presentation; it does not add a network protocol, alter a timeout,
@@ -588,16 +589,22 @@ preference.
 The shared Drawer is compact and contains only `检测历史`, `隐私与数据`, and
 `关于`, below the real app name and dynamic `BuildConfig.VERSION_NAME`. It does
 not repeat top-level navigation or expose a placeholder Settings entry.
+Drawer rows remain plain, compact navigation rows without new Cards, groups, or
+section redesign.
 
 History reuses the existing History screen and its local data behavior. Privacy
-& Data is a lightweight secondary screen using outlined information groups for
+& Data is a lightweight secondary screen using typography and dividers for
 local-first storage, no upload of diagnostic results/history, and no account
 requirement. It does not duplicate History management actions. About is a
-lightweight secondary screen using a compact outlined card with the real app
-name, open-source description, compact brand network icon, and dynamic version.
-All three screens use a source-aware Back action and do not show a Drawer
-button themselves. Light and dark themes reuse the same NetworkToolbox
-surface, outline, typography, and semantic tokens.
+lightweight secondary screen using the real launcher icon, app name, open-source
+description, and dynamic version without a giant outer Card. Each secondary
+page uses a Back arrow and title only: no header icon, subtitle, or Drawer
+button. Light and dark themes reuse the same NetworkToolbox surface, outline,
+typography, and semantic tokens.
+
+Home renders only the `快速工具` section title; it does not render supporting
+section copy such as `常用网络检测`. Each of the four quick-tool cards keeps
+its own one-line user-facing explanation.
 
 ## Home Hero pattern
 

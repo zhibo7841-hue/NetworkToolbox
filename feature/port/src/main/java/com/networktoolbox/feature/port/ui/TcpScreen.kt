@@ -41,8 +41,8 @@ fun TcpScreen(
 
     ToolScreenLayout(modifier = modifier) {
         ToolScreenHeader(
-            title = "TCP Port Check",
-            description = "检查指定服务端口连接",
+            title = "TCP 端口检测",
+            description = null,
             icon = Icons.Outlined.Lan,
             accent = NetworkToolAccent.AMBER,
             onBack = onBack,

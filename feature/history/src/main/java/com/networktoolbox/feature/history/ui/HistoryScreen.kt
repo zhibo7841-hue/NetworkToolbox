@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -36,6 +35,7 @@ import com.networktoolbox.core.designsystem.NetworkToolboxChevron
 import com.networktoolbox.core.designsystem.NetworkToolboxDeleteIcon
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.OutlinedNetworkCard
+import com.networktoolbox.core.designsystem.SecondaryInformationHeader
 import com.networktoolbox.feature.history.presentation.HistoryUiState
 import com.networktoolbox.feature.history.presentation.HistoryRecordPresentation
 
@@ -60,27 +60,11 @@ fun HistoryScreen(
                 .padding(NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
         ) {
-            TextButton(onClick = onBack, enabled = uiState !is HistoryUiState.Loading) {
-                Text("返回工具")
-            }
-            Text("历史记录", style = MaterialTheme.typography.headlineSmall)
-            Text(
-                "查看本机保存的网络检测记录。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            when (val state = uiState) {
-                HistoryUiState.Loading -> StatusCard("加载中...")
-                HistoryUiState.Empty -> EmptyHistoryCard()
-                is HistoryUiState.Error -> ErrorCard(state.message, onLoad)
-                is HistoryUiState.Success -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("历史记录", style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.weight(1f))
+            SecondaryInformationHeader(
+                title = "历史记录",
+                onBack = onBack,
+                trailingContent = {
+                    if (uiState is HistoryUiState.Success) {
                         TextButton(
                             onClick = { showClearDialog = true },
                             colors = ButtonDefaults.textButtonColors(
@@ -90,6 +74,14 @@ fun HistoryScreen(
                             Text("清空")
                         }
                     }
+                },
+            )
+
+            when (val state = uiState) {
+                HistoryUiState.Loading -> StatusCard("加载中...")
+                HistoryUiState.Empty -> EmptyHistoryCard()
+                is HistoryUiState.Error -> ErrorCard(state.message, onLoad)
+                is HistoryUiState.Success -> {
                     state.records.forEach { record ->
                         HistoryRecordCard(
                             record = record,

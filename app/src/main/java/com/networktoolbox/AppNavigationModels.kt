@@ -14,6 +14,11 @@ internal enum class NavigationOrigin {
     DEVICES,
 }
 
+internal enum class SecondaryNavigationSource {
+    NONE,
+    DRAWER,
+}
+
 internal enum class TopLevelDestination(
     val label: String,
     val icon: ImageVector,
@@ -58,6 +63,8 @@ internal data class AppNavigationState(
     val topLevelDestination: TopLevelDestination = TopLevelDestination.HOME,
     val toolScreen: ToolScreen = ToolScreen.NONE,
     val toolOrigin: NavigationOrigin = NavigationOrigin.HOME,
+    val secondaryNavigationSource: SecondaryNavigationSource = SecondaryNavigationSource.NONE,
+    val reopenDrawerRequest: Boolean = false,
 ) {
     fun openTool(screen: ToolScreen): AppNavigationState = copy(
         topLevelDestination = TopLevelDestination.TOOLS,
@@ -67,20 +74,29 @@ internal data class AppNavigationState(
         } else {
             toolOrigin
         },
+        secondaryNavigationSource = SecondaryNavigationSource.NONE,
+        reopenDrawerRequest = false,
     )
 
-    fun openSecondaryDestination(screen: ToolScreen): AppNavigationState = copy(
+    fun openSecondaryDestination(
+        screen: ToolScreen,
+        source: SecondaryNavigationSource = SecondaryNavigationSource.NONE,
+    ): AppNavigationState = copy(
         toolScreen = screen,
         toolOrigin = if (toolScreen == ToolScreen.NONE) {
             topLevelDestination.navigationOrigin()
         } else {
             toolOrigin
         },
+        secondaryNavigationSource = source,
+        reopenDrawerRequest = false,
     )
 
     fun selectTopLevel(destination: TopLevelDestination): AppNavigationState = copy(
         topLevelDestination = destination,
         toolScreen = ToolScreen.NONE,
+        secondaryNavigationSource = SecondaryNavigationSource.NONE,
+        reopenDrawerRequest = false,
     )
 
     fun goBack(): AppNavigationState = if (toolScreen == ToolScreen.NONE) {
@@ -89,8 +105,12 @@ internal data class AppNavigationState(
         copy(
             topLevelDestination = toolOrigin.backDestination(),
             toolScreen = ToolScreen.NONE,
+            secondaryNavigationSource = SecondaryNavigationSource.NONE,
+            reopenDrawerRequest = secondaryNavigationSource == SecondaryNavigationSource.DRAWER,
         )
     }
+
+    fun consumeDrawerReopenRequest(): AppNavigationState = copy(reopenDrawerRequest = false)
 
     companion object {
         val Saver: Saver<AppNavigationState, Any> = listSaver(
@@ -99,6 +119,8 @@ internal data class AppNavigationState(
                     state.topLevelDestination.name,
                     state.toolScreen.name,
                     state.toolOrigin.name,
+                    state.secondaryNavigationSource.name,
+                    state.reopenDrawerRequest.toString(),
                 )
             },
             restore = { saved ->
@@ -106,6 +128,10 @@ internal data class AppNavigationState(
                     topLevelDestination = TopLevelDestination.valueOf(saved[0]),
                     toolScreen = ToolScreen.valueOf(saved[1]),
                     toolOrigin = NavigationOrigin.valueOf(saved[2]),
+                    secondaryNavigationSource = saved.getOrNull(3)
+                        ?.let { SecondaryNavigationSource.valueOf(it) }
+                        ?: SecondaryNavigationSource.NONE,
+                    reopenDrawerRequest = saved.getOrNull(4) == "true",
                 )
             },
         )

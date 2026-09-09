@@ -27,6 +27,8 @@ class AppInformationPresentationTest {
     fun aboutUsesRealAppIdentityAndBuildVersion() {
         assertEquals("关于", AppInformationPresentation.aboutTitle)
         assertEquals("NetworkToolbox", AppInformationPresentation.appName)
+        assertEquals("开源网络分析与故障诊断工具箱", AppInformationPresentation.appDescription)
+        assertEquals("当前版本", AppInformationPresentation.versionTitle)
         assertEquals(
             "Version ${BuildConfig.VERSION_NAME}",
             AppInformationPresentation.versionValue(BuildConfig.VERSION_NAME),
@@ -37,6 +39,7 @@ class AppInformationPresentationTest {
     fun privacyCopyStatesLocalFirstNoAccountAndNoUpload() {
         assertTrue(AppInformationPresentation.localFirstDescription.contains("本地"))
         assertTrue(AppInformationPresentation.uploadDescription.contains("不会"))
+        assertEquals("无需账号", AppInformationPresentation.accountTitle)
         assertTrue(AppInformationPresentation.accountDescription.contains("无需账号"))
     }
 }

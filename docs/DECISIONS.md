@@ -197,7 +197,9 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Navigation: Secondary pages use source-aware Back navigation. History,
   Privacy & Data, and About return to the Home, Tools, or Devices caller that
   opened the Drawer, and secondary pages do not expose the top-level Drawer
-  action.
+  action. Drawer-opened secondary pages issue one explicit, consumed request to
+  reopen the same Drawer after Back; History opened from a non-Drawer flow does
+  not reopen it. The Drawer remains transient rather than becoming a route.
 - Affordances: Tool cards and Home quick-tool cards do not require a trailing
   chevron. Chevrons remain only where they communicate a meaningful detail or
   open action, including the Home Network Hero and existing History/Report

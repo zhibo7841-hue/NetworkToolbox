@@ -1,6 +1,8 @@
 package com.networktoolbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppNavigationStateTest {
@@ -59,15 +61,49 @@ class AppNavigationStateTest {
             TopLevelDestination.DEVICES,
         ).forEach { caller ->
             listOf(ToolScreen.HISTORY, ToolScreen.PRIVACY, ToolScreen.ABOUT).forEach { screen ->
-                val state = AppNavigationState()
-                    .selectTopLevel(caller)
-                    .openSecondaryDestination(screen)
+                    val state = AppNavigationState()
+                        .selectTopLevel(caller)
+                        .openSecondaryDestination(
+                            screen = screen,
+                            source = SecondaryNavigationSource.DRAWER,
+                        )
 
                 assertEquals(screen, state.toolScreen)
-                assertEquals(caller, state.goBack().topLevelDestination)
-                assertEquals(ToolScreen.NONE, state.goBack().toolScreen)
+                val returned = state.goBack()
+                assertEquals(caller, returned.topLevelDestination)
+                assertEquals(ToolScreen.NONE, returned.toolScreen)
+                assertTrue(returned.reopenDrawerRequest)
+                assertEquals(
+                    SecondaryNavigationSource.NONE,
+                    returned.secondaryNavigationSource,
+                )
             }
         }
+    }
+
+    @Test
+    fun nonDrawerHistoryBack_returnsToCallerWithoutReopeningDrawer() {
+        val returned = AppNavigationState()
+            .selectTopLevel(TopLevelDestination.TOOLS)
+            .openTool(ToolScreen.HISTORY)
+            .goBack()
+
+        assertEquals(TopLevelDestination.TOOLS, returned.topLevelDestination)
+        assertFalse(returned.reopenDrawerRequest)
+    }
+
+    @Test
+    fun drawerReopenRequest_isExplicitAndConsumedOnce() {
+        val returned = AppNavigationState()
+            .selectTopLevel(TopLevelDestination.DEVICES)
+            .openSecondaryDestination(
+                screen = ToolScreen.ABOUT,
+                source = SecondaryNavigationSource.DRAWER,
+            )
+            .goBack()
+
+        assertTrue(returned.reopenDrawerRequest)
+        assertFalse(returned.consumeDrawerReopenRequest().reopenDrawerRequest)
     }
 
     @Test

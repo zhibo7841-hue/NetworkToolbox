@@ -74,7 +74,7 @@ fun PingScreen(
     ToolScreenLayout(modifier = modifier) {
         ToolScreenHeader(
             title = "Ping",
-            description = "分析目标的可达性与网络质量",
+            description = null,
             icon = Icons.Outlined.WifiTethering,
             accent = NetworkToolAccent.PRIMARY,
             onBack = onBack,

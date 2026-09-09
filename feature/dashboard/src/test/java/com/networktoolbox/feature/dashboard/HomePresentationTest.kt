@@ -7,6 +7,13 @@ import org.junit.Test
 
 class HomePresentationTest {
     @Test
+    fun quickTools_useTitleOnlyAndKeepCardDescriptions() {
+        assertEquals("快速工具", HomePresentation.quickToolsTitle)
+        assertFalse(HomePresentation.quickToolsTitle.contains("常用网络检测"))
+        assertEquals("最近诊断", HomePresentation.recentDiagnosisTitle)
+    }
+
+    @Test
     fun homeUsesNetworkFirstOrderWithoutBrandHeader() {
         assertEquals(
             listOf("network", "diagnostic", "quick-tools", "recent-diagnosis"),

@@ -1,26 +1,22 @@
 package com.networktoolbox
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Lan
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.networktoolbox.core.designsystem.NetworkToolAccent
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
-import com.networktoolbox.core.designsystem.OutlinedNetworkCard
-import com.networktoolbox.core.designsystem.ToolIconContainer
-import com.networktoolbox.core.designsystem.ToolScreenHeader
+import com.networktoolbox.core.designsystem.SecondaryInformationHeader
 import com.networktoolbox.core.designsystem.ToolScreenLayout
 
 @Composable
@@ -29,15 +25,14 @@ internal fun AboutScreen(
     modifier: Modifier = Modifier,
 ) {
     ToolScreenLayout(modifier = modifier) {
-        ToolScreenHeader(
+        SecondaryInformationHeader(
             title = AppInformationPresentation.aboutTitle,
-            description = AppInformationPresentation.aboutDescription,
-            icon = Icons.Outlined.Info,
-            accent = NetworkToolAccent.PRIMARY,
             onBack = onBack,
         )
 
-        OutlinedNetworkCard {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -45,10 +40,10 @@ internal fun AboutScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
             ) {
-                ToolIconContainer(
-                    icon = Icons.Outlined.Lan,
-                    accent = NetworkToolAccent.PRIMARY,
-                    contentDescription = AppInformationPresentation.appName,
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher),
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -81,35 +76,38 @@ internal fun PrivacyScreen(
     modifier: Modifier = Modifier,
 ) {
     ToolScreenLayout(modifier = modifier) {
-        ToolScreenHeader(
+        SecondaryInformationHeader(
             title = AppInformationPresentation.privacyTitle,
-            description = AppInformationPresentation.privacyDescription,
-            icon = Icons.Outlined.Lock,
-            accent = NetworkToolAccent.CYAN,
             onBack = onBack,
         )
 
-        InformationCard(
-            title = AppInformationPresentation.localFirstTitle,
-            description = AppInformationPresentation.localFirstDescription,
-        )
-        InformationCard(
-            title = AppInformationPresentation.uploadTitle,
-            description = AppInformationPresentation.uploadDescription,
-        )
-        InformationCard(
-            title = AppInformationPresentation.accountTitle,
-            description = AppInformationPresentation.accountDescription,
-        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
+        ) {
+            InformationBlock(
+                title = AppInformationPresentation.localFirstTitle,
+                description = AppInformationPresentation.localFirstDescription,
+            )
+            HorizontalDivider()
+            InformationBlock(
+                title = AppInformationPresentation.uploadTitle,
+                description = AppInformationPresentation.uploadDescription,
+            )
+            HorizontalDivider()
+            InformationBlock(
+                title = AppInformationPresentation.accountTitle,
+                description = AppInformationPresentation.accountDescription,
+            )
+        }
     }
 }
 
 @Composable
-private fun InformationCard(
+private fun InformationBlock(
     title: String,
     description: String,
 ) {
-    OutlinedNetworkCard {
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(
             description,

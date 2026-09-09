@@ -63,7 +63,7 @@ fun TracerouteScreen(
         item {
             ToolScreenHeader(
                 title = "Traceroute",
-                description = "查看数据包经过的 IPv4 网络路径",
+                description = null,
                 icon = Icons.Outlined.AccountTree,
                 accent = NetworkToolAccent.CYAN,
                 onBack = onBack,
