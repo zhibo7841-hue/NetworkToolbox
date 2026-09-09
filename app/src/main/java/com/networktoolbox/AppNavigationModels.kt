@@ -32,8 +32,9 @@ internal enum class ToolScreen {
     TRACEROUTE,
     REPORT,
     HISTORY,
+    PRIVACY,
+    ABOUT,
     LAN_SCAN,
-    SETTINGS,
 }
 
 internal fun TopLevelDestination.navigationOrigin(): NavigationOrigin = when (this) {
@@ -68,8 +69,8 @@ internal data class AppNavigationState(
         },
     )
 
-    fun openSettings(): AppNavigationState = copy(
-        toolScreen = ToolScreen.SETTINGS,
+    fun openSecondaryDestination(screen: ToolScreen): AppNavigationState = copy(
+        toolScreen = screen,
         toolOrigin = if (toolScreen == ToolScreen.NONE) {
             topLevelDestination.navigationOrigin()
         } else {

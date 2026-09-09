@@ -4,18 +4,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DrawerState
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
-import androidx.compose.material3.DrawerState
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
@@ -24,7 +26,9 @@ import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 internal fun AppShellDrawer(
     drawerState: DrawerState,
     gesturesEnabled: Boolean,
-    onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onOpenAbout: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     ModalNavigationDrawer(
@@ -32,7 +36,11 @@ internal fun AppShellDrawer(
         gesturesEnabled = gesturesEnabled,
         drawerContent = {
             ModalDrawerSheet {
-                AppDrawerContent(onOpenSettings = onOpenSettings)
+                AppDrawerContent(
+                    onOpenHistory = onOpenHistory,
+                    onOpenPrivacy = onOpenPrivacy,
+                    onOpenAbout = onOpenAbout,
+                )
             }
         },
         content = content,
@@ -41,7 +49,9 @@ internal fun AppShellDrawer(
 
 @Composable
 private fun AppDrawerContent(
-    onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -56,23 +66,37 @@ private fun AppDrawerContent(
     ) {
         Text("NetworkToolbox", style = MaterialTheme.typography.titleLarge)
         Text(
-            "Version ${BuildConfig.VERSION_NAME}",
+            AppShellPresentation.versionLabel(BuildConfig.VERSION_NAME),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(NetworkToolboxSpacing.SM))
         HorizontalDivider()
-        NavigationDrawerItem(
-            label = { Text(AppShellPresentation.drawerSettingsLabel) },
-            selected = false,
-            onClick = onOpenSettings,
-            icon = {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = null,
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        AppShellPresentation.drawerItems.forEach { item ->
+            NavigationDrawerItem(
+                label = { Text(item.label) },
+                selected = false,
+                onClick = {
+                    when (item) {
+                        AppShellDrawerItem.HISTORY -> onOpenHistory()
+                        AppShellDrawerItem.PRIVACY -> onOpenPrivacy()
+                        AppShellDrawerItem.ABOUT -> onOpenAbout()
+                    }
+                },
+                icon = {
+                    Icon(
+                        imageVector = item.icon(),
+                        contentDescription = null,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
+}
+
+private fun AppShellDrawerItem.icon() = when (this) {
+    AppShellDrawerItem.HISTORY -> Icons.Outlined.History
+    AppShellDrawerItem.PRIVACY -> Icons.Outlined.Lock
+    AppShellDrawerItem.ABOUT -> Icons.Outlined.Info
 }

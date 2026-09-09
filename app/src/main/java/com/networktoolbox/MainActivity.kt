@@ -244,9 +244,19 @@ class MainActivity : ComponentActivity() {
                 navigationState = navigationState.goBack()
             }
 
-            fun openSettings() {
+            fun openDrawerDestination(destination: ToolScreen) {
                 closeDrawer()
-                navigationState = navigationState.openSettings()
+                if (reportUiState.status is ReportStatus.Running) {
+                    reportViewModel.stopCheck()
+                }
+                lanScannerViewModel.stopScan()
+                tracerouteViewModel.stop()
+                restoredDiagnosticReport = null
+                restoredAutomaticDiagnosticResult = null
+                navigationState = navigationState.openSecondaryDestination(destination)
+                if (destination == ToolScreen.HISTORY) {
+                    historyViewModel.load()
+                }
             }
 
             fun openDiagnosticHistory(record: HistoryRecord) {
@@ -279,7 +289,9 @@ class MainActivity : ComponentActivity() {
                 AppShellDrawer(
                     drawerState = drawerState,
                     gesturesEnabled = AppShellPresentation.canShowDrawer(navigationState),
-                    onOpenSettings = ::openSettings,
+                    onOpenHistory = { openDrawerDestination(ToolScreen.HISTORY) },
+                    onOpenPrivacy = { openDrawerDestination(ToolScreen.PRIVACY) },
+                    onOpenAbout = { openDrawerDestination(ToolScreen.ABOUT) },
                 ) {
                     Scaffold(
                         modifier = Modifier.fillMaxSize(),
@@ -333,7 +345,6 @@ class MainActivity : ComponentActivity() {
                                     onOpenSubnet = { openTool(ToolScreen.SUBNET) },
                                     onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
-                                    onOpenHistory = { openTool(ToolScreen.HISTORY) },
                                 )
                                 TopLevelDestination.DEVICES -> LanScannerScreen(
                                     uiState = lanScannerUiState,
@@ -349,11 +360,8 @@ class MainActivity : ComponentActivity() {
                                     onOpenMenu = ::openDrawer,
                                 )
                             }
-                            ToolScreen.SETTINGS -> SettingsScreen(
-                                    historyUiState = historyUiState,
-                                    onClearHistory = historyViewModel::clear,
-                                    onBack = ::goBack,
-                                )
+                            ToolScreen.PRIVACY -> PrivacyScreen(onBack = ::goBack)
+                            ToolScreen.ABOUT -> AboutScreen(onBack = ::goBack)
                             ToolScreen.SUBNET -> SubnetScreen(
                                 uiState = subnetUiState,
                                 onInputChanged = subnetViewModel::onInputChanged,

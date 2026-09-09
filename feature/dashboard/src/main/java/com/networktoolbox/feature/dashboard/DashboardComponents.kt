@@ -33,11 +33,12 @@ internal fun ToolCard(
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier.heightIn(min = 88.dp),
+        modifier = modifier.heightIn(min = 84.dp),
         shape = NetworkToolboxComponentShapes.Card,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         onClick = onClick,
     ) {
         Row(
@@ -66,7 +67,7 @@ internal fun ToolCard(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

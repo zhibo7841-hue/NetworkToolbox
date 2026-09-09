@@ -1,11 +1,18 @@
 package com.networktoolbox
 
+internal enum class AppShellDrawerItem(val label: String) {
+    HISTORY("检测历史"),
+    PRIVACY("隐私与数据"),
+    ABOUT("关于"),
+}
+
 /** Small app-shell contract shared by the drawer and navigation tests. */
 internal object AppShellPresentation {
-    const val drawerSettingsLabel = "设置"
-    const val devicesDescription = "发现并查看局域网设备。"
+    val drawerItems = AppShellDrawerItem.entries.toList()
 
-    val drawerItems = listOf(drawerSettingsLabel)
+    fun drawerItemLabels(): List<String> = drawerItems.map(AppShellDrawerItem::label)
+
+    fun versionLabel(versionName: String?): String = AppVersionInfo.formatVersionName(versionName)
 
     fun canShowDrawer(state: AppNavigationState): Boolean =
         state.toolScreen == ToolScreen.NONE

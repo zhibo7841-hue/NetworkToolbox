@@ -53,6 +53,7 @@ import com.networktoolbox.core.designsystem.NetworkToolboxMenuButton
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.NetworkToolboxStatusVisuals
+import com.networktoolbox.core.designsystem.OutlinedNetworkCard
 import com.networktoolbox.core.designsystem.PrimaryActionButton
 import com.networktoolbox.core.designsystem.StatusVisualState
 import com.networktoolbox.core.designsystem.ToolIconContainer
@@ -93,7 +94,6 @@ fun HomeScreen(
         onOpenSubnet = {},
         onOpenLanScan = onOpenLanScan,
         onOpenReport = onOpenReport,
-        onOpenHistory = onOpenHistory,
     )
 
     Surface(modifier = modifier.fillMaxSize()) {
@@ -170,7 +170,10 @@ internal fun NetworkSummaryCard(
     val statusState = NetworkStatusPresentation.connectionStatusVisualState(context)
     val summaryMetrics = NetworkStatusPresentation.summaryMetrics(context)
 
-    NetworkCard {
+    NetworkCard(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        borderColor = MaterialTheme.colorScheme.outlineVariant,
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -432,7 +435,7 @@ private fun RecentDiagnosticCard(
         darkTheme = isSystemInDarkTheme(),
     )
 
-    NetworkCard(
+    OutlinedNetworkCard(
         modifier = Modifier.clickable(
             role = androidx.compose.ui.semantics.Role.Button,
             onClick = onOpenHistory,

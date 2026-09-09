@@ -11,16 +11,21 @@ class ToolCatalogTest {
         val callbacks = callbacks()
         val sections = dashboardToolSections(callbacks)
 
-        assertEquals(listOf("连通性检测", "网络工具", "诊断与记录"), sections.map { it.title })
+        assertEquals(
+            listOf("连通与路径", "解析与服务", "网络与地址", "诊断"),
+            sections.map { it.title },
+        )
+        assertTrue(sections.all { it.subtitle == null })
         assertEquals(
             listOf(
-                listOf(DashboardToolId.PING, DashboardToolId.DNS, DashboardToolId.TCP, DashboardToolId.TRACEROUTE),
+                listOf(DashboardToolId.PING, DashboardToolId.TCP, DashboardToolId.TRACEROUTE),
+                listOf(DashboardToolId.DNS),
                 listOf(DashboardToolId.SUBNET, DashboardToolId.LAN_SCAN),
-                listOf(DashboardToolId.REPORT, DashboardToolId.HISTORY),
+                listOf(DashboardToolId.REPORT),
             ),
             sections.map { section -> section.tools.map(DashboardToolDefinition::id) },
         )
-        assertEquals(8, sections.flatMap { it.tools }.distinctBy(DashboardToolDefinition::id).size)
+        assertEquals(7, sections.flatMap { it.tools }.distinctBy(DashboardToolDefinition::id).size)
     }
 
     @Test
@@ -38,6 +43,25 @@ class ToolCatalogTest {
         )
         assertEquals(4, quickIds.size)
         assertFalse(dashboardToolDefinitions(callbacks()).any { it.title.contains("Wake") })
+    }
+
+    @Test
+    fun toolCardsUseShortUserFacingDescriptionsWithoutHistory() {
+        val definitions = dashboardToolDefinitions(callbacks())
+
+        assertEquals(
+            mapOf(
+                DashboardToolId.PING to "测试目标连通性",
+                DashboardToolId.DNS to "查询域名解析",
+                DashboardToolId.TCP to "检查 TCP 服务端口",
+                DashboardToolId.TRACEROUTE to "追踪目标网络路径",
+                DashboardToolId.SUBNET to "计算网络地址",
+                DashboardToolId.LAN_SCAN to "发现局域网设备",
+                DashboardToolId.REPORT to "自动检查网络问题",
+            ),
+            definitions.associate { it.id to it.description },
+        )
+        assertFalse(definitions.any { it.title.contains("历史") })
     }
 
     @Test
@@ -60,6 +84,5 @@ class ToolCatalogTest {
             onOpenSubnet = { onClick(DashboardToolId.SUBNET) },
             onOpenLanScan = { onClick(DashboardToolId.LAN_SCAN) },
             onOpenReport = { onClick(DashboardToolId.REPORT) },
-            onOpenHistory = { onClick(DashboardToolId.HISTORY) },
         )
 }

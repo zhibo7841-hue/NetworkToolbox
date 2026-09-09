@@ -65,17 +65,17 @@ The current app shell has three formal top-level destinations:
 - `DEVICES` / 设备 — the current LAN Scanner as the usable device-discovery
   entry point until a separate LAN Device Center is approved and implemented.
 
-`SETTINGS` is a secondary route, not a bottom-navigation destination. A shared
-Material 3 Drawer is available from each top-level destination and currently
-contains the Settings entry. About, local data management, and privacy remain
-inside the single Settings screen; the Drawer does not duplicate the Tools
-catalog.
+`HISTORY`, `PRIVACY`, and `ABOUT` are app-level secondary routes, not
+bottom-navigation destinations. A shared Material 3 Drawer is available from
+each top-level destination and opens those three destinations directly. There
+is no user-facing `SETTINGS` route while the product has no confirmed
+configurable settings. The Drawer does not duplicate the Tools catalog.
 
 Tool routes retain their source-aware caller. A tool opened from Home or Tools
 returns to that caller, while a route opened from Devices can return to
-Devices. Settings follows the same rule: Back returns to the top-level
-destination from which the Drawer was opened. Secondary pages expose their
-Back action and do not expose the top-level Drawer action.
+Devices. History, Privacy, and About follow the same rule: Back returns to the
+top-level destination from which the Drawer was opened. Secondary pages expose
+their Back action and do not expose the top-level Drawer action.
 
 The navigation state uses named top-level and tool destinations rather than
 integer indexes, and its saveable representation preserves the selected

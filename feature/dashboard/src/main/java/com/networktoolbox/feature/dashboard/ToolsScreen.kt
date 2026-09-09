@@ -25,7 +25,6 @@ fun ToolsScreen(
     onOpenSubnet: () -> Unit,
     onOpenLanScan: () -> Unit,
     onOpenReport: () -> Unit,
-    onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenMenu: () -> Unit = {},
 ) {
@@ -37,7 +36,6 @@ fun ToolsScreen(
         onOpenSubnet = onOpenSubnet,
         onOpenLanScan = onOpenLanScan,
         onOpenReport = onOpenReport,
-        onOpenHistory = onOpenHistory,
     )
 
     Surface(modifier = modifier.fillMaxSize()) {
@@ -50,16 +48,13 @@ fun ToolsScreen(
         ) {
             NetworkToolboxTopLevelHeader(
                 title = "工具",
-                description = "选择一个工具执行本地网络检测。",
+                description = null,
                 onOpenMenu = onOpenMenu,
             )
 
             dashboardToolSections(callbacks).forEach { section ->
                 Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
-                    SectionHeader(
-                        title = section.title,
-                        subtitle = section.subtitle,
-                    )
+                    SectionHeader(title = section.title)
                     DashboardToolGrid(section.tools)
                 }
             }

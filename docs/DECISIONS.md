@@ -179,13 +179,14 @@ This log records the confirmed project decisions. New scope or changes to these 
   foundation. Existing screens will be migrated incrementally; this decision
   does not authorize a Big Bang UI rewrite or change any network behavior.
 
-## Decision: v0.5 App Shell navigation and Devices entry
+## Decision: v0.5 App Shell information architecture and Devices entry
 
 - Date: 2026-09-09
 - Status: Accepted
 - Decision: The v0.5 app shell uses three top-level destinations: Home, Tools,
-  and Devices. Settings is removed from bottom navigation and is opened as a
-  secondary route from a shared Drawer available on those three destinations.
+  and Devices. The shared Drawer directly contains History, Privacy & Data,
+  and About. There is no user-facing Settings entry while the product has no
+  confirmed configurable setting.
 - Devices boundary: Devices is a real, usable top-level entry by reusing the
   existing LAN Scanner screen, ViewModel, and state. It is not a placeholder,
   fake device list, or second discovery implementation. A future LAN Device
@@ -193,13 +194,24 @@ This log records the confirmed project decisions. New scope or changes to these 
   approval.
 - Tool placement: Wi-Fi Analyzer remains part of Tools when it is implemented;
   it does not become a fourth top-level destination.
-- Navigation: Secondary pages use source-aware Back navigation. Settings
-  returns to the Home, Tools, or Devices caller that opened the Drawer, and
-  secondary pages do not expose the top-level Drawer action.
+- Navigation: Secondary pages use source-aware Back navigation. History,
+  Privacy & Data, and About return to the Home, Tools, or Devices caller that
+  opened the Drawer, and secondary pages do not expose the top-level Drawer
+  action.
 - Affordances: Tool cards and Home quick-tool cards do not require a trailing
   chevron. Chevrons remain only where they communicate a meaningful detail or
   open action, including the Home Network Hero and existing History/Report
   affordances.
+- Information architecture: History is an app-level secondary destination,
+  not a Tools entry. Tools categories are user-task-oriented: Connectivity &
+  Path, Resolution & Services, Network & Address, Performance only when an
+  implemented tool exists, and Diagnostics.
+- Visual cohesion: the Home Network Hero has a complete outlined/tonal
+  boundary, Recent Diagnosis uses a compact outlined surface, and Tools uses
+  compact outlined cards with one short description and no trailing chevron.
+- Product evolution: Devices currently hosts the existing LAN Scanner as a
+  transition surface. LAN Device Center and its later Favorites/Wake-on-LAN
+  flows require separate implementation approval.
 - Consequence: This information-architecture change does not modify LAN
   discovery, probe semantics, network tools, history storage, or any business
   logic. It only provides a stable shell for the current features and a future

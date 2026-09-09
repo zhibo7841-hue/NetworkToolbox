@@ -13,6 +13,8 @@ class AppNavigationStateTest {
         ToolScreen.LAN_SCAN,
         ToolScreen.REPORT,
         ToolScreen.HISTORY,
+        ToolScreen.PRIVACY,
+        ToolScreen.ABOUT,
     )
 
     @Test
@@ -50,19 +52,21 @@ class AppNavigationStateTest {
     }
 
     @Test
-    fun settingsIsSecondaryAndBackReturnsToItsCaller() {
+    fun drawerDestinationsAreSecondaryAndBackReturnsToItsCaller() {
         listOf(
             TopLevelDestination.HOME,
             TopLevelDestination.TOOLS,
             TopLevelDestination.DEVICES,
         ).forEach { caller ->
-            val state = AppNavigationState()
-                .selectTopLevel(caller)
-                .openSettings()
+            listOf(ToolScreen.HISTORY, ToolScreen.PRIVACY, ToolScreen.ABOUT).forEach { screen ->
+                val state = AppNavigationState()
+                    .selectTopLevel(caller)
+                    .openSecondaryDestination(screen)
 
-            assertEquals(ToolScreen.SETTINGS, state.toolScreen)
-            assertEquals(caller, state.goBack().topLevelDestination)
-            assertEquals(ToolScreen.NONE, state.goBack().toolScreen)
+                assertEquals(screen, state.toolScreen)
+                assertEquals(caller, state.goBack().topLevelDestination)
+                assertEquals(ToolScreen.NONE, state.goBack().toolScreen)
+            }
         }
     }
 
@@ -75,9 +79,14 @@ class AppNavigationStateTest {
         )
         assertEquals(
             false,
-            AppShellPresentation.canShowDrawer(AppNavigationState().openSettings()),
+            AppShellPresentation.canShowDrawer(
+                AppNavigationState().openSecondaryDestination(ToolScreen.PRIVACY),
+            ),
         )
-        assertEquals(listOf("设置"), AppShellPresentation.drawerItems)
+        assertEquals(
+            listOf("检测历史", "隐私与数据", "关于"),
+            AppShellPresentation.drawerItemLabels(),
+        )
     }
 
     @Test

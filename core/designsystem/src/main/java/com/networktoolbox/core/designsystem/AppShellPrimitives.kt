@@ -37,7 +37,7 @@ fun NetworkToolboxMenuButton(
 @Composable
 fun NetworkToolboxTopLevelHeader(
     title: String,
-    description: String,
+    description: String?,
     onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -52,11 +52,13 @@ fun NetworkToolboxTopLevelHeader(
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS),
         ) {
             Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            description?.let { text ->
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

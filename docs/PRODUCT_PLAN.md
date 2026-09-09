@@ -216,9 +216,25 @@ the home for the confirmed network utilities (including Wi-Fi Analyzer when it
 is separately implemented), and Devices is the long-term entry point for the
 LAN Device Center. Until that center has its own approved implementation, the
 Devices destination hosts the existing LAN Scanner content and state rather
-than a placeholder or a duplicate device-management feature. Settings is a
-secondary destination opened from the shared app Drawer and is not a fourth
-bottom-navigation tab.
+than a placeholder or a duplicate device-management feature.
+
+The shared app Drawer provides three app-level secondary destinations:
+**History**, **Privacy & Data**, and **About**. History is the unified home for
+results from Ping, DNS, TCP, and automatic diagnostics; it is not a tool card
+inside Tools. The current product has no user-facing Settings entry because it
+has no confirmed configurable settings. A Settings destination may be
+reintroduced only when a real configuration need is approved.
+
+Tools uses a user-task-oriented taxonomy rather than a pure protocol or OSI
+taxonomy:
+
+- **Connectivity & Path**: Ping, TCP Port Check, and Traceroute.
+- **Resolution & Services**: DNS Lookup and future service-oriented checks.
+- **Network & Address**: IPv4 subnet calculation and LAN Scanner, plus future
+  network-structure tools.
+- **Performance**: shown only when an implemented performance tool such as
+  iPerf exists.
+- **Diagnostics**: the cross-tool Network Diagnostic entry.
 
 This app-shell change does not authorize Favorites, Wake-on-LAN, MAC/OUI,
 device management, or any new discovery behavior. Those capabilities remain

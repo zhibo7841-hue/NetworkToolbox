@@ -234,8 +234,8 @@ The foundation currently provides only stable primitives:
 - `NetworkStatusChip`: icon + label + semantic state color;
 - `PrimaryActionButton`, `SecondaryActionButton`, and
   `DestructiveActionButton`: small semantic action wrappers;
-- `SettingsSection`, `SettingsRow`, and `SettingsInfoRow`: compact outlined
-  groups and full-width settings rows;
+- App-shell Drawer and secondary information screens: compact navigation and
+  outlined information groups for History, Privacy & Data, and About;
 - `networkToolboxNavigationItemColors`: primary-blue selection and
   secondary-text unselected navigation mapping;
 - `NetworkToolboxColors`, `NetworkToolboxSpacing`, component shapes, and
@@ -286,9 +286,14 @@ Tools is the complete entry point for currently implemented tools. It uses the
 following product-facing categories and preserves the existing callback
 routes:
 
-- `连通性检测`: Ping, DNS Lookup, TCP Port Check, Traceroute;
-- `网络工具`: IPv4 子网计算, 局域网扫描;
-- `诊断与记录`: 网络诊断, 历史记录.
+- `连通与路径`: Ping, TCP 端口检测, Traceroute;
+- `解析与服务`: DNS 查询;
+- `网络与地址`: IPv4 子网计算, 局域网扫描;
+- `诊断`: 网络诊断.
+
+History is an app-level secondary destination and is not rendered as a Tools
+card. A `性能测试` section is rendered only after an implemented performance
+tool exists; future concepts are not shown as filler.
 
 Each category is rendered as a compact two-column grid. The grid is part of the
 scrollable destination and respects the App Shell's safe-drawing and bottom
@@ -382,13 +387,16 @@ system back action and each tool's visible back action use this same source-awar
 transition. Bottom navigation remains a direct top-level switch and does not
 create an additional back-stack layer.
 
-Settings is a secondary app-level destination opened from the shared Drawer and
-keeps the caller's top-level destination for Back navigation. The Drawer is
-available from Home, Tools, and Devices, but not from secondary tool pages.
-Devices currently hosts the existing LAN Scanner screen and its existing
-ViewModel; it is a real entry point, not a placeholder or a second scanner
-state. The later LAN Device Center, Favorites, and Wake-on-LAN work remains a
-separate implementation stage.
+The shared Drawer is available from Home, Tools, and Devices and contains only
+the app-level destinations History, Privacy & Data, and About. Those screens
+keep the caller's top-level destination for Back navigation. The current
+product does not expose a Settings screen because it has no confirmed user
+configuration; a future Settings route requires a separate product decision.
+Secondary pages do not expose the top-level Drawer action. Devices currently
+hosts the existing LAN Scanner screen and its existing ViewModel; it is a real
+entry point, not a placeholder or a second scanner state. The later LAN Device
+Center, Favorites, and Wake-on-LAN work remains a separate implementation
+stage.
 
 Migration follows a staged path rather than a Big Bang rewrite:
 
@@ -575,22 +583,39 @@ unchanged in Network Detail, and Automatic Diagnostics and DNS Lookup continue
 to consume the complete `NetworkContext`/DNS result rather than this Home-only
 preference.
 
-## Settings Pattern
+## Drawer and information patterns
 
-Settings keeps the existing v0.5 shell and uses a compact Android Settings-like
-hierarchy: a short page title, followed by About, Data Management, and Privacy
-Protection groups. Each group is one `OutlinedNetworkCard` containing full-width
-rows separated by dividers; rows may include an icon, title, supporting copy,
-and a trailing value or action. Interactive rows preserve a comfortable touch
-target and expose button semantics. Destructive actions use low-emphasis error
-content on the row and keep the existing confirmation dialog; they never become
-a blue filled primary action.
+The shared Drawer is compact and contains only `检测历史`, `隐私与数据`, and
+`关于`, below the real app name and dynamic `BuildConfig.VERSION_NAME`. It does
+not repeat top-level navigation or expose a placeholder Settings entry.
 
-The About group keeps the real app name, open-source description, compact brand
-network icon, and the dynamic `BuildConfig.VERSION_NAME`. Data Management keeps
-local History and Clear History. Privacy Protection explains local-first data
-handling, no account requirement, and no upload of network test results or
-history. Settings does not add a language picker, theme picker, analytics,
-account system, cloud backup, or other unimplemented controls. Light and dark
-themes reuse the same NetworkToolbox surface, outline, typography, and semantic
-destructive tokens.
+History reuses the existing History screen and its local data behavior. Privacy
+& Data is a lightweight secondary screen using outlined information groups for
+local-first storage, no upload of diagnostic results/history, and no account
+requirement. It does not duplicate History management actions. About is a
+lightweight secondary screen using a compact outlined card with the real app
+name, open-source description, compact brand network icon, and dynamic version.
+All three screens use a source-aware Back action and do not show a Drawer
+button themselves. Light and dark themes reuse the same NetworkToolbox
+surface, outline, typography, and semantic tokens.
+
+## Home Hero pattern
+
+The Network Status Hero uses a complete boundary: a subtle tonal surface with a
+low-contrast outline. It keeps its existing real network fields, status chip,
+detail chevron, and diagnostic action. The Hero chevron remains because it
+opens meaningful network details; it is unrelated to Tool Card affordances.
+
+Recent Diagnosis uses a compact outlined card, including its empty state. It
+retains the existing reactive history preview and report-navigation affordance
+without re-running or re-analyzing a report.
+
+## Tools pattern
+
+Tools shows only the screen title `工具`, followed by category titles and
+compact two-column outlined Tool Cards. Category titles do not repeat
+supporting text; each card carries one short description. Cards remain full
+clickable surfaces with button semantics, ripple feedback, and no trailing
+chevron. The product taxonomy is user-task-oriented: Connectivity & Path,
+Resolution & Services, Network & Address, optional Performance, and
+Diagnostics. History is not a Tool Card.
