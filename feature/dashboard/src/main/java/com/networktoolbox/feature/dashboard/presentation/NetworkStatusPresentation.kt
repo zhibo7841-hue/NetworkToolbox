@@ -199,8 +199,7 @@ object NetworkStatusPresentation {
         return when {
             preferredServer == null && configuredServers.isEmpty() -> "未配置"
             preferredServer == null -> UNAVAILABLE_VALUE
-            configuredServers.size == 1 -> preferredServer
-            else -> "$preferredServer\n+${configuredServers.size - 1} 个"
+            else -> preferredServer
         }
     }
 

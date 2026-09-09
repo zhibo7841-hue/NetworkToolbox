@@ -208,24 +208,34 @@ class NetworkStatusPresentationTest {
     }
 
     @Test
-    fun dnsSummaryValue_prefersIpv4AndKeepsShortCount() {
+    fun dnsSummaryValue_prefersIpv4AndShowsOnlyOneAddress() {
         assertEquals(
             "192.0.2.53",
             NetworkStatusPresentation.dnsSummaryValue(listOf("192.0.2.53")),
         )
         assertEquals(
-            "192.0.2.53\n+1 个",
+            "192.0.2.53",
             NetworkStatusPresentation.dnsSummaryValue(
                 listOf("2001:db8::53", "192.0.2.53"),
             ),
         )
         assertEquals(
-            "192.0.2.53\n+1 个",
+            "192.0.2.53",
             NetworkStatusPresentation.dnsSummaryValue(
                 listOf("192.0.2.53", "2001:db8::53", "192.0.2.53"),
             ),
         )
         assertEquals("未配置", NetworkStatusPresentation.dnsSummaryValue(emptyList()))
+    }
+
+    @Test
+    fun dnsSummaryValue_withMultipleIpv4Servers_showsOnlyTheFirst() {
+        assertEquals(
+            "192.0.2.53",
+            NetworkStatusPresentation.dnsSummaryValue(
+                listOf("192.0.2.53", "192.0.2.54", "192.0.2.55", "192.0.2.56"),
+            ),
+        )
     }
 
     @Test

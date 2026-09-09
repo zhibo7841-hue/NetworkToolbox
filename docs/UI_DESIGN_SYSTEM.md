@@ -234,6 +234,8 @@ The foundation currently provides only stable primitives:
 - `NetworkStatusChip`: icon + label + semantic state color;
 - `PrimaryActionButton`, `SecondaryActionButton`, and
   `DestructiveActionButton`: small semantic action wrappers;
+- `SettingsSection`, `SettingsRow`, and `SettingsInfoRow`: compact outlined
+  groups and full-width settings rows;
 - `networkToolboxNavigationItemColors`: primary-blue selection and
   secondary-text unselected navigation mapping;
 - `NetworkToolboxColors`, `NetworkToolboxSpacing`, component shapes, and
@@ -262,9 +264,9 @@ conservative `已连接` / `未连接` / `状态未知` status chip. A chevron w
 accessible content description opens the existing detail area. The summary has
 exactly four compact metrics in a fixed order: IPv4 address, subnet mask,
 default gateway, and DNS. IPv6 and numeric Wi-Fi signal details remain behind
-the chevron; IPv6 is not represented as a public-connectivity claim. Multiple
-DNS servers use the first address plus a short count in the summary, while the
-complete configured list remains in details. Cellular uses a non-misleading
+the chevron; IPv6 is not represented as a public-connectivity claim. The Home
+DNS summary uses one preferred address only, while the complete configured list
+remains in details. Cellular uses a non-misleading
 `不适用` gateway value and no Wi-Fi signal field; Ethernet uses the Ethernet
 identity and no Wi-Fi signal field. The metrics fall back to a readable two
 column layout for phone widths or larger font scales, rather than forcing tiny
@@ -330,9 +332,9 @@ The summary/detail boundary is intentional:
 IPv6 is labelled `未配置`, `仅链路本地`, `已配置`, or `未知`. `已配置` is
 not a claim that public IPv6 connectivity works. Wi-Fi and Ethernet prefer the
 IPv4 default gateway for the ordinary gateway summary; cellular does not show
-an internal next-hop as a user-facing gateway. DNS shows one address directly
-when there is one configured server, and the first address with a short count
-when there are multiple servers; the full configured list is in details. SSID
+an internal next-hop as a user-facing gateway. Home DNS shows one preferred
+address directly, with no additional `+N` count; the full configured list is in
+details. SSID
 is shown only when already available and meaningful; the Home migration adds no
 location or nearby-device permission and never displays `<unknown ssid>`.
 
@@ -557,9 +559,29 @@ than a completed result hero.
 
 The Home Hero DNS value is a presentation-only compact summary. It selects the
 first valid IPv4 configured DNS address, then falls back to the first valid
-IPv6 address when no IPv4 address exists. With multiple configured servers it
-shows only that preferred address plus the existing short count. An empty or
-unrecognized list uses the existing unavailable wording. The full configured
-DNS list remains unchanged in Network Detail, and Automatic Diagnostics and
-DNS Lookup continue to consume the complete `NetworkContext`/DNS result rather
-than this Home-only preference.
+IPv6 address when no IPv4 address exists. It always shows only that one
+preferred address and never appends a `+N` count. An empty or unrecognized list
+uses the existing unavailable wording. The full configured DNS list remains
+unchanged in Network Detail, and Automatic Diagnostics and DNS Lookup continue
+to consume the complete `NetworkContext`/DNS result rather than this Home-only
+preference.
+
+## Settings Pattern
+
+Settings keeps the existing v0.5 shell and uses a compact Android Settings-like
+hierarchy: a short page title, followed by About, Data Management, and Privacy
+Protection groups. Each group is one `OutlinedNetworkCard` containing full-width
+rows separated by dividers; rows may include an icon, title, supporting copy,
+and a trailing value or action. Interactive rows preserve a comfortable touch
+target and expose button semantics. Destructive actions use low-emphasis error
+content on the row and keep the existing confirmation dialog; they never become
+a blue filled primary action.
+
+The About group keeps the real app name, open-source description, compact brand
+network icon, and the dynamic `BuildConfig.VERSION_NAME`. Data Management keeps
+local History and Clear History. Privacy Protection explains local-first data
+handling, no account requirement, and no upload of network test results or
+history. Settings does not add a language picker, theme picker, analytics,
+account system, cloud backup, or other unimplemented controls. Light and dark
+themes reuse the same NetworkToolbox surface, outline, typography, and semantic
+destructive tokens.
