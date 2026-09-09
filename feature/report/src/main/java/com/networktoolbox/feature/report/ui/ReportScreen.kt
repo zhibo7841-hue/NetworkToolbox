@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
@@ -33,6 +35,8 @@ import com.networktoolbox.core.designsystem.OutlinedNetworkCard
 import com.networktoolbox.core.designsystem.PrimaryActionButton
 import com.networktoolbox.core.designsystem.SecondaryActionButton
 import com.networktoolbox.core.designsystem.StatusVisualState
+import com.networktoolbox.core.designsystem.NetworkToolAccent
+import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheck as AutomaticDiagnosticCheck
 import com.networktoolbox.core.common.diagnostic.DiagnosticCheckStatus as AutomaticDiagnosticCheckStatus
@@ -66,6 +70,7 @@ import com.networktoolbox.feature.report.presentation.DiagnosticReportTextFormat
 import com.networktoolbox.feature.report.presentation.DiagnosticStageSummary
 import com.networktoolbox.feature.report.presentation.DiagnosticStatusPresentation
 import com.networktoolbox.feature.report.presentation.ReportProgress
+import com.networktoolbox.feature.report.presentation.ReportPresentationContext
 import com.networktoolbox.feature.report.presentation.ReportStageStatus
 import com.networktoolbox.feature.report.presentation.ReportStatus
 import com.networktoolbox.feature.report.presentation.ReportUiState
@@ -79,6 +84,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ReportScreen(
     uiState: ReportUiState,
+    context: ReportPresentationContext = ReportPresentationContext.LIVE_TOOL,
     restoredReport: DiagnosticReportV2? = null,
     restoredAutomaticResult: AutomaticDiagnosticResult? = null,
     onRunCheck: () -> Unit,
@@ -100,19 +106,12 @@ fun ReportScreen(
                 .padding(horizontal = NetworkToolboxSpacing.LG, vertical = NetworkToolboxSpacing.SM),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
         ) {
-            TextButton(onClick = onBack, enabled = !isRunning) {
-                Text("返回")
-            }
-            Text(
-                if (hasRestoredReport || uiState.status is ReportStatus.Completed ||
-                    uiState.status is ReportStatus.Success
-                ) "网络诊断报告" else "网络诊断",
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Text(
-                "自动检查当前网络环境并定位常见连接问题。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ToolScreenHeader(
+                title = context.title,
+                icon = Icons.Outlined.Assessment,
+                accent = NetworkToolAccent.AMBER,
+                onBack = onBack,
+                backEnabled = !isRunning,
             )
 
             if (!isRunning && !hasRestoredReport) {

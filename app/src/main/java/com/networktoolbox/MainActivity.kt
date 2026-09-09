@@ -28,7 +28,6 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +62,7 @@ import com.networktoolbox.feature.report.diagnostic.v2.DiagnosticOverallStatus
 import com.networktoolbox.feature.report.diagnostic.v2.ResolvedDiagnosticHistory
 import com.networktoolbox.feature.report.domain.AutomaticDiagnosticResult
 import com.networktoolbox.feature.report.presentation.ReportStatus
+import com.networktoolbox.feature.report.presentation.ReportPresentationContext
 import com.networktoolbox.feature.report.presentation.ReportViewModel
 import com.networktoolbox.feature.report.ui.ReportScreen
 import com.networktoolbox.feature.subnet.presentation.SubnetViewModel
@@ -253,10 +253,7 @@ class MainActivity : ComponentActivity() {
                 tracerouteViewModel.stop()
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
-                navigationState = navigationState.openSecondaryDestination(
-                    screen = destination,
-                    source = SecondaryNavigationSource.DRAWER,
-                )
+                navigationState = navigationState.openSecondaryDestination(destination)
                 if (destination == ToolScreen.HISTORY) {
                     historyViewModel.load()
                 }
@@ -286,13 +283,6 @@ class MainActivity : ComponentActivity() {
 
             BackHandler(enabled = !drawerState.isOpen && toolScreen != ToolScreen.NONE) {
                 goBack()
-            }
-
-            LaunchedEffect(navigationState.reopenDrawerRequest) {
-                if (navigationState.reopenDrawerRequest) {
-                    drawerState.open()
-                    navigationState = navigationState.consumeDrawerReopenRequest()
-                }
             }
 
             NetworkToolboxTheme {
@@ -413,6 +403,14 @@ class MainActivity : ComponentActivity() {
                             )
                             ToolScreen.REPORT -> ReportScreen(
                                 uiState = reportUiState,
+                                context = if (
+                                    restoredDiagnosticReport != null ||
+                                        restoredAutomaticDiagnosticResult != null
+                                ) {
+                                    ReportPresentationContext.SAVED_REPORT
+                                } else {
+                                    ReportPresentationContext.LIVE_TOOL
+                                },
                                 restoredReport = restoredDiagnosticReport,
                                 restoredAutomaticResult = restoredAutomaticDiagnosticResult,
                                 onRunCheck = {

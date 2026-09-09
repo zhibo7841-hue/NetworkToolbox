@@ -194,12 +194,15 @@ This log records the confirmed project decisions. New scope or changes to these 
   approval.
 - Tool placement: Wi-Fi Analyzer remains part of Tools when it is implemented;
   it does not become a fourth top-level destination.
-- Navigation: Secondary pages use source-aware Back navigation. History,
+- Navigation: Secondary pages use caller-aware Back navigation. History,
   Privacy & Data, and About return to the Home, Tools, or Devices caller that
   opened the Drawer, and secondary pages do not expose the top-level Drawer
-  action. Drawer-opened secondary pages issue one explicit, consumed request to
-  reopen the same Drawer after Back; History opened from a non-Drawer flow does
-  not reopen it. The Drawer remains transient rather than becoming a route.
+  action. Back returns to the originating top-level destination without
+  automatically reopening the Drawer; History opened from a non-Drawer flow
+  follows the same ordinary Back behavior. The Drawer remains transient
+  rather than becoming a route. A report opened from History returns to
+  History, while live diagnostic and saved-report presentation contexts keep
+  their distinct titles.
 - Affordances: Tool cards and Home quick-tool cards do not require a trailing
   chevron. Chevrons remain only where they communicate a meaningful detail or
   open action, including the Home Network Hero and existing History/Report

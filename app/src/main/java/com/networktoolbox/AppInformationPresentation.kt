@@ -18,3 +18,9 @@ internal object AppInformationPresentation {
 
     fun versionValue(versionName: String?): String = AppVersionInfo.formatVersionName(versionName)
 }
+
+/** Existing launcher components that can be rendered directly by Compose. */
+internal object AboutIconPresentation {
+    val foregroundResource: Int = R.drawable.ic_launcher_foreground
+    val backgroundResource: Int = R.color.ic_launcher_background
+}

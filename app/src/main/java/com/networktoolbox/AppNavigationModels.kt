@@ -14,11 +14,6 @@ internal enum class NavigationOrigin {
     DEVICES,
 }
 
-internal enum class SecondaryNavigationSource {
-    NONE,
-    DRAWER,
-}
-
 internal enum class TopLevelDestination(
     val label: String,
     val icon: ImageVector,
@@ -63,8 +58,7 @@ internal data class AppNavigationState(
     val topLevelDestination: TopLevelDestination = TopLevelDestination.HOME,
     val toolScreen: ToolScreen = ToolScreen.NONE,
     val toolOrigin: NavigationOrigin = NavigationOrigin.HOME,
-    val secondaryNavigationSource: SecondaryNavigationSource = SecondaryNavigationSource.NONE,
-    val reopenDrawerRequest: Boolean = false,
+    val toolBackDestination: ToolScreen = ToolScreen.NONE,
 ) {
     fun openTool(screen: ToolScreen): AppNavigationState = copy(
         topLevelDestination = TopLevelDestination.TOOLS,
@@ -74,43 +68,37 @@ internal data class AppNavigationState(
         } else {
             toolOrigin
         },
-        secondaryNavigationSource = SecondaryNavigationSource.NONE,
-        reopenDrawerRequest = false,
+        toolBackDestination = toolScreen.takeIf { it != ToolScreen.NONE } ?: ToolScreen.NONE,
     )
 
-    fun openSecondaryDestination(
-        screen: ToolScreen,
-        source: SecondaryNavigationSource = SecondaryNavigationSource.NONE,
-    ): AppNavigationState = copy(
+    fun openSecondaryDestination(screen: ToolScreen): AppNavigationState = copy(
         toolScreen = screen,
         toolOrigin = if (toolScreen == ToolScreen.NONE) {
             topLevelDestination.navigationOrigin()
         } else {
             toolOrigin
         },
-        secondaryNavigationSource = source,
-        reopenDrawerRequest = false,
+        toolBackDestination = ToolScreen.NONE,
     )
 
     fun selectTopLevel(destination: TopLevelDestination): AppNavigationState = copy(
         topLevelDestination = destination,
         toolScreen = ToolScreen.NONE,
-        secondaryNavigationSource = SecondaryNavigationSource.NONE,
-        reopenDrawerRequest = false,
+        toolBackDestination = ToolScreen.NONE,
     )
 
-    fun goBack(): AppNavigationState = if (toolScreen == ToolScreen.NONE) {
-        this
-    } else {
-        copy(
+    fun goBack(): AppNavigationState = when {
+        toolScreen == ToolScreen.NONE -> this
+        toolBackDestination != ToolScreen.NONE -> copy(
+            toolScreen = toolBackDestination,
+            toolBackDestination = ToolScreen.NONE,
+        )
+        else -> copy(
             topLevelDestination = toolOrigin.backDestination(),
             toolScreen = ToolScreen.NONE,
-            secondaryNavigationSource = SecondaryNavigationSource.NONE,
-            reopenDrawerRequest = secondaryNavigationSource == SecondaryNavigationSource.DRAWER,
+            toolBackDestination = ToolScreen.NONE,
         )
     }
-
-    fun consumeDrawerReopenRequest(): AppNavigationState = copy(reopenDrawerRequest = false)
 
     companion object {
         val Saver: Saver<AppNavigationState, Any> = listSaver(
@@ -119,8 +107,7 @@ internal data class AppNavigationState(
                     state.topLevelDestination.name,
                     state.toolScreen.name,
                     state.toolOrigin.name,
-                    state.secondaryNavigationSource.name,
-                    state.reopenDrawerRequest.toString(),
+                    state.toolBackDestination.name,
                 )
             },
             restore = { saved ->
@@ -128,10 +115,12 @@ internal data class AppNavigationState(
                     topLevelDestination = TopLevelDestination.valueOf(saved[0]),
                     toolScreen = ToolScreen.valueOf(saved[1]),
                     toolOrigin = NavigationOrigin.valueOf(saved[2]),
-                    secondaryNavigationSource = saved.getOrNull(3)
-                        ?.let { SecondaryNavigationSource.valueOf(it) }
-                        ?: SecondaryNavigationSource.NONE,
-                    reopenDrawerRequest = saved.getOrNull(4) == "true",
+                    // Slot 3 used to hold the Drawer source in the 063-B
+                    // save format. Unknown values (including DRAWER) safely
+                    // restore as no nested tool destination.
+                    toolBackDestination = saved.getOrNull(3)
+                        ?.let { value -> runCatching { ToolScreen.valueOf(value) }.getOrNull() }
+                        ?: ToolScreen.NONE,
                 )
             },
         )

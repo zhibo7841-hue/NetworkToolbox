@@ -599,8 +599,10 @@ requirement. It does not duplicate History management actions. About is a
 lightweight secondary screen using the real launcher icon, app name, open-source
 description, and dynamic version without a giant outer Card. Each secondary
 page uses a Back arrow and title only: no header icon, subtitle, or Drawer
-button. Light and dark themes reuse the same NetworkToolbox surface, outline,
-typography, and semantic tokens.
+button. A secondary page opened from the Drawer uses ordinary caller-aware Back
+navigation and does not automatically reopen the Drawer. Light and dark themes
+reuse the same NetworkToolbox surface, outline, typography, and semantic
+tokens.
 
 Home renders only the `快速工具` section title; it does not render supporting
 section copy such as `常用网络检测`. Each of the four quick-tool cards keeps
@@ -626,3 +628,12 @@ clickable surfaces with button semantics, ripple feedback, and no trailing
 chevron. The product taxonomy is user-task-oriented: Connectivity & Path,
 Resolution & Services, Network & Address, optional Performance, and
 Diagnostics. History is not a Tool Card.
+
+## Network Diagnostic header pattern
+
+The live Network Diagnostic tool uses the shared Tool Header: Back arrow,
+Diagnostic icon, and `网络诊断`. It has no redundant header subtitle or text
+back button; explanations remain in the report content. A report restored from
+History may use the saved-artifact context title `网络诊断报告` while reusing
+the same report content and export behavior. Live completion and reruns keep
+the `网络诊断` tool title.

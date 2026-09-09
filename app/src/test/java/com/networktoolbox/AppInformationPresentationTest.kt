@@ -36,6 +36,12 @@ class AppInformationPresentationTest {
     }
 
     @Test
+    fun aboutIconUsesExistingDirectlyRenderableBrandComponents() {
+        assertEquals(R.drawable.ic_launcher_foreground, AboutIconPresentation.foregroundResource)
+        assertEquals(R.color.ic_launcher_background, AboutIconPresentation.backgroundResource)
+    }
+
+    @Test
     fun privacyCopyStatesLocalFirstNoAccountAndNoUpload() {
         assertTrue(AppInformationPresentation.localFirstDescription.contains("本地"))
         assertTrue(AppInformationPresentation.uploadDescription.contains("不会"))

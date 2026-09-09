@@ -1,8 +1,6 @@
 package com.networktoolbox
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppNavigationStateTest {
@@ -61,22 +59,15 @@ class AppNavigationStateTest {
             TopLevelDestination.DEVICES,
         ).forEach { caller ->
             listOf(ToolScreen.HISTORY, ToolScreen.PRIVACY, ToolScreen.ABOUT).forEach { screen ->
-                    val state = AppNavigationState()
-                        .selectTopLevel(caller)
-                        .openSecondaryDestination(
-                            screen = screen,
-                            source = SecondaryNavigationSource.DRAWER,
-                        )
+                val state = AppNavigationState()
+                    .selectTopLevel(caller)
+                    .openSecondaryDestination(screen)
 
                 assertEquals(screen, state.toolScreen)
                 val returned = state.goBack()
                 assertEquals(caller, returned.topLevelDestination)
                 assertEquals(ToolScreen.NONE, returned.toolScreen)
-                assertTrue(returned.reopenDrawerRequest)
-                assertEquals(
-                    SecondaryNavigationSource.NONE,
-                    returned.secondaryNavigationSource,
-                )
+                assertEquals(ToolScreen.NONE, returned.toolBackDestination)
             }
         }
     }
@@ -89,21 +80,7 @@ class AppNavigationStateTest {
             .goBack()
 
         assertEquals(TopLevelDestination.TOOLS, returned.topLevelDestination)
-        assertFalse(returned.reopenDrawerRequest)
-    }
-
-    @Test
-    fun drawerReopenRequest_isExplicitAndConsumedOnce() {
-        val returned = AppNavigationState()
-            .selectTopLevel(TopLevelDestination.DEVICES)
-            .openSecondaryDestination(
-                screen = ToolScreen.ABOUT,
-                source = SecondaryNavigationSource.DRAWER,
-            )
-            .goBack()
-
-        assertTrue(returned.reopenDrawerRequest)
-        assertFalse(returned.consumeDrawerReopenRequest().reopenDrawerRequest)
+        assertEquals(ToolScreen.NONE, returned.toolBackDestination)
     }
 
     @Test
@@ -131,7 +108,10 @@ class AppNavigationStateTest {
             .openTool(ToolScreen.HISTORY)
             .openTool(ToolScreen.REPORT)
 
-        assertEquals(TopLevelDestination.HOME, state.goBack().topLevelDestination)
+        val history = state.goBack()
+        assertEquals(ToolScreen.HISTORY, history.toolScreen)
+        assertEquals(ToolScreen.NONE, history.toolBackDestination)
+        assertEquals(TopLevelDestination.HOME, history.goBack().topLevelDestination)
     }
 
     @Test
@@ -141,7 +121,9 @@ class AppNavigationStateTest {
             .openTool(ToolScreen.HISTORY)
             .openTool(ToolScreen.REPORT)
 
-        assertEquals(TopLevelDestination.TOOLS, state.goBack().topLevelDestination)
+        val history = state.goBack()
+        assertEquals(ToolScreen.HISTORY, history.toolScreen)
+        assertEquals(TopLevelDestination.TOOLS, history.goBack().topLevelDestination)
     }
 
     @Test

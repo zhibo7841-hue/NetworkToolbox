@@ -73,19 +73,21 @@ configurable settings. The Drawer does not duplicate the Tools catalog.
 
 Tool routes retain their source-aware caller. A tool opened from Home or Tools
 returns to that caller, while a route opened from Devices can return to
-Devices. History, Privacy, and About carry an explicit source marker. If a
-secondary page was opened from the transient Drawer, Back restores the exact
-Home, Tools, or Devices destination and emits a one-shot request for the
-Scaffold to reopen that Drawer. The Drawer is never a navigation destination.
-History opened from a non-Drawer flow keeps its real caller and does not reopen
-the Drawer. UI Back and system Back use the same state transition; system Back
-closes an open Drawer before navigating.
+Devices. History, Privacy, and About retain the originating Home, Tools, or
+Devices caller when opened from the transient Drawer. Back returns to that
+caller and does not automatically reopen the Drawer; the Drawer is never a
+navigation destination. History opened from a non-Drawer flow keeps its real
+caller and follows the same ordinary Back behavior. UI Back and system Back
+use the same state transition; system Back closes an open Drawer before
+navigating.
 
-The navigation state uses named top-level and tool destinations rather than
-integer indexes, and its saveable representation preserves the selected
-destination, caller, and secondary source across configuration changes. The
-Scaffold consumes the explicit reopen request once, preventing recomposition
-or lifecycle timing from reopening the Drawer repeatedly. The Devices screen
-reuses the existing LAN Scanner ViewModel and state; it does not create a
-second discovery pipeline or introduce LAN Device Center, Favorites, or
-Wake-on-LAN behavior.
+A report opened from History keeps a one-level tool return target so Back
+returns to History before the original top-level caller. The live diagnostic
+tool and a restored saved report use explicit presentation contexts, allowing
+the live header to remain `网络诊断` while a saved artifact can be titled
+`网络诊断报告`. The navigation state uses named top-level and tool
+destinations rather than integer indexes, and its saveable representation
+preserves the selected destination, caller, and nested tool return target
+across configuration changes. The Devices screen reuses the existing LAN
+Scanner ViewModel and state; it does not create a second discovery pipeline or
+introduce LAN Device Center, Favorites, or Wake-on-LAN behavior.
