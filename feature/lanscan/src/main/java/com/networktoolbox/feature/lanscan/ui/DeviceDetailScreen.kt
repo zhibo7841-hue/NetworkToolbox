@@ -28,6 +28,7 @@ fun DeviceDetailScreen(
     detail: DeviceDetailPresentation?,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
+    favoriteErrorMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     ToolScreenLayout(modifier = modifier) {
@@ -42,7 +43,7 @@ fun DeviceDetailScreen(
                     ) {
                         Icon(
                             imageVector = if (detail.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                            contentDescription = if (detail.isFavorite) "已收藏" else "收藏设备",
+                            contentDescription = detail.favoriteToggleContentDescription,
                             tint = if (detail.isFavorite) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -78,10 +79,17 @@ fun DeviceDetailScreen(
                 )
             }
             Text(
-                if (detail.isFavorite) "已收藏" else "未收藏",
+                detail.favoriteStatusLabel,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
+            favoriteErrorMessage?.let { message ->
+                Text(
+                    message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         DeviceDetailSection(title = "基本信息") {

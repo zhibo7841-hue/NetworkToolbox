@@ -173,6 +173,7 @@ class MainActivity : ComponentActivity() {
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
             val favoriteDevices by lanScannerViewModel.favoriteDevices.collectAsState()
+            val favoriteActionError by lanScannerViewModel.favoriteActionError.collectAsState()
             val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
             var navigationState by rememberSaveable(stateSaver = AppNavigationState.Saver) {
                 mutableStateOf(AppNavigationState())
@@ -458,8 +459,10 @@ class MainActivity : ComponentActivity() {
                             )
                             ToolScreen.DEVICE_DETAIL -> DeviceDetailScreen(
                                 detail = lanScannerViewModel.resolveDeviceDetail(
-                                    navigationState.deviceDetailKey,
+                                    routeKey = navigationState.deviceDetailKey,
+                                    favorites = favoriteDevices,
                                 ),
+                                favoriteErrorMessage = favoriteActionError,
                                 onBack = ::goBack,
                                 onToggleFavorite = {
                                     lanScannerViewModel.toggleFavoriteByRouteKey(

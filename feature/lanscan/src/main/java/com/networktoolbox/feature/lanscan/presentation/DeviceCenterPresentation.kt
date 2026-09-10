@@ -63,7 +63,14 @@ data class DeviceDetailPresentation(
     val lastSeenAt: Long?,
     val isFavorite: Boolean,
     val canToggleFavorite: Boolean,
-)
+) {
+    /** Derived labels keep the star, status text, and accessibility semantics aligned. */
+    val favoriteStatusLabel: String
+        get() = if (isFavorite) "已收藏" else "未收藏"
+
+    val favoriteToggleContentDescription: String
+        get() = if (isFavorite) "取消收藏" else "收藏设备"
+}
 
 object DeviceCenterPresentation {
     fun networkSummary(

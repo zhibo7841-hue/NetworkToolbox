@@ -60,18 +60,26 @@ class LanFavoritesViewModelTest {
         advanceUntilIdle()
         viewModel.startScan()
         advanceUntilIdle()
-        viewModel.toggleFavorite(device)
+        val route = viewModel.detailRouteKey(device)
+        val initialDetail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
+        assertNotNull(initialDetail)
+        assertTrue(initialDetail!!.isFavorite.not())
+        assertEquals("未收藏", initialDetail.favoriteStatusLabel)
+        assertEquals("收藏设备", initialDetail.favoriteToggleContentDescription)
+
+        viewModel.toggleFavoriteByRouteKey(route)
         advanceUntilIdle()
 
         val favorite = viewModel.favoriteDevices.value.single()
-        val route = viewModel.detailRouteKey(device)
-        val detail = viewModel.resolveDeviceDetail(route)
+        val detail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
 
         assertEquals("10.0.1.20", favorite.lastKnownIpv4)
         assertTrue(favorite.isLocalDevice.not())
         assertNotNull(detail)
         assertTrue(detail!!.isFavorite)
         assertTrue(detail.observedThisScan)
+        assertEquals("已收藏", detail.favoriteStatusLabel)
+        assertEquals("取消收藏", detail.favoriteToggleContentDescription)
     }
 
     @Test
@@ -90,6 +98,106 @@ class LanFavoritesViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.favoriteDevices.value.isEmpty())
+    }
+
+    @Test
+    fun `open detail receives repository changes without route recreation`() = runTest {
+        val context = context()
+        val device = device("10.0.1.21")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+
+        assertTrue(
+            viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)!!.isFavorite.not(),
+        )
+
+        repository.add(
+            com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity.createFavorite(
+                device = device,
+                context = context,
+                now = 1L,
+            )!!,
+        )
+        advanceUntilIdle()
+
+        val addedDetail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
+        assertTrue(addedDetail!!.isFavorite)
+        assertEquals("已收藏", addedDetail.favoriteStatusLabel)
+
+        repository.remove(viewModel.favoriteDevices.value.single().id)
+        advanceUntilIdle()
+
+        val removedDetail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
+        assertTrue(removedDetail!!.isFavorite.not())
+        assertEquals("未收藏", removedDetail.favoriteStatusLabel)
+    }
+
+    @Test
+    fun `favorite route falls back to observed device after removal`() = runTest {
+        val context = context()
+        val device = device("10.0.1.22")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        viewModel.toggleFavorite(device)
+        advanceUntilIdle()
+
+        val favoriteRoute = viewModel.detailRouteKey(device)
+        assertTrue(viewModel.resolveDeviceDetail(favoriteRoute, viewModel.favoriteDevices.value)!!.isFavorite)
+
+        viewModel.toggleFavoriteByRouteKey(favoriteRoute)
+        advanceUntilIdle()
+
+        val detailAfterRemoval = viewModel.resolveDeviceDetail(
+            favoriteRoute,
+            viewModel.favoriteDevices.value,
+        )
+        assertNotNull(detailAfterRemoval)
+        assertTrue(detailAfterRemoval!!.isFavorite.not())
+        assertEquals("未收藏", detailAfterRemoval.favoriteStatusLabel)
+    }
+
+    @Test
+    fun `rapid toggles are serialized and settle deterministically`() = runTest {
+        val context = context()
+        val device = device("10.0.1.23")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        viewModel.toggleFavorite(device)
+        viewModel.toggleFavorite(device)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.favoriteDevices.value.isEmpty())
+        assertEquals(null, viewModel.favoriteActionError.value)
+    }
+
+    @Test
+    fun `favorite write failure keeps state and exposes a user error`() = runTest {
+        val context = context()
+        val device = device("10.0.1.24")
+        val repository = FakeFavoriteDeviceRepository(failWrites = true)
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        viewModel.toggleFavorite(device)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.favoriteDevices.value.isEmpty())
+        assertEquals("收藏失败，请重试。", viewModel.favoriteActionError.value)
     }
 
     private fun viewModel(
@@ -154,19 +262,24 @@ class LanFavoritesViewModelTest {
     )
 }
 
-private class FakeFavoriteDeviceRepository : FavoriteDeviceRepository {
-    private val state = MutableStateFlow<List<FavoriteDevice>>(emptyList())
+private class FakeFavoriteDeviceRepository(
+    initialFavorites: List<FavoriteDevice> = emptyList(),
+    private val failWrites: Boolean = false,
+) : FavoriteDeviceRepository {
+    private val state = MutableStateFlow(initialFavorites)
     private var nextId = 1L
 
     override fun observeFavorites(): Flow<List<FavoriteDevice>> = state
 
     override suspend fun add(favorite: FavoriteDevice): Long {
+        if (failWrites) error("write failed")
         val id = nextId++
         state.value = state.value + favorite.copy(id = id)
         return id
     }
 
     override suspend fun remove(id: Long) {
+        if (failWrites) error("write failed")
         state.value = state.value.filterNot { it.id == id }
     }
 

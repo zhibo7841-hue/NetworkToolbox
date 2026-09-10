@@ -29,6 +29,8 @@ class DeviceDetailPresentationTest {
         assertTrue(detail.observedThisScan)
         assertFalse(detail.isFavorite)
         assertNull(detail.macAddress)
+        assertEquals("未收藏", detail.favoriteStatusLabel)
+        assertEquals("收藏设备", detail.favoriteToggleContentDescription)
     }
 
     @Test
@@ -99,6 +101,8 @@ class DeviceDetailPresentationTest {
         assertEquals("server.local", detail.hostname)
         assertEquals(listOf("Server"), detail.mdnsNames)
         assertEquals(123L, detail.lastSeenAt)
+        assertEquals("已收藏", detail.favoriteStatusLabel)
+        assertEquals("取消收藏", detail.favoriteToggleContentDescription)
     }
 
     private fun context() = NetworkContext(
