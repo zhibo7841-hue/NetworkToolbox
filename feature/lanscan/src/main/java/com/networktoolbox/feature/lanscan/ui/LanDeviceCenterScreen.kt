@@ -1,6 +1,5 @@
 package com.networktoolbox.feature.lanscan.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -19,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.networktoolbox.core.designsystem.NetworkToolboxComponentShapes
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
@@ -384,64 +380,7 @@ private fun LazyListScope.deviceCenterDeviceList(devices: List<LanDevice>) {
         items = devices,
         key = { it.ipAddress },
     ) { device ->
-        DeviceCenterDeviceCard(device)
-    }
-}
-
-@Composable
-private fun DeviceCenterDeviceCard(device: LanDevice) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = NetworkToolboxComponentShapes.Card,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = NetworkToolboxSpacing.LG, vertical = 12.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    DeviceCenterPresentation.deviceDisplayName(device),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    DeviceCenterPresentation.deviceAddress(device),
-                    style = NetworkToolboxTextStyles.TechnicalData,
-                )
-                DeviceCenterPresentation.deviceIdentitySummary(device)?.let { identity ->
-                    Text(
-                        identity,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                DeviceCenterPresentation.deviceEvidence(device)?.let { evidence ->
-                    Text(
-                        evidence,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            DeviceCenterPresentation.deviceRole(device)
-                .takeIf(String::isNotBlank)
-                ?.let { role ->
-                    Text(
-                        role,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                }
-        }
+        LanDeviceCard(device)
     }
 }
 

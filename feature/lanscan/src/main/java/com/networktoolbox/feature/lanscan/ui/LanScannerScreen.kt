@@ -3,29 +3,30 @@ package com.networktoolbox.feature.lanscan.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lan
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkToolAccent
+import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
+import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
+import com.networktoolbox.core.designsystem.OutlinedNetworkCard
+import com.networktoolbox.core.designsystem.PrimaryActionButton
+import com.networktoolbox.core.designsystem.SecondaryActionButton
+import com.networktoolbox.core.designsystem.StatusVisualState
+import com.networktoolbox.core.designsystem.ToolInputSection
+import com.networktoolbox.core.designsystem.ToolResultSection
+import com.networktoolbox.core.designsystem.ToolRunningSection
 import com.networktoolbox.core.designsystem.ToolScreenHeader
+import com.networktoolbox.core.designsystem.ToolScreenLayout
+import com.networktoolbox.core.designsystem.ToolStatusSummary
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
@@ -52,82 +53,74 @@ fun LanScannerScreen(
     isTopLevelDestination: Boolean = false,
     onOpenMenu: () -> Unit = {},
 ) {
-    Surface(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (isTopLevelDestination) {
-                NetworkToolboxTopLevelHeader(
-                    title = "设备",
-                    description = "发现并查看局域网设备。",
-                    onOpenMenu = onOpenMenu,
-                )
-            } else {
-                ToolScreenHeader(
-                    title = "局域网扫描",
-                    description = null,
-                    icon = Icons.Outlined.Lan,
-                    accent = NetworkToolAccent.PRIMARY,
-                    onBack = onBack,
-                )
-            }
+    ToolScreenLayout(modifier = modifier) {
+        if (isTopLevelDestination) {
+            NetworkToolboxTopLevelHeader(
+                title = "设备",
+                description = "发现并查看局域网设备。",
+                onOpenMenu = onOpenMenu,
+            )
+        } else {
+            ToolScreenHeader(
+                title = "局域网扫描",
+                description = null,
+                icon = Icons.Outlined.Lan,
+                accent = NetworkToolAccent.PRIMARY,
+                onBack = onBack,
+            )
+        }
 
-            when (val state = uiState) {
-                LanScannerUiState.Idle -> LoadingCard()
-                is LanScannerUiState.Ready -> ReadyContent(
-                    context = state.readiness.networkContext,
-                    range = state.range,
-                    rangeMode = state.rangeMode,
-                    customStartAddress = state.customStartAddress,
-                    customEndAddress = state.customEndAddress,
-                    customRangeResult = state.customRangeResult,
-                    onStartScan = onStartScan,
-                    onRangeModeChanged = onRangeModeChanged,
-                    onCustomStartAddressChanged = onCustomStartAddressChanged,
-                    onCustomEndAddressChanged = onCustomEndAddressChanged,
-                )
+        when (val state = uiState) {
+            LanScannerUiState.Idle -> LoadingCard()
+            is LanScannerUiState.Ready -> ReadyContent(
+                context = state.readiness.networkContext,
+                range = state.range,
+                rangeMode = state.rangeMode,
+                customStartAddress = state.customStartAddress,
+                customEndAddress = state.customEndAddress,
+                customRangeResult = state.customRangeResult,
+                onStartScan = onStartScan,
+                onRangeModeChanged = onRangeModeChanged,
+                onCustomStartAddressChanged = onCustomStartAddressChanged,
+                onCustomEndAddressChanged = onCustomEndAddressChanged,
+            )
 
-                is LanScannerUiState.Scanning -> ScanningContent(
-                    state = state,
-                    onStopScan = onStopScan,
-                )
+            is LanScannerUiState.Scanning -> ScanningContent(
+                state = state,
+                onStopScan = onStopScan,
+            )
 
-                is LanScannerUiState.Completed -> SessionContent(
-                    title = "扫描完成",
-                    session = state.session,
-                    actionLabel = "重新扫描",
-                    onAction = onRetry,
-                    onModifyRange = onModifyRange,
-                )
+            is LanScannerUiState.Completed -> SessionContent(
+                title = "扫描完成",
+                session = state.session,
+                actionLabel = "重新扫描",
+                onAction = onRetry,
+                onModifyRange = onModifyRange,
+            )
 
-                is LanScannerUiState.Cancelled -> SessionContent(
-                    title = "扫描已停止",
-                    session = state.session,
-                    actionLabel = "重新扫描",
-                    onAction = onRetry,
-                    onModifyRange = onModifyRange,
-                )
+            is LanScannerUiState.Cancelled -> SessionContent(
+                title = "扫描已停止",
+                session = state.session,
+                actionLabel = "重新扫描",
+                onAction = onRetry,
+                onModifyRange = onModifyRange,
+            )
 
-                is LanScannerUiState.NetworkChanged -> NetworkChangedContent(
-                    session = state.session,
-                    onRetry = onRetry,
-                    onModifyRange = onModifyRange,
-                )
+            is LanScannerUiState.NetworkChanged -> NetworkChangedContent(
+                session = state.session,
+                onRetry = onRetry,
+                onModifyRange = onModifyRange,
+            )
 
-                is LanScannerUiState.UnsupportedNetwork -> UnsupportedContent(
-                    context = state.readiness.networkContext,
-                )
+            is LanScannerUiState.UnsupportedNetwork -> UnsupportedContent(
+                context = state.readiness.networkContext,
+            )
 
-                is LanScannerUiState.VpnBlocked -> VpnBlockedContent()
-                is LanScannerUiState.Error -> ErrorContent(
-                    message = state.message,
-                    onRetry = onRetry,
-                )
-            }
+            is LanScannerUiState.VpnBlocked -> VpnBlockedContent()
+            is LanScannerUiState.Error -> ErrorContent(
+                message = state.message,
+                onRetry = onRetry,
+            )
         }
     }
 }
@@ -164,28 +157,20 @@ private fun ReadyContent(
     }
 
     if (rangeMode == LanScanRangeMode.CURRENT_NETWORK && range.rangeWasLimited) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            ),
+        OutlinedNetworkCard(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text("当前网络范围较大", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "为避免大量网络探测，本次扫描范围已限制为当前 /24。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text("扫描范围：${range.displayLabel}", style = MaterialTheme.typography.bodyMedium)
-            }
+            Text("当前网络范围较大", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "为避免大量网络探测，本次扫描范围已限制为当前 /24。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text("扫描范围：${range.displayLabel}", style = MaterialTheme.typography.bodyMedium)
         }
     }
 
     PrivacyHint()
-    Button(
+    PrimaryActionButton(
         onClick = onStartScan,
         enabled = rangeMode == LanScanRangeMode.CURRENT_NETWORK ||
             customRangeResult is LanCustomRangeResult.Valid,
@@ -200,33 +185,33 @@ private fun RangeModeSelector(
     selectedMode: LanScanRangeMode,
     onModeChanged: (LanScanRangeMode) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
         Text("扫描范围", style = MaterialTheme.typography.titleMedium)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
         ) {
             if (selectedMode == LanScanRangeMode.CURRENT_NETWORK) {
-                Button(
+                PrimaryActionButton(
                     onClick = { onModeChanged(LanScanRangeMode.CURRENT_NETWORK) },
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("当前网络")
                 }
-                OutlinedButton(
+                SecondaryActionButton(
                     onClick = { onModeChanged(LanScanRangeMode.CUSTOM) },
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("自定义范围")
                 }
             } else {
-                OutlinedButton(
+                SecondaryActionButton(
                     onClick = { onModeChanged(LanScanRangeMode.CURRENT_NETWORK) },
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("当前网络")
                 }
-                Button(
+                PrimaryActionButton(
                     onClick = { onModeChanged(LanScanRangeMode.CUSTOM) },
                     modifier = Modifier.weight(1f),
                 ) {
@@ -246,55 +231,46 @@ private fun CustomRangeCard(
     onStartAddressChanged: (String) -> Unit,
     onEndAddressChanged: (String) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                "${context.connectionType.displayName()} · 自定义 IPv4",
-                style = MaterialTheme.typography.bodyLarge,
+    ToolInputSection(title = "${context.connectionType.displayName()} · 自定义 IPv4") {
+        androidx.compose.material3.OutlinedTextField(
+            value = startAddress,
+            onValueChange = onStartAddressChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("起始 IP") },
+            placeholder = { Text("10.0.1.1") },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            ),
+            isError = result is LanCustomRangeResult.Invalid &&
+                result.reason == com.networktoolbox.feature.lanscan.domain.LanCustomRangeError.INVALID_START,
+        )
+        androidx.compose.material3.OutlinedTextField(
+            value = endAddress,
+            onValueChange = onEndAddressChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("结束 IP") },
+            placeholder = { Text("10.0.1.254") },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            ),
+            isError = result is LanCustomRangeResult.Invalid &&
+                result.reason == com.networktoolbox.feature.lanscan.domain.LanCustomRangeError.INVALID_END,
+        )
+        when (result) {
+            LanCustomRangeResult.Incomplete -> Unit
+            is LanCustomRangeResult.Invalid -> Text(
+                result.message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
             )
-            androidx.compose.material3.OutlinedTextField(
-                value = startAddress,
-                onValueChange = onStartAddressChanged,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("起始 IP") },
-                placeholder = { Text("10.0.1.1") },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                ),
-                isError = result is LanCustomRangeResult.Invalid &&
-                    result.reason == com.networktoolbox.feature.lanscan.domain.LanCustomRangeError.INVALID_START,
-            )
-            androidx.compose.material3.OutlinedTextField(
-                value = endAddress,
-                onValueChange = onEndAddressChanged,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("结束 IP") },
-                placeholder = { Text("10.0.1.254") },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                ),
-                isError = result is LanCustomRangeResult.Invalid &&
-                    result.reason == com.networktoolbox.feature.lanscan.domain.LanCustomRangeError.INVALID_END,
-            )
-            when (result) {
-                LanCustomRangeResult.Incomplete -> Unit
-                is LanCustomRangeResult.Invalid -> Text(
-                    result.message,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
 
-                is LanCustomRangeResult.Valid -> Text(
-                    "${result.range.hostCount} 个地址",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+            is LanCustomRangeResult.Valid -> Text(
+                "${result.range.hostCount} 个地址",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }
@@ -304,26 +280,20 @@ private fun NetworkSummaryCard(
     context: NetworkContext,
     range: LanScanRange,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("当前网络", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${context.connectionType.displayName()} · ${range.displayLabel}",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Text(
-                "${range.hostCount} 个可扫描地址",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            context.ipv4Address?.takeIf(String::isNotBlank)?.let {
-                DetailRow("本机", it)
-            }
-            DetailRow("网关", context.gateway?.takeIf(String::isNotBlank) ?: "未确认")
+    ToolInputSection(title = "当前网络") {
+        Text(
+            "${context.connectionType.displayName()} · ${range.displayLabel}",
+            style = NetworkToolboxTextStyles.TechnicalData,
+        )
+        Text(
+            "${range.hostCount} 个可扫描地址",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        context.ipv4Address?.takeIf(String::isNotBlank)?.let {
+            DetailRow("本机", it)
         }
+        DetailRow("网关", context.gateway?.takeIf(String::isNotBlank) ?: "未确认")
     }
 }
 
@@ -333,38 +303,39 @@ private fun ScanningContent(
     onStopScan: () -> Unit,
 ) {
     val update = state.update
-    StatusCard(
-        title = "正在扫描",
-        content = {
+    ToolRunningSection {
+        ToolStatusSummary(
+            title = "正在扫描",
+            status = StatusVisualState.RUNNING,
+            label = "扫描中",
+        )
+        Text(
+            "范围：${state.range.displayLabel}",
+            style = NetworkToolboxTextStyles.TechnicalData,
+        )
+        Text(
+            "${update.scannedHosts} / ${update.totalHosts}",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text("已发现 ${update.discoveredDevices.size} 台设备")
+        LinearProgressIndicator(
+            progress = {
+                LanScannerPresentation.progressFraction(
+                    scannedHosts = update.scannedHosts,
+                    totalHosts = update.totalHosts,
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        update.elapsedMs?.let { elapsed ->
             Text(
-                "范围：${state.range.displayLabel}",
-                style = MaterialTheme.typography.bodyMedium,
+                "已用时 ${LanScannerPresentation.elapsedText(elapsed)}",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                "${update.scannedHosts} / ${update.totalHosts}",
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Text("已发现 ${update.discoveredDevices.size} 台设备")
-            LinearProgressIndicator(
-                progress = {
-                    LanScannerPresentation.progressFraction(
-                        scannedHosts = update.scannedHosts,
-                        totalHosts = update.totalHosts,
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            update.elapsedMs?.let { elapsed ->
-                Text(
-                    "已用时 ${LanScannerPresentation.elapsedText(elapsed)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-    )
-    OutlinedButton(
+        }
+    }
+    SecondaryActionButton(
         onClick = onStopScan,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -381,31 +352,37 @@ private fun SessionContent(
     onAction: () -> Unit,
     onModifyRange: () -> Unit,
 ) {
-    StatusCard(
-        title = title,
-        content = {
-            session.range?.let { range ->
-                Text(range.displayLabel, style = MaterialTheme.typography.titleMedium)
-                if (session.rangeWasLimited) {
-                    Text(
-                        "原始范围 ${range.originalCidr}，本次已限制为当前 /24。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (session.status == LanScanStatus.COMPLETED) {
-                Text(LanScannerPresentation.sessionSummary(session))
+    ToolResultSection {
+        ToolStatusSummary(
+            title = title,
+            status = if (session.status == LanScanStatus.COMPLETED) {
+                StatusVisualState.NORMAL
             } else {
+                StatusVisualState.CANCELLED
+            },
+            label = if (session.status == LanScanStatus.COMPLETED) "已完成" else "已停止",
+        )
+        session.range?.let { range ->
+            Text(range.displayLabel, style = NetworkToolboxTextStyles.TechnicalData)
+            if (session.rangeWasLimited) {
                 Text(
-                    "已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址 · " +
-                        "发现 ${session.discoveredDevices.size} 台设备 · " +
-                        LanScannerPresentation.elapsedText(session.elapsedMs),
+                    "原始范围 ${range.originalCidr}，本次已限制为当前 /24。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        },
-    )
-    OutlinedButton(
+        }
+        if (session.status == LanScanStatus.COMPLETED) {
+            Text(LanScannerPresentation.sessionSummary(session))
+        } else {
+            Text(
+                "已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址 · " +
+                    "发现 ${session.discoveredDevices.size} 台设备 · " +
+                    LanScannerPresentation.elapsedText(session.elapsedMs),
+            )
+        }
+    }
+    SecondaryActionButton(
         onClick = onAction,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -423,18 +400,20 @@ private fun NetworkChangedContent(
     onRetry: () -> Unit,
     onModifyRange: () -> Unit,
 ) {
-    StatusCard(
-        title = "网络已发生变化",
-        content = {
-            Text("扫描已停止，以避免混合不同局域网的结果。")
-            Text(
-                "请在网络稳定后重新扫描。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text("已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址")
-        },
-    )
-    OutlinedButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = "网络已发生变化",
+            status = StatusVisualState.NOTICE,
+            label = "网络变化",
+        )
+        Text("扫描已停止，以避免混合不同局域网的结果。")
+        Text(
+            "请在网络稳定后重新扫描。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text("已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址")
+    }
+    SecondaryActionButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
         Text("重新扫描")
     }
     TextButton(onClick = onModifyRange) {
@@ -447,26 +426,30 @@ private fun NetworkChangedContent(
 private fun UnsupportedContent(
     context: NetworkContext,
 ) {
-    StatusCard(
-        title = if (context.connectionType == ConnectionType.CELLULAR) {
-            "当前为移动网络"
-        } else {
-            "当前网络不可用"
-        },
-        content = {
-            Text("局域网扫描用于扫描 Wi-Fi 或以太网局域网。")
-        },
-    )
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = if (context.connectionType == ConnectionType.CELLULAR) {
+                "当前为移动网络"
+            } else {
+                "当前网络不可用"
+            },
+            status = StatusVisualState.NOT_EXECUTED,
+            label = "未执行",
+        )
+        Text("局域网扫描用于扫描 Wi-Fi 或以太网局域网。")
+    }
 }
 
 @Composable
 private fun VpnBlockedContent() {
-    StatusCard(
-        title = "当前检测到 VPN 网络",
-        content = {
-            Text("第一版局域网扫描暂不在 VPN 网络下自动扫描，以避免扫描错误的虚拟网段。")
-        },
-    )
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = "当前检测到 VPN 网络",
+            status = StatusVisualState.NOT_EXECUTED,
+            label = "未执行",
+        )
+        Text("第一版局域网扫描暂不在 VPN 网络下自动扫描，以避免扫描错误的虚拟网段。")
+    }
 }
 
 @Composable
@@ -474,15 +457,29 @@ private fun ErrorContent(
     message: String,
     onRetry: () -> Unit,
 ) {
-    StatusCard(title = "扫描失败", content = { Text(message) })
-    OutlinedButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = "扫描失败",
+            status = StatusVisualState.ERROR,
+            label = "失败",
+        )
+        Text(message)
+    }
+    SecondaryActionButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
         Text("重试")
     }
 }
 
 @Composable
 private fun LoadingCard() {
-    StatusCard(title = "正在读取网络状态", content = { Text("请稍候…") })
+    OutlinedNetworkCard {
+        ToolStatusSummary(
+            title = "正在读取网络状态",
+            status = StatusVisualState.RUNNING,
+            label = "读取中",
+        )
+        Text("请稍候…")
+    }
 }
 
 @Composable
@@ -498,7 +495,7 @@ private fun PrivacyHint() {
 private fun DeviceList(devices: List<LanDevice>) {
     if (devices.isEmpty()) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -511,80 +508,8 @@ private fun DeviceList(devices: List<LanDevice>) {
                 style = MaterialTheme.typography.labelLarge,
             )
         }
-        devices.forEach { device -> DeviceCard(device) }
-    }
-}
-
-@Composable
-private fun DeviceCard(device: LanDevice) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    LanScannerPresentation.devicePrimaryText(device),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                LanScannerPresentation.deviceRole(device)
-                    .takeIf(String::isNotBlank)
-                    ?.let { role ->
-                        Text(
-                            role,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-            }
-            LanScannerPresentation.deviceAddressText(device)?.let { address ->
-                Text(
-                    address,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            LanScannerPresentation.deviceIdentitySummary(device)?.let { identity ->
-                Text(
-                    identity,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            LanScannerPresentation.deviceSecondaryText(device)?.let { secondary ->
-                Text(
-                    secondary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            device.macAddress?.takeIf(String::isNotBlank)?.let { mac ->
-                Text(
-                    "MAC · $mac",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusCard(
-    title: String,
-    content: @Composable () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
+        devices.forEach { device ->
+            LanDeviceCard(device = device, showMac = true)
         }
     }
 }
@@ -596,7 +521,7 @@ private fun DetailRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
     ) {
         Text(
             label,

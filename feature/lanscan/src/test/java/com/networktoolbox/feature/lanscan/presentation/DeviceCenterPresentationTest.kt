@@ -90,6 +90,11 @@ class DeviceCenterPresentationTest {
         assertEquals("Example · Hub 2", DeviceCenterPresentation.deviceIdentitySummary(upnpNamed))
         assertEquals("Office Printer", DeviceCenterPresentation.deviceDisplayName(mdnsNamed))
         assertEquals("未知设备", DeviceCenterPresentation.deviceDisplayName(unknown))
+        assertEquals("10.0.1.22", DeviceCenterPresentation.deviceAddress(unknown))
+        assertEquals(
+            LanScannerPresentation.deviceDisplayName(unknown),
+            DeviceCenterPresentation.deviceDisplayName(unknown),
+        )
         assertEquals("可达性检测 · 16 ms", DeviceCenterPresentation.deviceEvidence(unknown))
     }
 

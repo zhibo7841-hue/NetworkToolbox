@@ -41,9 +41,7 @@ object DeviceCenterPresentation {
 
     /** Returns a real aggregated name, or the neutral fallback required by Devices. */
     fun deviceDisplayName(device: LanDevice): String =
-        LanScannerPresentation.devicePrimaryText(device)
-            .takeIf { it.isNotBlank() && it != device.ipAddress }
-            ?: "未知设备"
+        LanScannerPresentation.deviceDisplayName(device)
 
     fun deviceAddress(device: LanDevice): String = device.ipAddress
 

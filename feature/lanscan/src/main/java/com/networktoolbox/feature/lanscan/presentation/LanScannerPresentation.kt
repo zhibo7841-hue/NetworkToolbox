@@ -10,6 +10,16 @@ import java.util.Locale
 object LanScannerPresentation {
     fun devicePrimaryText(device: LanDevice): String = device.identity.displayName.value
 
+    /**
+     * The user-facing fallback for a device without an observed name.
+     *
+     * Keep the IP address as a separate secondary value so an unknown device
+     * is not presented as if its address were a device name.
+     */
+    fun deviceDisplayName(device: LanDevice): String = devicePrimaryText(device)
+        .takeIf { it.isNotBlank() && it != device.ipAddress }
+        ?: "未知设备"
+
     fun deviceAddressText(device: LanDevice): String? = device.ipAddress.takeIf {
         devicePrimaryText(device) != device.ipAddress
     }

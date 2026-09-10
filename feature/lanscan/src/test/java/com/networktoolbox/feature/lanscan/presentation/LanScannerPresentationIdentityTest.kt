@@ -25,6 +25,7 @@ class LanScannerPresentationIdentityTest {
         )
 
         assertEquals("Smart Home Hub", LanScannerPresentation.devicePrimaryText(device))
+        assertEquals("Smart Home Hub", LanScannerPresentation.deviceDisplayName(device))
         assertEquals("10.0.1.122", LanScannerPresentation.deviceAddressText(device))
         assertEquals("Xiaomi · Hub 3", LanScannerPresentation.deviceIdentitySummary(device))
         assertEquals("可达性检测 · 16 ms", LanScannerPresentation.deviceSecondaryText(device))
@@ -35,6 +36,7 @@ class LanScannerPresentationIdentityTest {
         val device = device("10.0.1.10")
 
         assertEquals("10.0.1.10", LanScannerPresentation.devicePrimaryText(device))
+        assertEquals("未知设备", LanScannerPresentation.deviceDisplayName(device))
         assertNull(LanScannerPresentation.deviceAddressText(device))
         assertNull(LanScannerPresentation.deviceIdentitySummary(device))
         assertEquals("可达性检测 · 16 ms", LanScannerPresentation.deviceSecondaryText(device))

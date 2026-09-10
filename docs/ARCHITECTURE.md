@@ -116,3 +116,10 @@ technical range controls and shows real gateway/local roles, observed identity
 data, and confirmed discovery evidence without inferring online status or
 inventing MAC/vendor data. Network availability, cellular, VPN, cancellation,
 and network changes remain mapped from the existing scanner state.
+
+The configurable Tools -> 局域网扫描 surface and the top-level Devices surface
+share the `LanDeviceCard` Compose primitive for device-result presentation.
+The primitive keeps the existing identity, role, and discovery-evidence
+helpers as its source of truth; optional fields such as the scanner's existing
+MAC line remain presentation parameters rather than a new device model or
+discovery path.

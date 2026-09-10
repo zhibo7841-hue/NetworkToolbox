@@ -664,3 +664,28 @@ one-shot range-selection workflow. The two surfaces share the same scanner
 state and domain behavior but do not duplicate discovery or persistence
 logic. Device Center rendering uses the real scanned progress and does not
 simulate progress or create new Room data.
+
+### LAN Scanner visual alignment
+
+Tools -> 局域网扫描 keeps its current range-selection and scan behavior while
+using the same surface hierarchy as the other core tools:
+
+- Input configuration (`当前网络` and `自定义 IPv4`) uses an outlined Tool
+  Input Surface with the existing Material 3 fields and range validation.
+- Running state uses the outlined Tool Running Surface and keeps the real
+  progress, elapsed time, device count, cancellation, and network-change
+  behavior.
+- Completed and terminal summaries use a subtle tonal or outlined Result
+  Summary Surface. Re-scan remains an outlined secondary action, and the
+  `修改扫描范围 >` text action remains available.
+- Device results use the shared compact outlined `LanDeviceCard` primitive
+  with the order `display name`, IPv4 address, and observed identity/evidence.
+  When no real name is available, the display name is `未知设备`; the IP is
+  still shown as its own technical value. Gateway and local badges remain
+  reserved for those roles, and unknown identity stays neutral.
+
+LAN Scanner and Device Center therefore share the same device-card visual
+language without sharing their page roles: custom ranges remain a Tools-only
+concern, while Devices remains current-network-only. This alignment does not
+change scanner semantics, discovery evidence, identity aggregation, range
+calculation, persistence, or the Device Center information architecture.
