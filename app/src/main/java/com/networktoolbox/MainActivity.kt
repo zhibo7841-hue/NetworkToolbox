@@ -51,6 +51,7 @@ import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.ui.HistoryScreen
 import com.networktoolbox.feature.lanscan.presentation.LanScannerViewModel
 import com.networktoolbox.feature.lanscan.presentation.LanScanRangeMode
+import com.networktoolbox.feature.lanscan.ui.LanDeviceCenterScreen
 import com.networktoolbox.feature.lanscan.ui.LanScannerScreen
 import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
@@ -227,6 +228,9 @@ class MainActivity : ComponentActivity() {
                 }
                 lanScannerViewModel.stopScan()
                 tracerouteViewModel.stop()
+                if (destination == TopLevelDestination.DEVICES) {
+                    lanScannerViewModel.prepareDeviceCenter()
+                }
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
                 navigationState = navigationState.selectTopLevel(destination)
@@ -346,17 +350,11 @@ class MainActivity : ComponentActivity() {
                                     onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                     onOpenReport = { openTool(ToolScreen.REPORT) },
                                 )
-                                TopLevelDestination.DEVICES -> LanScannerScreen(
+                                TopLevelDestination.DEVICES -> LanDeviceCenterScreen(
                                     uiState = lanScannerUiState,
-                                    onStartScan = lanScannerViewModel::startScan,
+                                    onStartScan = lanScannerViewModel::startCurrentNetworkScan,
                                     onStopScan = lanScannerViewModel::stopScan,
-                                    onRetry = lanScannerViewModel::rescan,
-                                    onModifyRange = lanScannerViewModel::modifyRange,
-                                    onBack = {},
-                                    onRangeModeChanged = lanScannerViewModel::selectRangeMode,
-                                    onCustomStartAddressChanged = lanScannerViewModel::onCustomStartAddressChanged,
-                                    onCustomEndAddressChanged = lanScannerViewModel::onCustomEndAddressChanged,
-                                    isTopLevelDestination = true,
+                                    onRescan = lanScannerViewModel::rescanCurrentNetwork,
                                     onOpenMenu = ::openDrawer,
                                 )
                             }

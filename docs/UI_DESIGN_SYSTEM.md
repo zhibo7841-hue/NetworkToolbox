@@ -637,3 +637,30 @@ back button; explanations remain in the report content. A report restored from
 History may use the saved-artifact context title `网络诊断报告` while reusing
 the same report content and export behavior. Live completion and reruns keep
 the `网络诊断` tool title.
+
+## LAN Device Center pattern
+
+The top-level `设备` destination is a compact current-network device surface,
+not a copy of the configurable `局域网扫描` tool. It starts no scan on entry
+and shows one concise current-network summary followed by a manual scan action
+or the real scan state. The summary includes only the useful current-network
+context for this surface: network type/name when reliable, the selected
+current IPv4 subnet, local IPv4 address, and a real gateway where applicable.
+Cellular and blocked VPN states remain explicit and do not manufacture a
+traditional LAN gateway.
+
+Discovered devices use compact outlined cards. The card reads an aggregated
+display name from the existing reverse-DNS, mDNS, and UPnP identity pipeline,
+falls back to `未知设备` when no real name is available, and always keeps the
+IPv4 address visible. Gateway and local-device badges are reserved for those
+roles; ordinary discovered devices do not receive a redundant `在线` badge.
+Confirmed discovery evidence and latency remain a single supporting line when
+available. The list preserves the scanner's gateway, local-device, and numeric
+IPv4 ordering, and does not add detail chevrons, search, filters, or device
+management actions.
+
+Tools -> 局域网扫描 remains the place for custom IPv4 ranges and its existing
+one-shot range-selection workflow. The two surfaces share the same scanner
+state and domain behavior but do not duplicate discovery or persistence
+logic. Device Center rendering uses the real scanned progress and does not
+simulate progress or create new Room data.

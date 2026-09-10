@@ -251,6 +251,63 @@ class LanScannerViewModelTest {
     }
 
     @Test
+    fun `device center scan always uses the current automatic range`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val automaticRange = readyRange(context)
+        var automaticCalls = 0
+        var customCalls = 0
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                automaticCalls += 1
+                return session(context, automaticRange, emptyList())
+            }
+
+            override suspend fun invokeWithRange(
+                range: com.networktoolbox.feature.lanscan.domain.model.LanScanRange,
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                customCalls += 1
+                return session(context, range, emptyList())
+            }
+        }
+        val viewModel = viewModel(readiness(context), runner)
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        viewModel.onCustomStartAddressChanged("192.168.1.10")
+        viewModel.onCustomEndAddressChanged("192.168.1.20")
+        viewModel.startCurrentNetworkScan()
+        advanceUntilIdle()
+        viewModel.rescanCurrentNetwork()
+        advanceUntilIdle()
+
+        assertEquals(2, automaticCalls)
+        assertEquals(0, customCalls)
+        assertEquals(automaticRange, (viewModel.uiState.value as LanScannerUiState.Completed).session.range)
+    }
+
+    @Test
+    fun `preparing device center leaves custom values intact but selects current network`() = runTest {
+        val context = context("192.168.1.206", 24)
+        val viewModel = viewModel(readiness(context))
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        viewModel.onCustomStartAddressChanged("192.168.1.10")
+        viewModel.onCustomEndAddressChanged("192.168.1.20")
+        viewModel.prepareDeviceCenter()
+
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(LanScanRangeMode.CURRENT_NETWORK, state.rangeMode)
+        assertEquals("192.168.1.10", state.customStartAddress)
+        assertEquals("192.168.1.20", state.customEndAddress)
+    }
+
+    @Test
     fun `start exposes progressive devices and ends completed`() = runTest {
         val context = context("192.168.1.2", 30)
         val range = readyRange(context)

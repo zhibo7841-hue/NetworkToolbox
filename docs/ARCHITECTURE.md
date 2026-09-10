@@ -62,8 +62,9 @@ The current app shell has three formal top-level destinations:
 
 - `HOME` / 首页 — current network status, recent checks, and quick actions.
 - `TOOLS` / 工具 — the complete set of existing network tools.
-- `DEVICES` / 设备 — the current LAN Scanner as the usable device-discovery
-  entry point until a separate LAN Device Center is approved and implemented.
+- `DEVICES` / 设备 — the Phase 1 LAN Device Center foundation. It presents the
+  current network and the discovered device list through the existing LAN
+  Scanner capability.
 
 `HISTORY`, `PRIVACY`, and `ABOUT` are app-level secondary routes, not
 bottom-navigation destinations. A shared Material 3 Drawer is available from
@@ -89,5 +90,29 @@ the live header to remain `网络诊断` while a saved artifact can be titled
 destinations rather than integer indexes, and its saveable representation
 preserves the selected destination, caller, and nested tool return target
 across configuration changes. The Devices screen reuses the existing LAN
-Scanner ViewModel and state; it does not create a second discovery pipeline or
-introduce LAN Device Center, Favorites, or Wake-on-LAN behavior.
+Scanner ViewModel and state through a current-network-only entry point; it does
+not create a second discovery pipeline or duplicate device domain model. Tools
+-> 局域网扫描 retains the existing current/custom range workflow. The Device
+Center presentation is intentionally separate from that tool surface, but
+both use the same `RunLanScan`, discovery engine, real progress, cancellation,
+network-change handling, and identity enrichment. This phase does not
+introduce Favorites, Wake-on-LAN, Device Detail, background scans, new
+discovery protocols, IPv6 LAN scanning, new permissions, or new Room data.
+
+## LAN Device Center Phase 1
+
+The top-level Devices route is implemented as a small presentation boundary
+over the existing LAN Scanner domain. `LanScannerViewModel` remains the single
+owner of readiness, range state, scan lifecycle, enrichment generations, and
+terminal states. The Device Center uses dedicated current-network entry
+methods so a custom range selected in the Tools scanner cannot leak into the
+top-level Devices flow. It does not auto-start a scan when opened.
+
+The Device Center uses the existing `LanDevice`,
+`LanDeviceIdentityAggregator`, and scanner ordering. A lightweight
+`DeviceCenterNetworkSummary` is presentation data only; it does not replace
+`NetworkContext` or create another network provider. The compact UI hides
+technical range controls and shows real gateway/local roles, observed identity
+data, and confirmed discovery evidence without inferring online status or
+inventing MAC/vendor data. Network availability, cellular, VPN, cancellation,
+and network changes remain mapped from the existing scanner state.

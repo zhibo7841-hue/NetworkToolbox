@@ -221,3 +221,26 @@ This log records the confirmed project decisions. New scope or changes to these 
   discovery, probe semantics, network tools, history storage, or any business
   logic. It only provides a stable shell for the current features and a future
   Devices evolution.
+
+## Decision: Devices and LAN Scanner have separate roles
+
+- Date: 2026-09-10
+- Status: Accepted
+- Decision: The top-level Devices destination is the Phase 1 foundation of the
+  LAN Device Center. It presents the current network, offers a manual scan of
+  the current IPv4 range, and shows the discovered device list using the
+  existing LAN Scanner capability.
+- Tool boundary: Tools -> 局域网扫描 remains the one-shot scanner and keeps
+  both current-network and custom-range workflows. The Devices destination
+  does not expose custom range inputs.
+- Reuse: Both surfaces share the existing `LanScannerViewModel`,
+  `RunLanScan`, discovery engine, and identity enrichment. They use separate
+  presentation surfaces for their different roles; no second scanner or
+  duplicate device domain model is introduced.
+- Non-goals: This decision does not authorize Favorites, Wake-on-LAN, a full
+  Device Detail page, background scanning, new discovery protocols, IPv6 LAN
+  scanning, new permissions, or new persistence tables.
+- Consequence: A Devices scan preserves the existing scanner's real progress,
+  cancellation, network-change handling, identification enrichment, and
+  history behavior. The Device Center is a current-network entry point, not a
+  new device-management feature.

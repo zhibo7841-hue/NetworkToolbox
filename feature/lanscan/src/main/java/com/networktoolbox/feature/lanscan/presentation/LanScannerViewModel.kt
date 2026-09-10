@@ -77,11 +77,33 @@ class LanScannerViewModel @Inject constructor(
     }
 
     fun startScan() {
-        beginScan(requestedRange = null)
+        beginScan(requestedRange = null, forceCurrentNetwork = false)
     }
 
     fun rescan() {
-        beginScan(requestedRange = lastScanRange)
+        beginScan(requestedRange = lastScanRange, forceCurrentNetwork = false)
+    }
+
+    /** Starts the Devices destination on the current automatic IPv4 range. */
+    fun startCurrentNetworkScan() {
+        beginScan(requestedRange = null, forceCurrentNetwork = true)
+    }
+
+    /** Repeats the Devices destination's current-network scan. */
+    fun rescanCurrentNetwork() {
+        beginScan(requestedRange = null, forceCurrentNetwork = true)
+    }
+
+    /**
+     * Applies the Devices destination boundary without starting a scan.
+     * Tools may keep a custom range selected; Devices never inherits it.
+     */
+    fun prepareDeviceCenter() {
+        if (scanJob?.isActive == true) return
+        if (rangeMode == LanScanRangeMode.CUSTOM) {
+            rangeMode = LanScanRangeMode.CURRENT_NETWORK
+            publishReadinessState()
+        }
     }
 
     fun modifyRange() {
@@ -99,7 +121,10 @@ class LanScannerViewModel @Inject constructor(
         _uiState.value = readiness.toUiState()
     }
 
-    private fun beginScan(requestedRange: LanScanRange?) {
+    private fun beginScan(
+        requestedRange: LanScanRange?,
+        forceCurrentNetwork: Boolean,
+    ) {
         if (scanJob?.isActive == true) return
 
         val readiness = latestReadiness
@@ -109,12 +134,16 @@ class LanScannerViewModel @Inject constructor(
             )
             return
         }
-        val range = requestedRange ?: when (rangeMode) {
-            LanScanRangeMode.CURRENT_NETWORK ->
-                (readiness.rangeResult as? LanScanRangeResult.Ready)?.range
+        val range = requestedRange ?: if (forceCurrentNetwork) {
+            (readiness.rangeResult as? LanScanRangeResult.Ready)?.range
+        } else {
+            when (rangeMode) {
+                LanScanRangeMode.CURRENT_NETWORK ->
+                    (readiness.rangeResult as? LanScanRangeResult.Ready)?.range
 
-            LanScanRangeMode.CUSTOM ->
-                (customRangeResult as? LanCustomRangeResult.Valid)?.range
+                LanScanRangeMode.CUSTOM ->
+                    (customRangeResult as? LanCustomRangeResult.Valid)?.range
+            }
         }
         if (range == null) {
             _uiState.value = readiness.toUiState()
@@ -141,7 +170,9 @@ class LanScannerViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             val currentJob = coroutineContext[Job]
             try {
-                val session = if (requestedRange != null || rangeMode == LanScanRangeMode.CUSTOM) {
+                val session = if (!forceCurrentNetwork &&
+                    (requestedRange != null || rangeMode == LanScanRangeMode.CUSTOM)
+                ) {
                     runScan.invokeWithRange(
                         range = range,
                         probeConfig = LanScanProbeConfig(),
