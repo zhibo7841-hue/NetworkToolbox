@@ -237,10 +237,40 @@ This log records the confirmed project decisions. New scope or changes to these 
   `RunLanScan`, discovery engine, and identity enrichment. They use separate
   presentation surfaces for their different roles; no second scanner or
   duplicate device domain model is introduced.
-- Non-goals: This decision does not authorize Favorites, Wake-on-LAN, a full
-  Device Detail page, background scanning, new discovery protocols, IPv6 LAN
-  scanning, new permissions, or new persistence tables.
+- Non-goals for Phase 1: This decision did not authorize Favorites, Wake-on-LAN,
+  a full Device Detail page, background scanning, new discovery protocols,
+  IPv6 LAN scanning, new permissions, or new persistence tables. Those items
+  require a later decision; the separate Phase 2A decision below authorizes
+  only the limited detail/favorites foundation.
 - Consequence: A Devices scan preserves the existing scanner's real progress,
   cancellation, network-change handling, identification enrichment, and
   history behavior. The Device Center is a current-network entry point, not a
   new device-management feature.
+
+## Decision: v0.5 LAN Device Center Phase 2A — Device Detail and Favorites
+
+- Date: 2026-09-11
+- Status: Accepted
+- Decision: Phase 2A adds a read-only Device Detail route and local Favorites
+  to the top-level Devices surface. Tools -> 局域网扫描 remains a discovery
+  tool whose device cards are not detail-navigation entry points.
+- Identity: A saved device prefers a valid normalized MAC, then a reliable
+  protocol identity such as a stable UPnP UDN, and otherwise a network-scoped
+  IPv4 identity. Hostname alone is never a saved identity. A false merge is
+  more dangerous than a missed match, so stronger identities never silently
+  fall back to weaker identities.
+- Persistence: Favorites are stored locally in Room through one repository and
+  an additive v1 -> v2 migration. Existing History data must be preserved; no
+  destructive migration is permitted.
+- Observation semantics: A favorite not seen in the current scan is retained
+  and shown as `本次未发现`. Missing from one scan is not equivalent to offline,
+  and `lastSeenAt` is not an offline-duration claim.
+- Network scope: Matching is limited to an opaque scope derived from the
+  current eligible local network. Raw SSID or scope data is not used as the
+  sole device identity and is not shown as a device identifier.
+- Detail boundary: Device Detail may show observed identity metadata, roles,
+  network relation, and observation status. It does not rename devices, add
+  notes, scan ports automatically, infer an operating system, or perform
+  device actions.
+- Product boundary: Wake-on-LAN remains a later phase. Its data basis,
+  permission behavior, and safety semantics require a separate decision.

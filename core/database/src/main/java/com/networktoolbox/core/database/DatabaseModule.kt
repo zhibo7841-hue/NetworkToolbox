@@ -22,7 +22,7 @@ object DatabaseModule {
         context,
         NetworkToolboxDatabase::class.java,
         DATABASE_NAME,
-    ).build()
+    ).addMigrations(MIGRATION_1_2).build()
 
     @Provides
     @Singleton
@@ -37,6 +37,18 @@ object DatabaseModule {
     @Singleton
     fun provideHistoryRecorder(historyRepository: HistoryRepository): HistoryRecorder =
         RoomHistoryRecorder(historyRepository)
+
+    @Provides
+    @Singleton
+    fun provideFavoriteDeviceDao(database: NetworkToolboxDatabase): FavoriteDeviceDao =
+        database.favoriteDeviceDao()
+
+    @Provides
+    @Singleton
+    fun provideFavoriteDeviceRepository(
+        favoriteDeviceDao: FavoriteDeviceDao,
+    ): com.networktoolbox.core.common.favorites.FavoriteDeviceRepository =
+        RoomFavoriteDeviceRepository(favoriteDeviceDao)
 
     private const val DATABASE_NAME = "networktoolbox.db"
 }

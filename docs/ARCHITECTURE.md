@@ -95,9 +95,11 @@ not create a second discovery pipeline or duplicate device domain model. Tools
 -> 局域网扫描 retains the existing current/custom range workflow. The Device
 Center presentation is intentionally separate from that tool surface, but
 both use the same `RunLanScan`, discovery engine, real progress, cancellation,
-network-change handling, and identity enrichment. This phase does not
-introduce Favorites, Wake-on-LAN, Device Detail, background scans, new
-discovery protocols, IPv6 LAN scanning, new permissions, or new Room data.
+network-change handling, and identity enrichment. The Phase 1 shell itself did
+not introduce Favorites, Wake-on-LAN, Device Detail, background scans, new
+discovery protocols, IPv6 LAN scanning, new permissions, or new Room data;
+those boundaries are refined by the separately approved Phase 2A foundation
+below.
 
 ## LAN Device Center Phase 1
 
@@ -123,3 +125,49 @@ The primitive keeps the existing identity, role, and discovery-evidence
 helpers as its source of truth; optional fields such as the scanner's existing
 MAC line remain presentation parameters rather than a new device model or
 discovery path.
+
+## LAN Device Center Phase 2A — Device Detail and Favorites
+
+Phase 2A keeps scan observations separate from saved device identity. The
+existing `LanDevice` remains an observation assembled by the LAN Scanner and
+its reverse-DNS, mDNS, and UPnP enrichment. A saved `FavoriteDevice` contains
+only the locally useful identity, opaque network scope, last-known metadata,
+roles, and timestamps needed to render a favorite when it is not observed in
+the current scan.
+
+`core:common` owns the platform-independent favorite models,
+`FavoriteDeviceRepository` contract, and `FavoriteIdentityMatcher`. Matching
+is scope-first and conservative: a valid normalized MAC is preferred, then a
+reliable protocol identity, then a network-scoped IPv4 identity. Hostnames do
+not identify a device, stronger saved identities do not fall back to weaker
+candidate data, and a mismatch is safer than a false merge.
+
+`feature:lanscan` derives an opaque `v1:<sha256>` network scope for eligible
+Wi-Fi/Ethernet contexts from the local network shape and relevant context. The
+raw scope inputs are not persisted or displayed as an identity. Favorites
+from another scope are excluded from the current Device Center; a favorite in
+the current scope that is not in the scan remains visible as `本次未发现`, not
+`离线`. `lastSeenAt` records the last confirmed observation and is not an
+offline-duration calculation.
+
+`core:database` persists favorites in `favorite_devices` through
+`RoomFavoriteDeviceRepository`. The database moves from version 1 to version 2
+with an additive `MIGRATION_1_2`; the existing `history_records` table is
+untouched and no destructive migration is enabled. The repository exposes
+observe, add, remove, update-last-observed, and conservative match operations.
+
+`LanScannerViewModel` remains the single owner of scan lifecycle and observes
+the favorite repository. A completed scan synchronizes only matching observed
+metadata, while internal scan observations are not saved as separate History
+records. `LanDeviceCenterScreen` merges current observations with in-scope
+favorites for the order favorite+observed, gateway/local, other observed, and
+favorite-not-discovered, using natural IPv4 order within groups.
+
+The Device Center `LanDeviceCard` is clickable and navigates with a stable
+route key to `DeviceDetailScreen`; Tools -> 局域网扫描 continues to use the
+same card primitive without a detail click action. Detail is a secondary route
+with Back navigation and sections for basic identity, observed identity
+metadata, network relation, and observation status. Its star toggles the
+favorite through the ViewModel/repository without confirmation. No detail
+action performs port scanning, Wake-on-LAN, renaming, notes, OS inference, or
+background work.

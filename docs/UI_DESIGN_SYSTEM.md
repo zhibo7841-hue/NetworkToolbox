@@ -392,11 +392,11 @@ the app-level destinations History, Privacy & Data, and About. Those screens
 keep the caller's top-level destination for Back navigation. The current
 product does not expose a Settings screen because it has no confirmed user
 configuration; a future Settings route requires a separate product decision.
-Secondary pages do not expose the top-level Drawer action. Devices currently
-hosts the existing LAN Scanner screen and its existing ViewModel; it is a real
-entry point, not a placeholder or a second scanner state. The later LAN Device
-Center, Favorites, and Wake-on-LAN work remains a separate implementation
-stage.
+Secondary pages do not expose the top-level Drawer action. Devices hosts the
+existing LAN Scanner state through the LAN Device Center surface; it is a real
+entry point, not a placeholder or a second scanner state. The approved Phase
+2A Device Detail and Favorites foundation is described below; Wake-on-LAN
+remains a separate later implementation stage.
 
 Migration follows a staged path rather than a Big Bang rewrite:
 
@@ -509,8 +509,9 @@ history snapshot, export, and business rules are outside this visual layer.
 This foundation does not modify Ping, DNS, TCP, Traceroute, LAN Scanner
 discovery, Automatic Diagnostics, History, Report, Retry/Verify, or their data
 semantics. The App Shell change only hosts the existing LAN Scanner under the
-Devices top-level destination; it does not implement the later LAN Device
-Center, Favorites, or Wake-on-LAN work.
+Devices top-level destination; Phase 2A separately adds the limited Device
+Detail and Favorites presentation/persistence described in the LAN Device
+Center pattern. Wake-on-LAN remains outside this phase.
 
 ## Core Tool Screen Pattern
 
@@ -689,3 +690,26 @@ language without sharing their page roles: custom ranges remain a Tools-only
 concern, while Devices remains current-network-only. This alignment does not
 change scanner semantics, discovery evidence, identity aggregation, range
 calculation, persistence, or the Device Center information architecture.
+
+### Device Detail and Favorites pattern
+
+Device Detail is a secondary page reached only from a Device Center card. Its
+header uses the shared secondary-page pattern with Back, the device title, and
+a compact star action. The star uses the user-facing labels `收藏设备` and
+`已收藏`; toggling it is immediate and does not require a danger confirmation.
+Tools -> 局域网扫描 cards remain non-clickable so the scanner does not acquire
+a second detail-navigation behavior.
+
+The first viewport prioritizes the device identity, current IP when observed,
+optional real metadata, and role badges such as `网关` or `本机`. Detail
+sections group basic information, observed identity sources, network relation,
+and observation status. Unavailable fields are omitted rather than filled with
+guessed values, raw hashes, or internal enum names. An unknown device is
+labelled `未知设备`.
+
+The Device Center uses one compact list. Favorites observed in the current
+scan are marked with a star and sorted before the gateway/local and other
+observed groups; in-scope favorites absent from the current scan remain at the
+end with the neutral state `本次未发现`. This state never uses an offline
+label or an error color. Cards retain the shared compact primary/secondary
+layout and the existing role/evidence semantics.

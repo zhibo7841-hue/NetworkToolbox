@@ -52,6 +52,7 @@ import com.networktoolbox.feature.history.ui.HistoryScreen
 import com.networktoolbox.feature.lanscan.presentation.LanScannerViewModel
 import com.networktoolbox.feature.lanscan.presentation.LanScanRangeMode
 import com.networktoolbox.feature.lanscan.ui.LanDeviceCenterScreen
+import com.networktoolbox.feature.lanscan.ui.DeviceDetailScreen
 import com.networktoolbox.feature.lanscan.ui.LanScannerScreen
 import com.networktoolbox.feature.ping.presentation.PingViewModel
 import com.networktoolbox.feature.ping.ui.PingScreen
@@ -171,6 +172,7 @@ class MainActivity : ComponentActivity() {
             val reportUiState by reportViewModel.uiState.collectAsState()
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
+            val favoriteDevices by lanScannerViewModel.favoriteDevices.collectAsState()
             val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
             var navigationState by rememberSaveable(stateSaver = AppNavigationState.Saver) {
                 mutableStateOf(AppNavigationState())
@@ -238,6 +240,12 @@ class MainActivity : ComponentActivity() {
 
             fun goBack() {
                 if (toolScreen == ToolScreen.NONE) return
+                if (toolScreen == ToolScreen.DEVICE_DETAIL) {
+                    restoredDiagnosticReport = null
+                    restoredAutomaticDiagnosticResult = null
+                    navigationState = navigationState.goBack()
+                    return
+                }
                 if (reportUiState.status is ReportStatus.Running) {
                     reportViewModel.stopCheck()
                 }
@@ -352,10 +360,14 @@ class MainActivity : ComponentActivity() {
                                 )
                                 TopLevelDestination.DEVICES -> LanDeviceCenterScreen(
                                     uiState = lanScannerUiState,
+                                    favorites = favoriteDevices,
                                     onStartScan = lanScannerViewModel::startCurrentNetworkScan,
                                     onStopScan = lanScannerViewModel::stopScan,
                                     onRescan = lanScannerViewModel::rescanCurrentNetwork,
                                     onOpenMenu = ::openDrawer,
+                                    onOpenDevice = { key ->
+                                        navigationState = navigationState.openDeviceDetail(key)
+                                    },
                                 )
                             }
                             ToolScreen.PRIVACY -> PrivacyScreen(onBack = ::goBack)
@@ -443,6 +455,17 @@ class MainActivity : ComponentActivity() {
                                 onRangeModeChanged = lanScannerViewModel::selectRangeMode,
                                 onCustomStartAddressChanged = lanScannerViewModel::onCustomStartAddressChanged,
                                 onCustomEndAddressChanged = lanScannerViewModel::onCustomEndAddressChanged,
+                            )
+                            ToolScreen.DEVICE_DETAIL -> DeviceDetailScreen(
+                                detail = lanScannerViewModel.resolveDeviceDetail(
+                                    navigationState.deviceDetailKey,
+                                ),
+                                onBack = ::goBack,
+                                onToggleFavorite = {
+                                    lanScannerViewModel.toggleFavoriteByRouteKey(
+                                        navigationState.deviceDetailKey,
+                                    )
+                                },
                             )
                         }
                     }

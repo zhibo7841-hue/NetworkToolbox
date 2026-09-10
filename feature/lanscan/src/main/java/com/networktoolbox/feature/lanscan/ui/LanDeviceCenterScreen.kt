@@ -21,6 +21,7 @@ import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
 import com.networktoolbox.core.designsystem.OutlinedNetworkCard
 import com.networktoolbox.core.designsystem.ToolScreenLazyLayout
+import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
@@ -44,6 +45,8 @@ fun LanDeviceCenterScreen(
     onRescan: () -> Unit,
     onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier,
+    favorites: List<FavoriteDevice> = emptyList(),
+    onOpenDevice: (String) -> Unit = {},
 ) {
     ToolScreenLazyLayout(modifier = modifier) {
         item {
@@ -77,7 +80,13 @@ fun LanDeviceCenterScreen(
                 item {
                     DeviceCenterScanningCard(state = state, onStopScan = onStopScan)
                 }
-                deviceCenterDeviceList(state.update.discoveredDevices)
+                deviceCenterDeviceList(
+                    devices = state.update.discoveredDevices,
+                    favorites = favorites,
+                    context = state.networkContext,
+                    includeUnseenFavorites = false,
+                    onOpenDevice = onOpenDevice,
+                )
             }
 
             is LanScannerUiState.Completed -> {
@@ -95,7 +104,12 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 item { DeviceCenterRescanButton(onRescan = onRescan) }
-                deviceCenterDeviceList(state.session.discoveredDevices)
+                deviceCenterDeviceList(
+                    devices = state.session.discoveredDevices,
+                    favorites = favorites,
+                    context = state.session.initialNetworkContext,
+                    onOpenDevice = onOpenDevice,
+                )
             }
 
             is LanScannerUiState.Cancelled -> {
@@ -113,7 +127,12 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 item { DeviceCenterRescanButton(onRescan = onRescan) }
-                deviceCenterDeviceList(state.session.discoveredDevices)
+                deviceCenterDeviceList(
+                    devices = state.session.discoveredDevices,
+                    favorites = favorites,
+                    context = state.session.initialNetworkContext,
+                    onOpenDevice = onOpenDevice,
+                )
             }
 
             is LanScannerUiState.NetworkChanged -> {
@@ -348,8 +367,20 @@ private fun DeviceCenterLoadingCard() {
     }
 }
 
-private fun LazyListScope.deviceCenterDeviceList(devices: List<LanDevice>) {
-    if (devices.isEmpty()) {
+private fun LazyListScope.deviceCenterDeviceList(
+    devices: List<LanDevice>,
+    favorites: List<FavoriteDevice>,
+    context: com.networktoolbox.core.network.model.NetworkContext,
+    includeUnseenFavorites: Boolean = true,
+    onOpenDevice: (String) -> Unit,
+) {
+    val deviceItems = DeviceCenterPresentation.deviceList(
+        devices = devices,
+        favorites = favorites,
+        context = context,
+        includeUnseenFavorites = includeUnseenFavorites,
+    )
+    if (deviceItems.isEmpty()) {
         item {
             OutlinedNetworkCard {
                 Text("未发现局域网设备", style = MaterialTheme.typography.titleMedium)
@@ -370,17 +401,20 @@ private fun LazyListScope.deviceCenterDeviceList(devices: List<LanDevice>) {
         ) {
             Text("已发现设备", style = MaterialTheme.typography.titleMedium)
             Text(
-                devices.size.toString(),
+                deviceItems.size.toString(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelLarge,
             )
         }
     }
     items(
-        items = devices,
-        key = { it.ipAddress },
-    ) { device ->
-        LanDeviceCard(device)
+        items = deviceItems,
+        key = { it.detailKey },
+    ) { deviceItem ->
+        LanDeviceCard(
+            presentation = deviceItem.card,
+            onClick = { onOpenDevice(deviceItem.detailKey) },
+        )
     }
 }
 

@@ -35,6 +35,7 @@ internal enum class ToolScreen {
     PRIVACY,
     ABOUT,
     LAN_SCAN,
+    DEVICE_DETAIL,
 }
 
 internal fun TopLevelDestination.navigationOrigin(): NavigationOrigin = when (this) {
@@ -59,6 +60,7 @@ internal data class AppNavigationState(
     val toolScreen: ToolScreen = ToolScreen.NONE,
     val toolOrigin: NavigationOrigin = NavigationOrigin.HOME,
     val toolBackDestination: ToolScreen = ToolScreen.NONE,
+    val deviceDetailKey: String? = null,
 ) {
     fun openTool(screen: ToolScreen): AppNavigationState = copy(
         topLevelDestination = TopLevelDestination.TOOLS,
@@ -69,6 +71,7 @@ internal data class AppNavigationState(
             toolOrigin
         },
         toolBackDestination = toolScreen.takeIf { it != ToolScreen.NONE } ?: ToolScreen.NONE,
+        deviceDetailKey = null,
     )
 
     fun openSecondaryDestination(screen: ToolScreen): AppNavigationState = copy(
@@ -79,24 +82,42 @@ internal data class AppNavigationState(
             toolOrigin
         },
         toolBackDestination = ToolScreen.NONE,
+        deviceDetailKey = null,
+    )
+
+    fun openDeviceDetail(key: String): AppNavigationState = copy(
+        topLevelDestination = TopLevelDestination.DEVICES,
+        toolScreen = ToolScreen.DEVICE_DETAIL,
+        toolOrigin = NavigationOrigin.DEVICES,
+        toolBackDestination = ToolScreen.NONE,
+        deviceDetailKey = key,
     )
 
     fun selectTopLevel(destination: TopLevelDestination): AppNavigationState = copy(
         topLevelDestination = destination,
         toolScreen = ToolScreen.NONE,
         toolBackDestination = ToolScreen.NONE,
+        deviceDetailKey = null,
     )
 
     fun goBack(): AppNavigationState = when {
         toolScreen == ToolScreen.NONE -> this
+        toolScreen == ToolScreen.DEVICE_DETAIL -> copy(
+            topLevelDestination = TopLevelDestination.DEVICES,
+            toolScreen = ToolScreen.NONE,
+            toolBackDestination = ToolScreen.NONE,
+            deviceDetailKey = null,
+        )
         toolBackDestination != ToolScreen.NONE -> copy(
             toolScreen = toolBackDestination,
             toolBackDestination = ToolScreen.NONE,
+            deviceDetailKey = null,
         )
         else -> copy(
             topLevelDestination = toolOrigin.backDestination(),
             toolScreen = ToolScreen.NONE,
             toolBackDestination = ToolScreen.NONE,
+            deviceDetailKey = null,
         )
     }
 
@@ -108,19 +129,21 @@ internal data class AppNavigationState(
                     state.toolScreen.name,
                     state.toolOrigin.name,
                     state.toolBackDestination.name,
+                    state.deviceDetailKey,
                 )
             },
             restore = { saved ->
                 AppNavigationState(
-                    topLevelDestination = TopLevelDestination.valueOf(saved[0]),
-                    toolScreen = ToolScreen.valueOf(saved[1]),
-                    toolOrigin = NavigationOrigin.valueOf(saved[2]),
+                    topLevelDestination = TopLevelDestination.valueOf(saved[0] as String),
+                    toolScreen = ToolScreen.valueOf(saved[1] as String),
+                    toolOrigin = NavigationOrigin.valueOf(saved[2] as String),
                     // Slot 3 used to hold the Drawer source in the 063-B
                     // save format. Unknown values (including DRAWER) safely
                     // restore as no nested tool destination.
-                    toolBackDestination = saved.getOrNull(3)
+                    toolBackDestination = (saved.getOrNull(3) as? String)
                         ?.let { value -> runCatching { ToolScreen.valueOf(value) }.getOrNull() }
                         ?: ToolScreen.NONE,
+                    deviceDetailKey = saved.getOrNull(4) as? String,
                 )
             },
         )

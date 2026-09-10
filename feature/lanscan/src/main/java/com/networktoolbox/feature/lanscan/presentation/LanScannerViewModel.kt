@@ -2,11 +2,17 @@ package com.networktoolbox.feature.lanscan.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.networktoolbox.core.common.favorites.FavoriteDevice
+import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
+import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
+import com.networktoolbox.core.common.favorites.NoOpFavoriteDeviceRepository
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
+import com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
+import com.networktoolbox.feature.lanscan.domain.LanNetworkScope
 import com.networktoolbox.feature.lanscan.domain.MdnsDeviceEnrichment
 import com.networktoolbox.feature.lanscan.domain.MdnsEnricher
 import com.networktoolbox.feature.lanscan.domain.NoOpUpnpEnricher
@@ -42,9 +48,12 @@ class LanScannerViewModel @Inject constructor(
     private val reverseDnsEnricher: ReverseDnsEnricher,
     private val mdnsEnricher: MdnsEnricher,
     private val upnpEnricher: UpnpEnricher = NoOpUpnpEnricher,
+    private val favoriteRepository: FavoriteDeviceRepository = NoOpFavoriteDeviceRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<LanScannerUiState>(LanScannerUiState.Idle)
     val uiState: StateFlow<LanScannerUiState> = _uiState.asStateFlow()
+    private val _favoriteDevices = MutableStateFlow<List<FavoriteDevice>>(emptyList())
+    val favoriteDevices: StateFlow<List<FavoriteDevice>> = _favoriteDevices.asStateFlow()
 
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
@@ -73,6 +82,11 @@ class LanScannerViewModel @Inject constructor(
                     _uiState.value = readiness.toUiState()
                 }
             }
+        }
+        viewModelScope.launch {
+            favoriteRepository
+                .observeFavorites()
+                .collect { favorites -> _favoriteDevices.value = favorites }
         }
     }
 
@@ -188,6 +202,10 @@ class LanScannerViewModel @Inject constructor(
                 if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
                     _uiState.value = session.toUiState()
                     if (session.status == LanScanStatus.COMPLETED) {
+                        syncFavoritesWithDevices(
+                            context = session.initialNetworkContext,
+                            devices = session.discoveredDevices,
+                        )
                         startPostDiscoveryEnrichment(session, generation)
                     }
                 }
@@ -254,6 +272,134 @@ class LanScannerViewModel @Inject constructor(
         _uiState.value = LanScannerUiState.Cancelled(
             session = current.toCancelledSession(),
         )
+    }
+
+    /** Toggles the favorite for an observed Device Center item. */
+    fun toggleFavorite(device: com.networktoolbox.feature.lanscan.domain.model.LanDevice) {
+        val context = currentNetworkContext() ?: return
+        viewModelScope.launch {
+            val candidate = LanFavoriteIdentity.candidate(device, context) ?: return@launch
+            val existing = favoriteRepository.findMatching(candidate)
+            if (existing != null) {
+                favoriteRepository.remove(existing.id)
+            } else {
+                LanFavoriteIdentity.createFavorite(
+                    device = device,
+                    context = context,
+                    now = System.currentTimeMillis(),
+                )?.let { favoriteRepository.add(it) }
+            }
+        }
+    }
+
+    /** Resolves and toggles the favorite represented by the secondary detail route. */
+    fun toggleFavoriteByRouteKey(routeKey: String?) {
+        viewModelScope.launch {
+            val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return@launch
+            val context = currentNetworkContext() ?: return@launch
+            val scope = LanNetworkScope.from(context) ?: return@launch
+            when (parsed) {
+                is LanDeviceDetailRouteKey.Parsed.Favorite -> {
+                    if (parsed.networkScope != scope) return@launch
+                    _favoriteDevices.value.firstOrNull { favorite ->
+                        favorite.networkScope == parsed.networkScope &&
+                            favorite.identityType == parsed.identityType &&
+                            favorite.identityValue == parsed.identityValue
+                    }?.let { favoriteRepository.remove(it.id) }
+                }
+
+                is LanDeviceDetailRouteKey.Parsed.Observed -> {
+                    if (parsed.networkScope != null && parsed.networkScope != scope) return@launch
+                    val device = currentDevices().firstOrNull { device ->
+                        FavoriteIdentityMatcher.normalizeIpv4(device.ipAddress) == parsed.ipv4Address
+                    } ?: return@launch
+                    val candidate = LanFavoriteIdentity.candidate(device, context) ?: return@launch
+                    val existing = favoriteRepository.findMatching(candidate)
+                    if (existing != null) {
+                        favoriteRepository.remove(existing.id)
+                    } else {
+                        LanFavoriteIdentity.createFavorite(
+                            device = device,
+                            context = context,
+                            now = System.currentTimeMillis(),
+                        )?.let { favoriteRepository.add(it) }
+                    }
+                }
+            }
+        }
+    }
+
+    fun detailRouteKey(device: com.networktoolbox.feature.lanscan.domain.model.LanDevice): String {
+        val context = currentNetworkContext()
+        val candidate = context?.let { LanFavoriteIdentity.candidate(device, it) }
+        val favorite = candidate?.let { current ->
+            _favoriteDevices.value.firstOrNull { saved ->
+                FavoriteIdentityMatcher.matches(saved, current)
+            }
+        }
+        return favorite?.let(LanDeviceDetailRouteKey::forFavorite)
+            ?: LanDeviceDetailRouteKey.forObserved(
+                context?.let(LanNetworkScope::from),
+                device.ipAddress,
+            )
+    }
+
+    /** Resolves a detail route against the current scan or a saved favorite. */
+    fun resolveDeviceDetail(routeKey: String?): DeviceDetailPresentation? {
+        val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return null
+        val context = currentNetworkContext() ?: return null
+        val scope = LanNetworkScope.from(context)
+        val devices = currentDevices()
+        return when (parsed) {
+            is LanDeviceDetailRouteKey.Parsed.Observed -> {
+                if (parsed.networkScope != null && parsed.networkScope != scope) return null
+                val device = devices.firstOrNull { current ->
+                    FavoriteIdentityMatcher.normalizeIpv4(current.ipAddress) == parsed.ipv4Address
+                } ?: return null
+                val candidate = LanFavoriteIdentity.candidate(device, context)
+                val favorite = candidate?.let { current ->
+                    _favoriteDevices.value.firstOrNull { saved ->
+                        FavoriteIdentityMatcher.matches(saved, current)
+                    }
+                }
+                DeviceCenterPresentation.detail(
+                    device = device,
+                    favorite = favorite,
+                    context = context,
+                    observedThisScan = true,
+                    detailKey = routeKey.orEmpty(),
+                )
+            }
+
+            is LanDeviceDetailRouteKey.Parsed.Favorite -> {
+                if (parsed.networkScope != scope) return null
+                val favorite = _favoriteDevices.value.firstOrNull { saved ->
+                    saved.networkScope == parsed.networkScope &&
+                        saved.identityType == parsed.identityType &&
+                        saved.identityValue == parsed.identityValue
+                } ?: return null
+                val observed = devices.firstOrNull { device ->
+                    LanFavoriteIdentity.candidate(device, context)?.let { current ->
+                        FavoriteIdentityMatcher.matches(favorite, current)
+                    } == true
+                }
+                if (observed != null) {
+                    DeviceCenterPresentation.detail(
+                        device = observed,
+                        favorite = favorite,
+                        context = context,
+                        observedThisScan = true,
+                        detailKey = routeKey.orEmpty(),
+                    )
+                } else {
+                    DeviceCenterPresentation.detail(
+                        favorite = favorite,
+                        context = context,
+                        detailKey = routeKey.orEmpty(),
+                    )
+                }
+            }
+        }
     }
 
     private fun LanScanSession.toUiState(): LanScannerUiState = when (status) {
@@ -373,6 +519,9 @@ class LanScannerViewModel @Inject constructor(
         _uiState.value = state.copy(
             session = state.session.copy(discoveredDevices = updatedDevices),
         )
+        updatedDevices.firstOrNull { it.ipAddress == result.ipAddress }?.let { device ->
+            syncFavoriteObservation(state.session.initialNetworkContext, device)
+        }
     }
 
     private fun applyMdnsResult(result: MdnsDeviceEnrichment) {
@@ -397,6 +546,9 @@ class LanScannerViewModel @Inject constructor(
         _uiState.value = state.copy(
             session = state.session.copy(discoveredDevices = updatedDevices),
         )
+        updatedDevices.firstOrNull { it.ipAddress == result.ipAddress }?.let { device ->
+            syncFavoriteObservation(state.session.initialNetworkContext, device)
+        }
     }
 
     private fun startUpnpEnrichment(
@@ -447,6 +599,60 @@ class LanScannerViewModel @Inject constructor(
         _uiState.value = state.copy(
             session = state.session.copy(discoveredDevices = updatedDevices),
         )
+        updatedDevices.firstOrNull { it.ipAddress == result.ipAddress }?.let { device ->
+            syncFavoriteObservation(state.session.initialNetworkContext, device)
+        }
+    }
+
+    private fun syncFavoriteObservation(context: NetworkContext, device: com.networktoolbox.feature.lanscan.domain.model.LanDevice) {
+        viewModelScope.launch {
+            val candidate = LanFavoriteIdentity.candidate(device, context) ?: return@launch
+            val favorite = favoriteRepository.findMatching(candidate) ?: return@launch
+            favoriteRepository.updateLastObserved(
+                id = favorite.id,
+                observation = LanFavoriteIdentity.observedMetadata(device),
+            )
+        }
+    }
+
+    private suspend fun syncFavoritesWithDevices(
+        context: NetworkContext,
+        devices: List<com.networktoolbox.feature.lanscan.domain.model.LanDevice>,
+    ) {
+        devices.forEach { device ->
+            val candidate = LanFavoriteIdentity.candidate(device, context) ?: return@forEach
+            val favorite = favoriteRepository.findMatching(candidate) ?: return@forEach
+            favoriteRepository.updateLastObserved(
+                id = favorite.id,
+                observation = LanFavoriteIdentity.observedMetadata(device),
+            )
+        }
+    }
+
+    private fun currentNetworkContext(): NetworkContext? = when (val state = _uiState.value) {
+        LanScannerUiState.Idle -> latestReadiness?.networkContext
+        is LanScannerUiState.Ready -> state.readiness.networkContext
+        is LanScannerUiState.Scanning -> state.networkContext
+        is LanScannerUiState.Completed -> state.session.initialNetworkContext
+        is LanScannerUiState.Cancelled -> state.session.initialNetworkContext
+        is LanScannerUiState.NetworkChanged -> state.session.initialNetworkContext
+        is LanScannerUiState.UnsupportedNetwork -> state.readiness.networkContext
+        is LanScannerUiState.VpnBlocked -> state.readiness.networkContext
+        is LanScannerUiState.Error -> state.readiness?.networkContext
+    }
+
+    private fun currentDevices(): List<com.networktoolbox.feature.lanscan.domain.model.LanDevice> = when (val state = _uiState.value) {
+        LanScannerUiState.Idle,
+        is LanScannerUiState.Ready,
+        is LanScannerUiState.UnsupportedNetwork,
+        is LanScannerUiState.VpnBlocked,
+        is LanScannerUiState.Error,
+        -> emptyList()
+
+        is LanScannerUiState.Scanning -> state.update.discoveredDevices
+        is LanScannerUiState.Completed -> state.session.discoveredDevices
+        is LanScannerUiState.Cancelled -> state.session.discoveredDevices
+        is LanScannerUiState.NetworkChanged -> state.session.discoveredDevices
     }
 
     private fun beginNewEnrichmentGeneration(): Long {

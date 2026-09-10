@@ -1,5 +1,6 @@
 package com.networktoolbox
 
+import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -135,5 +136,45 @@ class AppNavigationStateTest {
         assertEquals(TopLevelDestination.DEVICES, state.topLevelDestination)
         assertEquals(ToolScreen.NONE, state.toolScreen)
         assertEquals(state, state.goBack())
+    }
+
+    @Test
+    fun deviceDetail_isADevicesSecondaryRouteAndBackReturnsToDevices() {
+        val state = AppNavigationState().openDeviceDetail("observed:key:10.0.1.20")
+
+        assertEquals(TopLevelDestination.DEVICES, state.topLevelDestination)
+        assertEquals(ToolScreen.DEVICE_DETAIL, state.toolScreen)
+        assertEquals("observed:key:10.0.1.20", state.deviceDetailKey)
+
+        val returned = state.goBack()
+        assertEquals(TopLevelDestination.DEVICES, returned.topLevelDestination)
+        assertEquals(ToolScreen.NONE, returned.toolScreen)
+        assertEquals(null, returned.deviceDetailKey)
+    }
+
+    @Test
+    fun deviceDetailRoute_survivesSaveableRestore() {
+        val state = AppNavigationState()
+            .selectTopLevel(TopLevelDestination.DEVICES)
+            .openDeviceDetail("favorite:scope:type:value")
+
+        val saverScope = object : SaverScope {
+            override fun canBeSaved(value: Any): Boolean = true
+        }
+        val saved = with(AppNavigationState.Saver) {
+            with(saverScope) { save(state) }
+        }
+        val restored = AppNavigationState.Saver.restore(saved!!)
+
+        assertEquals(state, restored)
+    }
+
+    @Test
+    fun openingAnotherDestination_clearsDeviceDetailKey() {
+        val state = AppNavigationState()
+            .openDeviceDetail("favorite:scope:type:value")
+            .openTool(ToolScreen.PING)
+
+        assertEquals(null, state.deviceDetailKey)
     }
 }

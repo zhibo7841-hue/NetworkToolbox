@@ -205,8 +205,8 @@ Core goals:
 
 - **Visual Refresh Phase 1:** establish and incrementally adopt one
   NetworkToolbox design system across the app shell and existing screens.
-- **LAN Device Center Phase 1:** provide a focused home for managing already
-  discovered local devices, subject to a separate implementation plan.
+- **LAN Device Center:** provide a focused home for managing already discovered
+  local devices through separately approved implementation phases.
 - **Wake-on-LAN:** add a local-device wake action only after its product,
   permission, and safety details are separately confirmed.
 
@@ -214,9 +214,10 @@ The v0.5 app shell uses three top-level destinations: **Home**, **Tools**, and
 **Devices**. Home remains the concise network-status entry point, Tools remains
 the home for the confirmed network utilities (including Wi-Fi Analyzer when it
 is separately implemented), and Devices is the long-term entry point for the
-LAN Device Center. Until that center has its own approved implementation, the
-Devices destination hosts the existing LAN Scanner content and state rather
-than a placeholder or a duplicate device-management feature.
+LAN Device Center. Phase 2A now adds the approved Device Detail and local
+Favorites foundation on top of the existing LAN Scanner state; it remains a
+current-network device-management surface rather than a duplicate discovery
+implementation.
 
 The shared app Drawer provides three app-level secondary destinations:
 **History**, **Privacy & Data**, and **About**. History is the unified home for
@@ -236,9 +237,32 @@ taxonomy:
   iPerf exists.
 - **Diagnostics**: the cross-tool Network Diagnostic entry.
 
-This app-shell change does not authorize Favorites, Wake-on-LAN, MAC/OUI,
-device management, or any new discovery behavior. Those capabilities remain
-subject to their existing product and implementation decisions.
+The earlier app-shell change alone did not authorize Favorites, Wake-on-LAN,
+MAC/OUI, device management, or any new discovery behavior. The Phase 2A scope
+below is the separate approval for the limited Device Detail and Favorites
+foundation; all other capabilities remain subject to their own product and
+implementation decisions.
+
+### V0.5 Phase 2A — LAN Device Center: Device Detail + Favorites Foundation
+
+Phase 2A adds a conservative, local-only device-management foundation to the
+top-level Devices surface:
+
+- Read-only Device Detail for discovered devices and saved favorites.
+- Local Favorites with immediate star toggle and Room persistence.
+- Conservative identity matching that prefers a valid MAC, then a reliable
+  protocol identity, and otherwise uses a network-scoped IPv4 identity.
+- Opaque network scoping so favorites from a different local network are not
+  mixed into the current Device Center.
+- A favorite not observed in the current scan is shown as `本次未发现`; it is
+  never presented as proof of being offline.
+- Rescans update last-known metadata only when the conservative identity and
+  network scope match.
+
+Phase 2A does not add user-defined names or notes, automatic port scanning,
+operating-system inference, background scanning, new discovery protocols,
+Wake-on-LAN, or any cloud/account flow. Wake-on-LAN remains a later phase and
+requires a separately confirmed data, permission, and safety design.
 
 All new functionality must be introduced within the shared design system so
 that the project does not continue accumulating inconsistent page styles and
