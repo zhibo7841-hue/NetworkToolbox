@@ -101,6 +101,73 @@ class LanFavoritesViewModelTest {
     }
 
     @Test
+    fun `observed route supports repeated off on off on transitions`() = runTest {
+        val context = context()
+        val device = device("10.0.1.25")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+
+        listOf(true, false, true, false).forEach { expectedFavorite ->
+            viewModel.toggleFavoriteByRouteKey(route)
+            advanceUntilIdle()
+
+            val detail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
+            assertNotNull(detail)
+            assertEquals(expectedFavorite, detail!!.isFavorite)
+            assertEquals(
+                if (expectedFavorite) "已收藏" else "未收藏",
+                detail.favoriteStatusLabel,
+            )
+            assertEquals(
+                if (expectedFavorite) "取消收藏" else "收藏设备",
+                detail.favoriteToggleContentDescription,
+            )
+            assertEquals(if (expectedFavorite) 1 else 0, viewModel.favoriteDevices.value.size)
+        }
+    }
+
+    @Test
+    fun `favorite route supports repeated on off on off on transitions`() = runTest {
+        val context = context()
+        val device = device("10.0.1.26")
+        val initialFavorite = com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
+            .createFavorite(device = device, context = context, now = 1L)!!
+            .copy(id = 41L)
+        val repository = FakeFavoriteDeviceRepository(initialFavorites = listOf(initialFavorite))
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+        assertTrue(route.startsWith("favorite:"))
+        assertTrue(viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)!!.isFavorite)
+
+        listOf(false, true, false, true).forEach { expectedFavorite ->
+            viewModel.toggleFavoriteByRouteKey(route)
+            advanceUntilIdle()
+
+            val detail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
+            assertNotNull(detail)
+            assertEquals(expectedFavorite, detail!!.isFavorite)
+            assertEquals(
+                if (expectedFavorite) "已收藏" else "未收藏",
+                detail.favoriteStatusLabel,
+            )
+            assertEquals(
+                if (expectedFavorite) "取消收藏" else "收藏设备",
+                detail.favoriteToggleContentDescription,
+            )
+            assertEquals(if (expectedFavorite) 1 else 0, viewModel.favoriteDevices.value.size)
+        }
+    }
+
+    @Test
     fun `open detail receives repository changes without route recreation`() = runTest {
         val context = context()
         val device = device("10.0.1.21")
@@ -163,6 +230,42 @@ class LanFavoritesViewModelTest {
         assertNotNull(detailAfterRemoval)
         assertTrue(detailAfterRemoval!!.isFavorite.not())
         assertEquals("未收藏", detailAfterRemoval.favoriteStatusLabel)
+
+        viewModel.toggleFavoriteByRouteKey(favoriteRoute)
+        advanceUntilIdle()
+
+        val detailAfterReAdd = viewModel.resolveDeviceDetail(
+            favoriteRoute,
+            viewModel.favoriteDevices.value,
+        )
+        assertNotNull(detailAfterReAdd)
+        assertTrue(detailAfterReAdd!!.isFavorite)
+        assertEquals("已收藏", detailAfterReAdd.favoriteStatusLabel)
+        assertEquals(1, viewModel.favoriteDevices.value.size)
+    }
+
+    @Test
+    fun `favorite route without observation remains conservative after removal`() = runTest {
+        val context = context()
+        val favoriteDevice = device("10.0.1.27")
+        val favorite = com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
+            .createFavorite(device = favoriteDevice, context = context, now = 1L)!!
+            .copy(id = 42L)
+        val observedOtherDevice = device("10.0.1.28")
+        val repository = FakeFavoriteDeviceRepository(initialFavorites = listOf(favorite))
+        val viewModel = viewModel(context, observedOtherDevice, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = LanDeviceDetailRouteKey.forFavorite(favorite)
+        assertNotNull(viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value))
+
+        viewModel.toggleFavoriteByRouteKey(route)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.favoriteDevices.value.isEmpty())
+        assertEquals(null, viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value))
     }
 
     @Test
