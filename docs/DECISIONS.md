@@ -353,3 +353,50 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Consequence: no Wake-on-LAN, quick actions, notes, background scans, new
   discovery protocol, or Room schema change; discovery evidence and matching
   remain unchanged.
+
+## Decision: v0.5 Wake-on-LAN Phase 1 — Manual local wake
+
+- Date: 2026-09-12
+- Status: Accepted
+- Product action: Wake-on-LAN is a manual action exposed only from Device
+  Detail. It is not a Device Center card action, Quick Action, automatic
+  follow-up, or diagnostic side effect.
+- Profile ownership: The Wake-on-LAN configuration belongs to the existing
+  `SavedDeviceProfile` and is persisted by the existing saved-profile
+  repository/Room table rather than a separate WOL repository.
+- Profile existence: A profile containing only a valid WOL configuration is
+  allowed to persist with `favorite = false` and `customName = null`. Clearing
+  the WOL configuration removes that profile only when no other persistent
+  profile state remains, following the existing orphan cleanup policy.
+- Result semantics: `唤醒包已发送` means that the local UDP Magic Packet was
+  handed to the socket successfully. It never means that the device woke,
+  powered on, or became reachable.
+- Network target: Phase 1 sends only through the current eligible local
+  Wi-Fi/Ethernet IPv4 network to its directed broadcast. The current network
+  and broadcast are resolved at send time; a cached address is not reused.
+- Remote boundary: Remote-Internet wake, DDNS, cloud services, accounts, and
+  any relay path are out of scope.
+- Support detection: The app does not automatically decide whether a device
+  supports Wake-on-LAN. A valid user-supplied unicast MAC is sufficient to
+  configure the action; failures remain explicit transport/network results.
+- Trigger policy: There is no automatic send, wake-after-Ping, wake-after-TCP,
+  scheduler, background worker, or diagnostic-triggered wake.
+- Port policy: UDP port 9 is the default. Users may change it only to a valid
+  port in the inclusive range 1..65535; the value is validated before any
+  socket is opened.
+- MAC policy: A valid unicast MAC is required. Zero, broadcast, and multicast
+  addresses are rejected; locally administered unicast addresses are accepted.
+  Accepted formats are stored in canonical uppercase colon notation.
+- Binding policy: The sender binds its datagram socket to the current
+  physical LAN `Network`, including when a VPN is present, and never uses a
+  VPN/active-network shortcut as a broadcast target.
+- Network limitations: Cellular and IPv6-only contexts are unsupported for
+  Phase 1 local broadcast. No new location, nearby-device, wake-lock, or
+  multicast permission is introduced.
+- History policy: A Wake-on-LAN action is not a detection result and is not
+  saved in the unified detection History.
+- Security boundary: SecureOn passwords and any secret wake credential are
+  not part of Phase 1.
+- Consequence: Final wake verification, remote wake, automatic support
+  discovery, background/scheduled behavior, and Phase 2 device actions remain
+  future decisions and are not implied by this implementation.

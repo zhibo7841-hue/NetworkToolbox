@@ -7,6 +7,10 @@ import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
 import com.networktoolbox.core.common.favorites.NoOpSavedDeviceRepository
 import com.networktoolbox.core.common.favorites.SavedDeviceRepository
+import com.networktoolbox.core.common.wol.MacAddress
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
+import com.networktoolbox.core.common.wol.WakeOnLanFailureReason
+import com.networktoolbox.core.common.wol.WakeOnLanResult
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
@@ -23,6 +27,10 @@ import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentResult
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnrichmentStatus
 import com.networktoolbox.feature.lanscan.domain.RunLanScan
+import com.networktoolbox.feature.lanscan.domain.NoOpSendWakeOnLan
+import com.networktoolbox.feature.lanscan.domain.SendWakeOnLan
+import com.networktoolbox.core.network.wol.NoOpLanNetworkBindingProvider
+import com.networktoolbox.core.network.wol.LanNetworkBindingProvider
 import com.networktoolbox.feature.lanscan.domain.UpnpDeviceEnrichment
 import com.networktoolbox.feature.lanscan.domain.UpnpEnricher
 import com.networktoolbox.feature.lanscan.domain.upnpNetworkIdentity
@@ -54,6 +62,8 @@ class LanScannerViewModel @Inject constructor(
     private val mdnsEnricher: MdnsEnricher,
     private val upnpEnricher: UpnpEnricher = NoOpUpnpEnricher,
     private val savedDeviceRepository: SavedDeviceRepository = NoOpSavedDeviceRepository,
+    private val lanNetworkBindingProvider: LanNetworkBindingProvider = NoOpLanNetworkBindingProvider,
+    private val sendWakeOnLan: SendWakeOnLan = NoOpSendWakeOnLan,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<LanScannerUiState>(LanScannerUiState.Idle)
     val uiState: StateFlow<LanScannerUiState> = _uiState.asStateFlow()
@@ -65,6 +75,10 @@ class LanScannerViewModel @Inject constructor(
     val favoriteActionError: StateFlow<String?> = _favoriteActionError.asStateFlow()
     private val _customNameActionError = MutableStateFlow<String?>(null)
     val customNameActionError: StateFlow<String?> = _customNameActionError.asStateFlow()
+    private val _wakeOnLanActionMessage = MutableStateFlow<String?>(null)
+    val wakeOnLanActionMessage: StateFlow<String?> = _wakeOnLanActionMessage.asStateFlow()
+    private val _wakeOnLanActionError = MutableStateFlow<String?>(null)
+    val wakeOnLanActionError: StateFlow<String?> = _wakeOnLanActionError.asStateFlow()
 
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
@@ -84,6 +98,7 @@ class LanScannerViewModel @Inject constructor(
     private var customRangeResult: LanCustomRangeResult = LanCustomRangeResult.Incomplete
     private var lastScanRange: LanScanRange? = null
     private val favoriteOperationMutex = Mutex()
+    private val wakeOnLanOperationMutex = Mutex()
 
     init {
         viewModelScope.launch {
@@ -405,6 +420,7 @@ class LanScannerViewModel @Inject constructor(
                     context = context,
                     observedThisScan = true,
                     detailKey = routeKey.orEmpty(),
+                    wakeOnLanContext = context,
                 )
             }
 
@@ -428,6 +444,7 @@ class LanScannerViewModel @Inject constructor(
                         context = context,
                         observedThisScan = true,
                         detailKey = routeKey.orEmpty(),
+                        wakeOnLanContext = context,
                     )
                 } else if (observed != null) {
                     DeviceCenterPresentation.detail(
@@ -436,12 +453,14 @@ class LanScannerViewModel @Inject constructor(
                         context = context,
                         observedThisScan = true,
                         detailKey = routeKey.orEmpty(),
+                        wakeOnLanContext = context,
                     )
                 } else {
                     DeviceCenterPresentation.detail(
                         favorite = checkNotNull(favorite),
                         context = context,
                         detailKey = routeKey.orEmpty(),
+                        wakeOnLanContext = context,
                     )
                 }
             }
@@ -546,6 +565,113 @@ class LanScannerViewModel @Inject constructor(
                 updateCustomNameByRouteKey(routeKey, null)
             }
         }
+    }
+
+    /** Saves only the local WoL configuration on the current device profile. */
+    fun saveWakeOnLanByRouteKey(routeKey: String?, rawMacAddress: String, rawPort: String) {
+        viewModelScope.launch {
+            _wakeOnLanActionMessage.value = null
+            _wakeOnLanActionError.value = null
+            val mac = MacAddress.parse(rawMacAddress)
+            if (mac == null) {
+                _wakeOnLanActionError.value = "请输入有效的单播 MAC 地址。"
+                return@launch
+            }
+            val port = rawPort.trim().toIntOrNull()
+            if (port == null || port !in WakeOnLanConfig.MIN_UDP_PORT..WakeOnLanConfig.MAX_UDP_PORT) {
+                _wakeOnLanActionError.value = "UDP 端口必须在 1 到 65535 之间。"
+                return@launch
+            }
+            val config = WakeOnLanConfig(macAddress = mac, udpPort = port)
+            runWakeOnLanOperation {
+                val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return@runWakeOnLanOperation
+                val context = currentNetworkContext()
+                    ?: return@runWakeOnLanOperation failWakeOnLan("当前网络状态不可用，无法保存配置。")
+                val scope = LanNetworkScope.from(context)
+                    ?: return@runWakeOnLanOperation failWakeOnLan("当前没有可保存的局域网范围。")
+                when (val target = resolveDeviceDetailActionTarget(parsed, context, scope)) {
+                    is DeviceDetailActionTarget.Observed -> {
+                        val candidate = LanFavoriteIdentity.candidate(target.device, target.context)
+                            ?: return@runWakeOnLanOperation failWakeOnLan("当前设备没有可保存的局域网信息。")
+                        val existing = savedDeviceRepository.findMatching(candidate)
+                        if (existing != null) {
+                            savedDeviceRepository.setWakeOnLanConfig(existing.id, config)
+                        } else {
+                            val profile = LanFavoriteIdentity.createSavedProfile(
+                                device = target.device,
+                                context = target.context,
+                                now = System.currentTimeMillis(),
+                            )?.copy(
+                                isFavorite = false,
+                                customName = null,
+                                wolConfig = config,
+                            ) ?: return@runWakeOnLanOperation failWakeOnLan("无法保存当前设备配置。")
+                            savedDeviceRepository.save(profile)
+                        }
+                        _wakeOnLanActionMessage.value = "唤醒配置已保存。"
+                    }
+
+                    is DeviceDetailActionTarget.SavedProfile -> {
+                        savedDeviceRepository.setWakeOnLanConfig(target.profile.id, config)
+                        _wakeOnLanActionMessage.value = "唤醒配置已保存。"
+                    }
+
+                    null -> failWakeOnLan("设备信息已不可用，请返回后重试。")
+                }
+            }
+        }
+    }
+
+    /** Sends one magic packet directly; sending does not imply the device woke up. */
+    fun sendWakeOnLanByRouteKey(routeKey: String?) {
+        viewModelScope.launch {
+            _wakeOnLanActionMessage.value = null
+            _wakeOnLanActionError.value = null
+            runWakeOnLanOperation {
+                val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return@runWakeOnLanOperation
+                val context = currentNetworkContext()
+                    ?: return@runWakeOnLanOperation failWakeOnLan("当前网络状态不可用，无法发送唤醒包。")
+                val scope = LanNetworkScope.from(context)
+                    ?: return@runWakeOnLanOperation failWakeOnLan("当前没有可用的局域网。")
+                val profile = when (val target = resolveDeviceDetailActionTarget(parsed, context, scope)) {
+                    is DeviceDetailActionTarget.SavedProfile -> target.profile
+                    is DeviceDetailActionTarget.Observed -> {
+                        val candidate = LanFavoriteIdentity.candidate(target.device, target.context)
+                            ?: return@runWakeOnLanOperation failWakeOnLan("设备信息已不可用，请重试。")
+                        savedDeviceRepository.findMatching(candidate)
+                    }
+
+                    null -> null
+                }
+                if (profile == null) {
+                    return@runWakeOnLanOperation failWakeOnLan("请先配置 MAC 地址。")
+                }
+                when (val result = sendWakeOnLan(profile)) {
+                    is WakeOnLanResult.Sent -> {
+                        _wakeOnLanActionMessage.value = "唤醒包已发送"
+                    }
+
+                    is WakeOnLanResult.Failed -> failWakeOnLan(result.reason.toUserMessage())
+                    WakeOnLanResult.Cancelled -> Unit
+                }
+            }
+        }
+    }
+
+    private suspend fun runWakeOnLanOperation(operation: suspend () -> Unit) {
+        wakeOnLanOperationMutex.withLock {
+            try {
+                operation()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _wakeOnLanActionError.value = "唤醒包发送失败，请检查当前局域网连接后重试。"
+            }
+        }
+    }
+
+    private fun failWakeOnLan(message: String) {
+        _wakeOnLanActionError.value = message
     }
 
     private suspend fun runCustomNameOperation(operation: suspend () -> Unit) {
@@ -1006,3 +1132,20 @@ private fun LanScannerUiState.canRefreshReadiness(): Boolean = when (this) {
 
 private const val MAX_MDNS_OBSERVATIONS_PER_DEVICE = 16
 private const val MAX_UPNP_OBSERVATIONS_PER_DEVICE = 8
+
+private fun WakeOnLanFailureReason.toUserMessage(): String = when (this) {
+    WakeOnLanFailureReason.NOT_CONFIGURED -> "请先配置 MAC 地址。"
+    WakeOnLanFailureReason.INVALID_CONFIG -> "唤醒配置无效，请重新检查 MAC 地址和 UDP 端口。"
+    WakeOnLanFailureReason.NO_ACTIVE_LAN,
+    WakeOnLanFailureReason.UNSUPPORTED_NETWORK,
+    -> "当前没有可用的 Wi-Fi 或以太网网络。"
+
+    WakeOnLanFailureReason.NO_IPV4 -> "当前局域网没有可用的 IPv4 地址。"
+    WakeOnLanFailureReason.BROADCAST_UNAVAILABLE -> "当前局域网没有可用的 IPv4 广播地址。"
+    WakeOnLanFailureReason.NETWORK_SCOPE_MISMATCH ->
+        "当前网络与保存配置不匹配，无法发送唤醒包。"
+
+    WakeOnLanFailureReason.PERMISSION_DENIED,
+    WakeOnLanFailureReason.SEND_FAILED,
+    -> "无法发送唤醒包，请检查当前局域网连接后重试。"
+}

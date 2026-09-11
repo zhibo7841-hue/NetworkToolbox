@@ -70,6 +70,20 @@ interface FavoriteDeviceDao {
     @Query("UPDATE favorite_devices SET custom_name = :customName, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateCustomName(id: Long, customName: String?, updatedAt: Long)
 
+    @Query(
+        "UPDATE favorite_devices SET " +
+            "wol_mac_address = :wolMacAddress, " +
+            "wol_udp_port = :wolUdpPort, " +
+            "updated_at = :updatedAt " +
+            "WHERE id = :id",
+    )
+    suspend fun updateWakeOnLan(
+        id: Long,
+        wolMacAddress: String?,
+        wolUdpPort: Int?,
+        updatedAt: Long,
+    )
+
     @Query("DELETE FROM favorite_devices WHERE id = :id")
     suspend fun deleteById(id: Long)
 }

@@ -9,6 +9,9 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanMdnsObservation
 import com.networktoolbox.feature.lanscan.domain.model.LanUpnpObservation
+import com.networktoolbox.feature.lanscan.domain.LanNetworkScope
+import com.networktoolbox.core.common.wol.MacAddress
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -16,6 +19,61 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceDetailPresentationTest {
+    @Test
+    fun `wol presentation is available only for matching physical lan`() {
+        val context = context()
+        val profile = FavoriteDevice(
+            identityType = FavoriteIdentityType.NETWORK_IP,
+            identityValue = "10.0.1.50",
+            networkScope = LanNetworkScope.from(context)!!,
+            lastKnownIpv4 = "10.0.1.50",
+            lastKnownDisplayName = null,
+            lastKnownHostname = null,
+            lastKnownMdnsName = null,
+            lastKnownUpnpName = null,
+            macAddress = null,
+            vendor = null,
+            model = null,
+            createdAt = 1L,
+            lastSeenAt = 1L,
+            wolConfig = WakeOnLanConfig(MacAddress.parse("00:11:22:33:44:55")!!),
+        )
+
+        val detail = DeviceCenterPresentation.detail(profile, context)
+
+        assertEquals(WakeOnLanAvailability.AVAILABLE, detail.wakeOnLan.availability)
+        assertTrue(detail.wakeOnLan.canSend)
+    }
+
+    @Test
+    fun `wol presentation disables send when scope changes`() {
+        val context = context()
+        val config = WakeOnLanConfig(MacAddress.parse("00:11:22:33:44:55")!!)
+
+        val presentation = DeviceCenterPresentation.wakeOnLan(
+            config = config,
+            savedNetworkScope = LanNetworkScope.from(context),
+            context = context.copy(ipv4Address = "10.0.2.20", gateway = "10.0.2.1"),
+        )
+
+        assertEquals(WakeOnLanAvailability.SCOPE_MISMATCH, presentation.availability)
+        assertFalse(presentation.canSend)
+    }
+
+    @Test
+    fun `wol presentation marks cellular as unsupported`() {
+        val context = context().copy(connectionType = ConnectionType.CELLULAR)
+
+        val presentation = DeviceCenterPresentation.wakeOnLan(
+            config = null,
+            savedNetworkScope = null,
+            context = context,
+        )
+
+        assertEquals(WakeOnLanAvailability.UNSUPPORTED_NETWORK, presentation.availability)
+        assertFalse(presentation.canSend)
+    }
+
     @Test
     fun `unknown detail stays neutral and keeps ip`() {
         val detail = DeviceCenterPresentation.detail(

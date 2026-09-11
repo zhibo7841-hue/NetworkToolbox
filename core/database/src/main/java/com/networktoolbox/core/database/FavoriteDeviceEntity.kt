@@ -7,6 +7,8 @@ import androidx.room.PrimaryKey
 import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteIdentityType
 import com.networktoolbox.core.common.favorites.SavedDeviceProfile
+import com.networktoolbox.core.common.wol.MacAddress
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 
 @Entity(
     tableName = "favorite_devices",
@@ -55,6 +57,10 @@ data class FavoriteDeviceEntity(
     val isFavorite: Int = 1,
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = createdAt,
+    @ColumnInfo(name = "wol_mac_address")
+    val wolMacAddress: String? = null,
+    @ColumnInfo(name = "wol_udp_port")
+    val wolUdpPort: Int? = null,
 )
 
 fun FavoriteDevice.toEntity(): FavoriteDeviceEntity = FavoriteDeviceEntity(
@@ -77,6 +83,8 @@ fun FavoriteDevice.toEntity(): FavoriteDeviceEntity = FavoriteDeviceEntity(
     customName = customName,
     isFavorite = if (isFavorite) 1 else 0,
     updatedAt = updatedAt,
+    wolMacAddress = wolConfig?.macAddress?.toString(),
+    wolUdpPort = wolConfig?.udpPort,
 )
 
 fun FavoriteDeviceEntity.toSavedDeviceProfile(): SavedDeviceProfile? = runCatching {
@@ -100,8 +108,18 @@ fun FavoriteDeviceEntity.toSavedDeviceProfile(): SavedDeviceProfile? = runCatchi
         customName = customName,
         isFavorite = isFavorite != 0,
         updatedAt = updatedAt,
+        // A malformed optional WoL value must not make an otherwise valid
+        // saved profile disappear. It is treated as an absent configuration.
+        wolConfig = wolConfigOrNull(),
     )
 }.getOrNull()
+
+private fun FavoriteDeviceEntity.wolConfigOrNull(): WakeOnLanConfig? {
+    val mac = MacAddress.parse(wolMacAddress ?: return null) ?: return null
+    return runCatching {
+        WakeOnLanConfig(macAddress = mac, udpPort = wolUdpPort ?: WakeOnLanConfig.DEFAULT_UDP_PORT)
+    }.getOrNull()
+}
 
 /** Compatibility mapper for pre-Phase-2B database callers. */
 fun FavoriteDeviceEntity.toFavoriteDevice(): FavoriteDevice? = toSavedDeviceProfile()

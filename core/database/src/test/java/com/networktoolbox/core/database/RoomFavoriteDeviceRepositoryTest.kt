@@ -6,6 +6,8 @@ import com.networktoolbox.core.common.favorites.FavoriteDeviceObservation
 import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
 import com.networktoolbox.core.common.favorites.FavoriteIdentityType
 import com.networktoolbox.core.common.favorites.SavedDeviceRepository
+import com.networktoolbox.core.common.wol.MacAddress
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -186,6 +188,67 @@ class RoomFavoriteDeviceRepositoryTest {
         assertEquals(1, repository.observeProfiles().first().size)
     }
 
+    @Test
+    fun `wol only profile survives without favorite or custom name`() = runBlocking {
+        val repository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val config = WakeOnLanConfig(MacAddress.parse("00:11:22:33:44:55")!!)
+        val id = repository.save(
+            favorite().copy(
+                isFavorite = false,
+                customName = null,
+                wolConfig = config,
+            ),
+        )
+
+        val saved = repository.observeProfiles().first().single()
+        assertEquals(id, saved.id)
+        assertEquals(config, saved.wolConfig)
+        assertTrue(!saved.isFavorite)
+        assertNull(saved.customName)
+    }
+
+    @Test
+    fun `clearing wol config removes an otherwise orphaned profile`() = runBlocking {
+        val repository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val id = repository.save(
+            favorite().copy(
+                isFavorite = false,
+                customName = null,
+                wolConfig = WakeOnLanConfig(MacAddress.parse("00:11:22:33:44:55")!!),
+            ),
+        )
+
+        repository.setWakeOnLanConfig(id, null)
+
+        assertTrue(repository.observeProfiles().first().isEmpty())
+    }
+
+    @Test
+    fun `clearing wol config preserves favorite or custom profile`() = runBlocking {
+        val repository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val favoriteId = repository.save(
+            favorite().copy(
+                wolConfig = WakeOnLanConfig(MacAddress.parse("00:11:22:33:44:55")!!),
+            ),
+        )
+        val customId = repository.save(
+            favorite(ip = "10.0.1.21", identityValue = "10.0.1.21").copy(
+                isFavorite = false,
+                customName = "HomeLab",
+                wolConfig = WakeOnLanConfig(MacAddress.parse("02:11:22:33:44:55")!!),
+            ),
+        )
+
+        repository.setWakeOnLanConfig(favoriteId, null)
+        repository.setWakeOnLanConfig(customId, null)
+
+        val remaining = repository.observeProfiles().first()
+        assertEquals(setOf(favoriteId, customId), remaining.map { it.id }.toSet())
+        assertTrue(remaining.first { it.id == favoriteId }.isFavorite)
+        assertEquals("HomeLab", remaining.first { it.id == customId }.customName)
+        assertTrue(remaining.all { it.wolConfig == null })
+    }
+
     private fun favorite(
         ip: String = "10.0.1.20",
         identityValue: String = "AA:BB:CC:DD:EE:FF",
@@ -293,6 +356,22 @@ private class FakeFavoriteDeviceDao : FavoriteDeviceDao {
         if (index < 0) return
         entities[index] = entities[index].copy(
             customName = customName,
+            updatedAt = updatedAt,
+        )
+        publish()
+    }
+
+    override suspend fun updateWakeOnLan(
+        id: Long,
+        wolMacAddress: String?,
+        wolUdpPort: Int?,
+        updatedAt: Long,
+    ) {
+        val index = entities.indexOfFirst { it.id == id }
+        if (index < 0) return
+        entities[index] = entities[index].copy(
+            wolMacAddress = wolMacAddress,
+            wolUdpPort = wolUdpPort,
             updatedAt = updatedAt,
         )
         publish()

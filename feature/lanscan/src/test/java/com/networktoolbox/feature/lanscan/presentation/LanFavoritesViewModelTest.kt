@@ -7,6 +7,7 @@ import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.core.common.favorites.SavedDeviceRepository
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
@@ -524,6 +525,18 @@ private class FakeFavoriteDeviceRepository(
         } else {
             state.value = state.value.map { profile ->
                 if (profile.id == id) profile.copy(customName = customName) else profile
+            }
+        }
+    }
+
+    override suspend fun setWakeOnLanConfig(id: Long, config: WakeOnLanConfig?) {
+        if (failWrites) error("write failed")
+        val existing = state.value.firstOrNull { it.id == id } ?: return
+        if (config == null && !existing.isFavorite && existing.customName == null) {
+            delete(id)
+        } else {
+            state.value = state.value.map { profile ->
+                if (profile.id == id) profile.copy(wolConfig = config) else profile
             }
         }
     }

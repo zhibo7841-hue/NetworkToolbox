@@ -4,6 +4,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import java.lang.reflect.Proxy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,6 +58,28 @@ class DatabaseMigrationsTest {
     }
 
     @Test
+    fun `wake on lan migration is additive and preserves old rows`() {
+        val statements = mutableListOf<String>()
+        val database = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java),
+        ) { _, method, args ->
+            if (method.name == "execSQL") statements += args?.firstOrNull()?.toString().orEmpty()
+            defaultValue(method.returnType)
+        } as SupportSQLiteDatabase
+
+        assertEquals(3, MIGRATION_3_4.startVersion)
+        assertEquals(4, MIGRATION_3_4.endVersion)
+        MIGRATION_3_4.migrate(database)
+
+        assertEquals(2, statements.size)
+        assertTrue(statements.any { it.contains("ADD COLUMN wol_mac_address") })
+        assertTrue(statements.any { it.contains("ADD COLUMN wol_udp_port") })
+        assertFalse(statements.any { it.contains("DROP", ignoreCase = true) })
+        assertFalse(statements.any { it.contains("DELETE", ignoreCase = true) })
+    }
+
+    @Test
     fun `legacy v2 favorite rows map to profiles without changing history mapping`() {
         val legacyRows = listOf(
             legacyFavorite(id = 1L, ip = "10.0.1.10", createdAt = 10L),
@@ -85,6 +108,17 @@ class DatabaseMigrationsTest {
         assertEquals("10.0.1.10", historyRecord.title)
         assertEquals("{}", historyRecord.detailJson)
         assertNull(profiles.first().customName)
+    }
+
+    @Test
+    fun `invalid optional wol columns do not discard a saved profile`() {
+        val profile = legacyFavorite(id = 3L, ip = "10.0.1.12", createdAt = 30L)
+            .copy(wolMacAddress = "not-a-mac", wolUdpPort = 0)
+            .toSavedDeviceProfile()
+
+        assertNotNull(profile)
+        assertNull(profile?.wolConfig)
+        assertEquals("10.0.1.12", profile?.lastKnownIpv4)
     }
 
     private fun legacyFavorite(id: Long, ip: String, createdAt: Long) = FavoriteDeviceEntity(

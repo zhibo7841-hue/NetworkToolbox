@@ -51,3 +51,11 @@ val MIGRATION_2_3: Migration = object : Migration(2, 3) {
         db.execSQL("UPDATE favorite_devices SET updated_at = created_at WHERE updated_at = 0")
     }
 }
+
+/** Adds optional Wake-on-LAN configuration without rewriting saved profiles. */
+val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE favorite_devices ADD COLUMN wol_mac_address TEXT")
+        db.execSQL("ALTER TABLE favorite_devices ADD COLUMN wol_udp_port INTEGER")
+    }
+}

@@ -283,3 +283,41 @@ boundaries remain different: the scanner supports its existing automatic and
 custom range flow, while Device Center remains current-network-only. This is a
 presentation and role boundary; discovery evidence, Network Change handling,
 and Room v3 persistence are unchanged.
+
+## Wake-on-LAN Phase 1 — Manual local wake
+
+The v0.5 Phase 1 Wake-on-LAN path is intentionally limited to an explicit
+action from Device Detail. Its dependency direction is:
+
+`SavedDeviceProfile -> WakeOnLanConfig -> WakeOnLanUseCase ->
+MagicPacketBuilder -> IPv4BroadcastResolver -> WakeOnLanSender`
+
+`core:common` owns the pure Kotlin `MacAddress`, `WakeOnLanConfig`, Magic
+Packet builder, directed-broadcast resolver, and result/failure semantics.
+The MAC parser accepts the supported user formats and persists one canonical
+uppercase colon representation. The packet builder has no Android or socket
+dependency and always produces the standard 102-byte payload. The broadcast
+resolver uses the current IPv4 address and prefix and reports `/31`, `/32`,
+invalid, or unavailable networks explicitly instead of fabricating a target.
+
+`core:network` owns the Android adapter boundary. The current eligible
+Wi-Fi/Ethernet `Network` is selected and the `DatagramSocket` is bound to it
+before sending to the resolver's directed broadcast and configured UDP port.
+The provider reads the current network context for every send, skips a VPN as
+the physical LAN choice, and never requires a target-IP reachability probe.
+Android framework classes, `Network.bindSocket`, and `DatagramSocket` do not
+leak into Compose or feature UI.
+
+`feature:lanscan` owns the `WakeOnLanUseCase`, which validates the saved
+profile, current network scope, eligible network type, IPv4 availability, and
+fresh directed broadcast before delegating to the sender. Device Detail
+renders configuration and send state through the existing ViewModel/repository
+path. A send is not a network detection result and is not written to the
+unified detection History. Late or changed network context produces a safe
+failure/disabled action rather than reusing a cached broadcast.
+
+This phase does not add automatic support detection, automatic or scheduled
+wake, remote/cloud/DDNS delivery, SecureOn, cellular or IPv6-only broadcast,
+new permissions, or a separate device-action repository. `SavedDeviceProfile`
+remains the sole persistence owner; the additive Room migration preserves all
+existing favorite, custom-name, identity, scope, and observation data.

@@ -175,6 +175,8 @@ class MainActivity : ComponentActivity() {
             val savedDeviceProfiles by lanScannerViewModel.savedProfiles.collectAsState()
             val favoriteActionError by lanScannerViewModel.favoriteActionError.collectAsState()
             val customNameActionError by lanScannerViewModel.customNameActionError.collectAsState()
+            val wakeOnLanActionMessage by lanScannerViewModel.wakeOnLanActionMessage.collectAsState()
+            val wakeOnLanActionError by lanScannerViewModel.wakeOnLanActionError.collectAsState()
             val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
             var navigationState by rememberSaveable(stateSaver = AppNavigationState.Saver) {
                 mutableStateOf(AppNavigationState())
@@ -483,6 +485,20 @@ class MainActivity : ComponentActivity() {
                                         navigationState.deviceDetailKey,
                                     )
                                 },
+                                onSaveWakeOnLan = { macAddress, udpPort ->
+                                    lanScannerViewModel.saveWakeOnLanByRouteKey(
+                                        routeKey = navigationState.deviceDetailKey,
+                                        rawMacAddress = macAddress,
+                                        rawPort = udpPort,
+                                    )
+                                },
+                                onSendWakeOnLan = {
+                                    lanScannerViewModel.sendWakeOnLanByRouteKey(
+                                        navigationState.deviceDetailKey,
+                                    )
+                                },
+                                wakeOnLanActionMessage = wakeOnLanActionMessage,
+                                wakeOnLanActionErrorMessage = wakeOnLanActionError,
                             )
                         }
                     }

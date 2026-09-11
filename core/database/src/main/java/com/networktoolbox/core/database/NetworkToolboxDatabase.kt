@@ -5,8 +5,8 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [HistoryEntity::class, FavoriteDeviceEntity::class],
-    version = 3,
-    exportSchema = false,
+    version = 4,
+    exportSchema = true,
 )
 abstract class NetworkToolboxDatabase : RoomDatabase() {
     abstract fun historyDao(): HistoryDao

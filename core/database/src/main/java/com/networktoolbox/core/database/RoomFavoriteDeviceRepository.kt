@@ -9,6 +9,7 @@ import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
 import com.networktoolbox.core.common.favorites.SavedDeviceProfile
 import com.networktoolbox.core.common.favorites.SavedDeviceRepository
 import javax.inject.Inject
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -38,7 +39,7 @@ class RoomFavoriteDeviceRepository @Inject constructor(
     override suspend fun setFavorite(id: Long, isFavorite: Boolean) {
         val existing = favoriteDeviceDao.findById(id) ?: return
         val now = System.currentTimeMillis()
-        if (!isFavorite && existing.customName.isNullOrBlank()) {
+        if (!isFavorite && existing.customName.isNullOrBlank() && existing.wolMacAddress == null) {
             favoriteDeviceDao.deleteById(id)
         } else {
             favoriteDeviceDao.updateFavorite(
@@ -54,12 +55,26 @@ class RoomFavoriteDeviceRepository @Inject constructor(
             DeviceDisplayNameResolver.validateCustomName(it).getOrElse { error -> throw error }
         }
         val existing = favoriteDeviceDao.findById(id) ?: return
-        if (normalized == null && existing.isFavorite == 0) {
+        if (normalized == null && existing.isFavorite == 0 && existing.wolMacAddress == null) {
             favoriteDeviceDao.deleteById(id)
         } else {
             favoriteDeviceDao.updateCustomName(
                 id = id,
                 customName = normalized,
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    override suspend fun setWakeOnLanConfig(id: Long, config: WakeOnLanConfig?) {
+        val existing = favoriteDeviceDao.findById(id) ?: return
+        if (config == null && existing.isFavorite == 0 && existing.customName.isNullOrBlank()) {
+            favoriteDeviceDao.deleteById(id)
+        } else {
+            favoriteDeviceDao.updateWakeOnLan(
+                id = id,
+                wolMacAddress = config?.macAddress?.toString(),
+                wolUdpPort = config?.udpPort,
                 updatedAt = System.currentTimeMillis(),
             )
         }

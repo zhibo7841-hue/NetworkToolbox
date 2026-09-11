@@ -8,6 +8,8 @@ import com.networktoolbox.core.network.data.AndroidNetworkRepository
 import com.networktoolbox.core.network.data.AndroidPingEngine
 import com.networktoolbox.core.network.data.AndroidPingSessionProbe
 import com.networktoolbox.core.network.data.AndroidTcpPortChecker
+import com.networktoolbox.core.network.data.AndroidLanNetworkBindingProvider
+import com.networktoolbox.core.network.data.AndroidWakeOnLanSender
 import com.networktoolbox.core.network.data.traceroute.AndroidNativeUdpTracerouteProbe
 import com.networktoolbox.core.network.data.traceroute.AndroidTracerouteNetworkProvider
 import com.networktoolbox.core.network.dns.DnsEngine
@@ -22,6 +24,8 @@ import com.networktoolbox.core.network.traceroute.TracerouteEngine
 import com.networktoolbox.core.network.traceroute.TracerouteNetworkProvider
 import com.networktoolbox.core.network.traceroute.UdpTracerouteNativeProbe
 import com.networktoolbox.core.network.repository.NetworkRepository
+import com.networktoolbox.core.network.wol.LanNetworkBindingProvider
+import com.networktoolbox.core.network.wol.WakeOnLanSender
 import com.networktoolbox.feature.dashboard.domain.ObserveNetworkContextUseCase
 import com.networktoolbox.feature.dns.domain.LookupDnsUseCase
 import com.networktoolbox.feature.ping.domain.ExecutePingUseCase
@@ -45,6 +49,8 @@ import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadinessUseCase
 import com.networktoolbox.feature.lanscan.domain.RunLanScanUseCase
 import com.networktoolbox.feature.lanscan.domain.RunLanScan
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
+import com.networktoolbox.feature.lanscan.domain.SendWakeOnLan
+import com.networktoolbox.feature.lanscan.domain.SendWakeOnLanUseCase
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsResolver
 import com.networktoolbox.feature.lanscan.domain.DefaultUpnpEnricher
 import com.networktoolbox.feature.lanscan.domain.SsdpDiscovery
@@ -108,6 +114,26 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideTcpPortChecker(): TcpPortChecker = AndroidTcpPortChecker()
+
+    @Provides
+    @Singleton
+    fun provideLanNetworkBindingProvider(
+        @ApplicationContext context: Context,
+    ): LanNetworkBindingProvider = AndroidLanNetworkBindingProvider(context)
+
+    @Provides
+    @Singleton
+    fun provideWakeOnLanSender(): WakeOnLanSender = AndroidWakeOnLanSender()
+
+    @Provides
+    @Singleton
+    fun provideSendWakeOnLan(
+        bindingProvider: LanNetworkBindingProvider,
+        sender: WakeOnLanSender,
+    ): SendWakeOnLan = SendWakeOnLanUseCase(
+        bindingProvider = bindingProvider,
+        sender = sender,
+    )
 
     @Provides
     @Singleton

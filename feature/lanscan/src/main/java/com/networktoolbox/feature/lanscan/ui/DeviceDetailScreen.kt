@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -26,9 +27,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.networktoolbox.core.common.favorites.DeviceDisplayNameResolver
+import com.networktoolbox.core.common.wol.MacAddress
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
+import com.networktoolbox.feature.lanscan.presentation.WakeOnLanAvailability
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.OutlinedNetworkCard
+import com.networktoolbox.core.designsystem.PrimaryActionButton
+import com.networktoolbox.core.designsystem.SecondaryActionButton
 import com.networktoolbox.core.designsystem.SecondaryInformationHeader
 import com.networktoolbox.core.designsystem.ToolResultRow
 import com.networktoolbox.core.designsystem.ToolScreenLayout
@@ -46,14 +52,33 @@ fun DeviceDetailScreen(
     onRestoreAutomaticName: () -> Unit = {},
     favoriteErrorMessage: String? = null,
     customNameErrorMessage: String? = null,
+    onSaveWakeOnLan: (String, String) -> Unit = { _, _ -> },
+    onSendWakeOnLan: () -> Unit = {},
+    wakeOnLanActionMessage: String? = null,
+    wakeOnLanActionErrorMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
     var showNameDialog by rememberSaveable(detail?.detailKey) { mutableStateOf(false) }
+    var showWakeOnLanDialog by rememberSaveable(detail?.detailKey) { mutableStateOf(false) }
     var draftName by rememberSaveable(detail?.detailKey) {
         mutableStateOf(detail?.customName.orEmpty())
     }
+    var draftWakeOnLanMac by rememberSaveable(detail?.detailKey) {
+        mutableStateOf(detail?.wakeOnLan?.config?.macAddress?.toString().orEmpty())
+    }
+    var draftWakeOnLanPort by rememberSaveable(detail?.detailKey) {
+        mutableStateOf(
+            detail?.wakeOnLan?.config?.udpPort?.toString()
+                ?: WakeOnLanConfig.DEFAULT_UDP_PORT.toString(),
+        )
+    }
     LaunchedEffect(detail?.detailKey, detail?.customName) {
         draftName = detail?.customName.orEmpty()
+    }
+    LaunchedEffect(detail?.detailKey, detail?.wakeOnLan?.config) {
+        draftWakeOnLanMac = detail?.wakeOnLan?.config?.macAddress?.toString().orEmpty()
+        draftWakeOnLanPort = detail?.wakeOnLan?.config?.udpPort?.toString()
+            ?: WakeOnLanConfig.DEFAULT_UDP_PORT.toString()
     }
 
     ToolScreenLayout(modifier = modifier) {
@@ -165,6 +190,71 @@ fun DeviceDetailScreen(
             detail.networkScope?.takeIf(String::isNotBlank)?.let { ToolResultRow("范围", it) }
         }
 
+        DeviceDetailSection(title = stringResource(com.networktoolbox.feature.lanscan.R.string.wol_section_title)) {
+            detail.wakeOnLan.config?.let { config ->
+                ToolResultRow(
+                    stringResource(com.networktoolbox.feature.lanscan.R.string.wol_mac_label),
+                    config.macAddress.toString(),
+                )
+                ToolResultRow(
+                    stringResource(com.networktoolbox.feature.lanscan.R.string.wol_udp_port_label),
+                    stringResource(
+                        com.networktoolbox.feature.lanscan.R.string.wol_udp_port_value,
+                        config.udpPort,
+                    ),
+                )
+            } ?: Text(
+                stringResource(com.networktoolbox.feature.lanscan.R.string.wol_not_configured),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(com.networktoolbox.feature.lanscan.R.string.wol_section_helper),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            wakeOnLanStatusMessage(detail.wakeOnLan.availability)?.let { message ->
+                Text(
+                    message,
+                    color = if (detail.wakeOnLan.availability == WakeOnLanAvailability.SCOPE_MISMATCH) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            wakeOnLanActionMessage?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.primary)
+            }
+            wakeOnLanActionErrorMessage?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error)
+            }
+            SecondaryActionButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { showWakeOnLanDialog = true },
+                enabled = detail.wakeOnLan.canConfigure,
+            ) {
+                Text(
+                    stringResource(
+                        if (detail.wakeOnLan.config == null) {
+                            com.networktoolbox.feature.lanscan.R.string.wol_configure
+                        } else {
+                            com.networktoolbox.feature.lanscan.R.string.wol_edit
+                        },
+                    ),
+                )
+            }
+            if (detail.wakeOnLan.config != null) {
+                PrimaryActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onSendWakeOnLan,
+                    enabled = detail.wakeOnLan.canSend,
+                ) {
+                    Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_send))
+                }
+            }
+        }
+
         DeviceDetailSection(title = "观察状态") {
             ToolResultRow("本次扫描", if (detail.observedThisScan) "已发现" else "本次未发现")
             detail.lastSeenAt?.takeIf { it > 0L }?.let { timestamp ->
@@ -226,6 +316,84 @@ fun DeviceDetailScreen(
                 },
             )
         }
+
+        if (showWakeOnLanDialog) {
+            val macValidation = MacAddress.parse(draftWakeOnLanMac)
+            val port = draftWakeOnLanPort.trim().toIntOrNull()
+            val portValid = port in WakeOnLanConfig.MIN_UDP_PORT..WakeOnLanConfig.MAX_UDP_PORT
+            AlertDialog(
+                onDismissRequest = { showWakeOnLanDialog = false },
+                title = {
+                    Text(
+                        stringResource(
+                            if (detail.wakeOnLan.config == null) {
+                                com.networktoolbox.feature.lanscan.R.string.wol_dialog_title_configure
+                            } else {
+                                com.networktoolbox.feature.lanscan.R.string.wol_dialog_title_edit
+                            },
+                        ),
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
+                        OutlinedTextField(
+                            modifier = Modifier.fillMaxWidth(),
+                            value = draftWakeOnLanMac,
+                            onValueChange = { draftWakeOnLanMac = it },
+                            label = {
+                                Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_mac_label))
+                            },
+                            placeholder = {
+                                Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_mac_placeholder))
+                            },
+                            supportingText = {
+                                Text(
+                                    if (draftWakeOnLanMac.isNotBlank() && macValidation == null) {
+                                        stringResource(com.networktoolbox.feature.lanscan.R.string.wol_mac_invalid)
+                                    } else {
+                                        stringResource(com.networktoolbox.feature.lanscan.R.string.wol_mac_helper)
+                                    },
+                                )
+                            },
+                            isError = draftWakeOnLanMac.isNotBlank() && macValidation == null,
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            modifier = Modifier.fillMaxWidth(),
+                            value = draftWakeOnLanPort,
+                            onValueChange = { draftWakeOnLanPort = it },
+                            label = {
+                                Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_udp_port_label))
+                            },
+                            supportingText = {
+                                if (draftWakeOnLanPort.isNotBlank() && !portValid) {
+                                    Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_port_invalid))
+                                }
+                            },
+                            isError = draftWakeOnLanPort.isNotBlank() && !portValid,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = macValidation != null && portValid,
+                        onClick = {
+                            onSaveWakeOnLan(draftWakeOnLanMac, draftWakeOnLanPort)
+                            showWakeOnLanDialog = false
+                        },
+                    ) {
+                        Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_dialog_save))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showWakeOnLanDialog = false }) {
+                        Text(stringResource(com.networktoolbox.feature.lanscan.R.string.wol_dialog_cancel))
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -246,3 +414,26 @@ private fun DeviceDetailSection(
 private fun formatTimestamp(timestamp: Long): String = DateFormat
     .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
     .format(Date(timestamp))
+
+@Composable
+private fun wakeOnLanStatusMessage(availability: WakeOnLanAvailability): String? = when (availability) {
+    WakeOnLanAvailability.NOT_CONFIGURED,
+    WakeOnLanAvailability.AVAILABLE,
+    -> null
+
+    WakeOnLanAvailability.NO_ACTIVE_NETWORK -> stringResource(
+        com.networktoolbox.feature.lanscan.R.string.wol_no_active_network,
+    )
+    WakeOnLanAvailability.UNSUPPORTED_NETWORK -> stringResource(
+        com.networktoolbox.feature.lanscan.R.string.wol_unsupported_network,
+    )
+    WakeOnLanAvailability.NO_IPV4 -> stringResource(
+        com.networktoolbox.feature.lanscan.R.string.wol_no_ipv4,
+    )
+    WakeOnLanAvailability.SCOPE_MISMATCH -> stringResource(
+        com.networktoolbox.feature.lanscan.R.string.wol_scope_mismatch,
+    )
+    WakeOnLanAvailability.BROADCAST_UNAVAILABLE -> stringResource(
+        com.networktoolbox.feature.lanscan.R.string.wol_no_broadcast,
+    )
+}

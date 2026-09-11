@@ -1,5 +1,6 @@
 package com.networktoolbox.core.common.favorites
 
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -8,7 +9,7 @@ import kotlinx.coroutines.flow.emptyFlow
  *
  * Profile existence is deliberately separate from [SavedDeviceProfile.isFavorite].
  * Implementations own orphan cleanup when a profile has neither a favorite
- * flag nor a custom name.
+ * flag, a custom name, nor a Wake-on-LAN configuration.
  */
 interface SavedDeviceRepository {
     fun observeProfiles(): Flow<List<SavedDeviceProfile>>
@@ -20,6 +21,12 @@ interface SavedDeviceRepository {
     suspend fun setFavorite(id: Long, isFavorite: Boolean)
 
     suspend fun setCustomName(id: Long, customName: String?)
+
+    /** Saves or removes only the local Wake-on-LAN configuration. */
+    suspend fun setWakeOnLanConfig(
+        id: Long,
+        config: WakeOnLanConfig?,
+    )
 
     suspend fun updateLastObserved(id: Long, observation: FavoriteDeviceObservation)
 
@@ -52,6 +59,11 @@ object NoOpSavedDeviceRepository : SavedDeviceRepository {
     override suspend fun setFavorite(id: Long, isFavorite: Boolean) = Unit
 
     override suspend fun setCustomName(id: Long, customName: String?) = Unit
+
+    override suspend fun setWakeOnLanConfig(
+        id: Long,
+        config: WakeOnLanConfig?,
+    ) = Unit
 
     override suspend fun updateLastObserved(id: Long, observation: FavoriteDeviceObservation) = Unit
 

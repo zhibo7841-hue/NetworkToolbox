@@ -360,3 +360,32 @@ SSH/Telnet-related scope is limited to service discovery, port detection, and ba
 
 This clarification does not authorize Wake-on-LAN, quick actions, notes,
 background scans, new discovery protocols, or a Room schema change.
+
+### V0.5 Phase 2D — Wake-on-LAN Phase 1: Manual local wake
+
+Wake-on-LAN Phase 1 is now part of the current v0.5 mainline scope. It is a
+manual, local-only action available from an existing LAN Device Detail page.
+The approved scope is deliberately narrow:
+
+- The user may enter or edit a valid unicast device MAC address. Colon,
+  hyphen, and plain-hex input are normalized to uppercase colon notation.
+- The MAC address and a user-valid UDP port are persisted as part of the
+  existing `SavedDeviceProfile`. A profile may therefore exist only because
+  it has a Wake-on-LAN configuration; it does not need to be a favorite or
+  have a custom name.
+- The app resolves the current eligible Wi-Fi/Ethernet IPv4 network and its
+  directed broadcast at send time, then sends one standard 102-byte Magic
+  Packet through that current physical LAN network. The default UDP port is
+  9, while ports from 1 through 65535 may be configured.
+- The Device Detail action reports only that the wake packet was sent. Packet
+  delivery is not proof that the device powered on or became reachable.
+
+Phase 1 does not include final wake verification, remote-Internet wake,
+DDNS/cloud access, background or scheduled wake, automatic support detection,
+automatic sending, SecureOn passwords, cellular broadcast, IPv6-only wake,
+or a separate Wake-on-LAN history record. VPN environments must use the
+current eligible physical LAN binding; a VPN or another active-network
+shortcut must not be treated as a local broadcast target. The action does not
+run from Device Center cards, Quick Actions, Ping, TCP checks, or
+diagnostics, and it does not add a new discovery protocol or alter LAN scan
+evidence.

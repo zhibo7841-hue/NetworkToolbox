@@ -11,6 +11,9 @@ import com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
 import com.networktoolbox.feature.lanscan.domain.LanNetworkScope
 import com.networktoolbox.feature.lanscan.domain.model.identity
 import com.networktoolbox.core.common.ipv4.IPv4Address
+import com.networktoolbox.core.common.wol.IPv4BroadcastResolution
+import com.networktoolbox.core.common.wol.IPv4BroadcastResolver
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 
 /**
  * Small presentation values for the top-level Devices destination.
@@ -65,6 +68,7 @@ data class DeviceDetailPresentation(
     val customName: String? = null,
     val isFavorite: Boolean,
     val canToggleFavorite: Boolean,
+    val wakeOnLan: WakeOnLanDetailPresentation = WakeOnLanDetailPresentation.notConfigured(),
 ) {
     /** Derived labels keep the star, status text, and accessibility semantics aligned. */
     val favoriteStatusLabel: String
@@ -74,7 +78,70 @@ data class DeviceDetailPresentation(
         get() = if (isFavorite) "取消收藏" else "收藏设备"
 }
 
+enum class WakeOnLanAvailability {
+    NOT_CONFIGURED,
+    AVAILABLE,
+    NO_ACTIVE_NETWORK,
+    UNSUPPORTED_NETWORK,
+    NO_IPV4,
+    SCOPE_MISMATCH,
+    BROADCAST_UNAVAILABLE,
+}
+
+data class WakeOnLanDetailPresentation(
+    val config: WakeOnLanConfig?,
+    val availability: WakeOnLanAvailability,
+) {
+    val canSend: Boolean
+        get() = config != null && availability == WakeOnLanAvailability.AVAILABLE
+
+    /** Configuration is an editable local profile value, not an immediate send. */
+    val canConfigure: Boolean = true
+
+    companion object {
+        fun notConfigured(): WakeOnLanDetailPresentation = WakeOnLanDetailPresentation(
+            config = null,
+            availability = WakeOnLanAvailability.NOT_CONFIGURED,
+        )
+    }
+}
+
 object DeviceCenterPresentation {
+    fun wakeOnLan(
+        config: WakeOnLanConfig?,
+        savedNetworkScope: String?,
+        context: NetworkContext,
+    ): WakeOnLanDetailPresentation {
+        if (context.activeNetworkAvailable == false) {
+            return WakeOnLanDetailPresentation(config, WakeOnLanAvailability.NO_ACTIVE_NETWORK)
+        }
+        if (context.connectionType != ConnectionType.WIFI &&
+            context.connectionType != ConnectionType.ETHERNET
+        ) {
+            return WakeOnLanDetailPresentation(config, WakeOnLanAvailability.UNSUPPORTED_NETWORK)
+        }
+        val currentScope = LanNetworkScope.from(context)
+        if (config != null && (currentScope == null || currentScope != savedNetworkScope)) {
+            return WakeOnLanDetailPresentation(config, WakeOnLanAvailability.SCOPE_MISMATCH)
+        }
+        if (context.ipv4Address.isNullOrBlank()) {
+            return WakeOnLanDetailPresentation(config, WakeOnLanAvailability.NO_IPV4)
+        }
+        if (IPv4BroadcastResolver.resolve(context.ipv4Address, context.ipv4PrefixLength) !is
+            IPv4BroadcastResolution.Available
+        ) {
+            return WakeOnLanDetailPresentation(config, WakeOnLanAvailability.BROADCAST_UNAVAILABLE)
+        }
+        return WakeOnLanDetailPresentation(
+            config = config,
+            availability = if (config == null) {
+                WakeOnLanAvailability.NOT_CONFIGURED
+            } else {
+                WakeOnLanAvailability.AVAILABLE
+            },
+        )
+    }
+
     fun networkSummary(
         context: NetworkContext,
         range: LanScanRange? = null,
@@ -152,7 +219,7 @@ object DeviceCenterPresentation {
         val observedFavoriteKeys = observedItems.mapNotNull { it.favorite?.let(::favoriteKey) }.toSet()
         val unseenItems = if (includeUnseenFavorites) {
             scopedFavorites
-                .filter { it.isFavorite || it.customName != null }
+                .filter { it.isFavorite || it.customName != null || it.wolConfig != null }
                 .filterNot { favorite -> favoriteKey(favorite) in observedFavoriteKeys }
                 .map { favorite ->
                     DeviceCenterDeviceItem(
@@ -220,6 +287,7 @@ object DeviceCenterPresentation {
             LanNetworkScope.from(context),
             device.ipAddress,
         ),
+        wakeOnLanContext: NetworkContext? = null,
     ): DeviceDetailPresentation {
         val identity = device.identity
         val role = deviceRole(device).takeIf(String::isNotBlank)
@@ -255,6 +323,11 @@ object DeviceCenterPresentation {
             customName = favorite?.customName,
             isFavorite = favorite?.isFavorite == true,
             canToggleFavorite = LanNetworkScope.from(context) != null,
+            wakeOnLan = wakeOnLan(
+                config = favorite?.wolConfig,
+                savedNetworkScope = favorite?.networkScope,
+                context = wakeOnLanContext ?: context,
+            ),
         )
     }
 
@@ -262,6 +335,7 @@ object DeviceCenterPresentation {
         favorite: FavoriteDevice,
         context: NetworkContext,
         detailKey: String = LanDeviceDetailRouteKey.forFavorite(favorite),
+        wakeOnLanContext: NetworkContext? = null,
     ): DeviceDetailPresentation = DeviceDetailPresentation(
         detailKey = detailKey,
         displayName = DeviceDisplayNameResolver.resolve(
@@ -284,6 +358,11 @@ object DeviceCenterPresentation {
         customName = favorite.customName,
         isFavorite = favorite.isFavorite,
         canToggleFavorite = LanNetworkScope.from(context) != null,
+        wakeOnLan = wakeOnLan(
+            config = favorite.wolConfig,
+            savedNetworkScope = favorite.networkScope,
+            context = wakeOnLanContext ?: context,
+        ),
     )
 
     private fun card(device: LanDevice, favorite: FavoriteDevice?): LanDeviceCardPresentation =

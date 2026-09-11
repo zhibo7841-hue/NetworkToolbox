@@ -1,5 +1,7 @@
 package com.networktoolbox.core.common.favorites
 
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
+
 /** The strength-ordered identity sources used for a saved LAN device. */
 enum class FavoriteIdentityType {
     MAC,
@@ -75,6 +77,7 @@ data class SavedDeviceProfile(
     val customName: String? = null,
     val isFavorite: Boolean = true,
     val updatedAt: Long = createdAt,
+    val wolConfig: WakeOnLanConfig? = null,
 ) {
     init {
         require(identityValue.isNotBlank()) { "Favorite identity value must not be blank." }
