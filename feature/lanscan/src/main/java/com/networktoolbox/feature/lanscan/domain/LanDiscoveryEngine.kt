@@ -1,6 +1,5 @@
 package com.networktoolbox.feature.lanscan.domain
 
-import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
@@ -25,6 +24,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 fun interface LanHostProbe {
     suspend fun probe(
@@ -57,12 +57,15 @@ class DefaultLanDiscoveryEngine(
     private val rangeCalculator: LanScanRangeCalculator = LanScanRangeCalculator(),
     private val clock: LanScanClock = LanScanClock { System.currentTimeMillis() },
 ) : LanDiscoveryEngine {
+    private val sessionSequence = AtomicLong(0L)
+
     override suspend fun scan(
         request: LanScanRequest,
         currentNetworkContext: suspend () -> NetworkContext,
         onUpdate: (LanScanUpdate) -> Unit,
     ): LanScanSession {
         val startedAt = clock.now()
+        val sessionId = sessionSequence.incrementAndGet()
         val rangeResult = request.requestedRange?.let { requestedRange ->
             rangeCalculator.validateRequestedRange(
                 context = request.networkContext,
@@ -90,6 +93,7 @@ class DefaultLanDiscoveryEngine(
                 finishedAt = finishedAt,
                 rejectionReason = rangeResult.reason,
                 errorMessage = rangeResult.message,
+                sessionId = sessionId,
             )
             onUpdate(session.toUpdate())
             return session
@@ -127,6 +131,7 @@ class DefaultLanDiscoveryEngine(
             newDevice = newDevice,
             elapsedMs = (clock.now() - startedAt).coerceAtLeast(0L),
             message = message,
+            sessionId = sessionId,
         )
 
         suspend fun publish(outcome: HostOutcome) {
@@ -196,6 +201,7 @@ class DefaultLanDiscoveryEngine(
                 startedAt = startedAt,
                 finishedAt = finishedAt,
                 statistics = statistics(),
+                sessionId = sessionId,
             )
             onUpdate(session.toUpdate())
             return session
@@ -212,6 +218,7 @@ class DefaultLanDiscoveryEngine(
                 finishedAt = finishedAt,
                 errorMessage = "The active network changed during the scan.",
                 statistics = statistics(),
+                sessionId = sessionId,
             )
             onUpdate(session.toUpdate())
             return session
@@ -228,6 +235,7 @@ class DefaultLanDiscoveryEngine(
                 finishedAt = finishedAt,
                 errorMessage = "The scan was cancelled.",
                 statistics = statistics(),
+                sessionId = sessionId,
             )
             onUpdate(session.toUpdate())
             return session
@@ -244,6 +252,7 @@ class DefaultLanDiscoveryEngine(
                 finishedAt = finishedAt,
                 errorMessage = "The scan was cancelled.",
                 statistics = statistics(),
+                sessionId = sessionId,
             )
             onUpdate(session.toUpdate())
             return session
@@ -260,6 +269,7 @@ class DefaultLanDiscoveryEngine(
                 finishedAt = finishedAt,
                 errorMessage = error.message ?: "LAN scan failed.",
                 statistics = statistics(),
+                sessionId = sessionId,
             )
             onUpdate(session.toUpdate())
             return session
@@ -311,7 +321,7 @@ class DefaultLanDiscoveryEngine(
         initial: NetworkContext,
         current: NetworkContext,
     ) {
-        if (initial.identity() != current.identity()) {
+        if (!LanNetworkFingerprint.matches(initial, current)) {
             throw NetworkChangedSignal()
         }
     }
@@ -339,6 +349,7 @@ class DefaultLanDiscoveryEngine(
         discoveredDevices = discoveredDevices,
         elapsedMs = elapsedMs,
         message = errorMessage,
+        sessionId = sessionId,
     )
 
     private data class HostOutcome(val device: LanDevice?)
@@ -349,26 +360,6 @@ class DefaultLanDiscoveryEngine(
 
     private class HostProbeCancellation(cause: CancellationException) : Exception(cause)
 }
-
-private data class NetworkIdentity(
-    val activeNetworkAvailable: Boolean?,
-    val connectionType: ConnectionType,
-    val ipv4Address: String?,
-    val ipv4PrefixLength: Int?,
-    val gateway: String?,
-    val interfaceName: String?,
-    val vpnActive: Boolean?,
-)
-
-private fun NetworkContext.identity(): NetworkIdentity = NetworkIdentity(
-    activeNetworkAvailable = activeNetworkAvailable,
-    connectionType = connectionType,
-    ipv4Address = ipv4Address,
-    ipv4PrefixLength = ipv4PrefixLength,
-    gateway = gateway,
-    interfaceName = interfaceName,
-    vpnActive = vpnActive,
-)
 
 private fun Collection<LanDevice>.sortedForDisplay(): List<LanDevice> =
     sortedWith(

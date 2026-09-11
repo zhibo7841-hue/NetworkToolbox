@@ -298,6 +298,34 @@ type inference, background scanning, cloud/account behavior, or new
 permissions. Wake-on-LAN remains the next separately approved phase and is
 not implemented or implied by this custom-name work.
 
+### V0.5 Phase 2C — LAN Device Center: Scan Session and Saved Profile Consistency
+
+Phase 2C separates the transient result of a scan from the local profile that a
+user intentionally saved:
+
+- A `LanScanSession` is scoped to one captured network scope and opaque network
+  fingerprint. Its observations, progress, completion state, and summary only
+  describe that scan session.
+- When the active network fingerprint changes, the old session is cancelled or
+  invalidated immediately. Old observations, completion counts, and elapsed
+  time are cleared; the app does not automatically start a scan on the new
+  network.
+- Saved device profiles remain local and persist across scans and app restarts.
+  They mean that the user recognizes a device, not that the device is currently
+  online. Profiles are shown only for the current eligible network scope before
+  a scan and use neutral states such as `尚未进行本次扫描` or `本次未发现`.
+- A completed session merges current observations with matching saved profiles
+  without duplicating a device. Current observation metadata remains current;
+  custom names and favorite state remain profile data. Ordinary discoveries are
+  not auto-saved.
+
+Phase 2C keeps the existing conservative discovery evidence and local-only
+storage. It does not add Wake-on-LAN, quick actions, notes, device-type
+inference, background or periodic scans, a historical network manager, new
+discovery protocols, or a new Room migration. The Device Center and Tools LAN
+Scanner share the same session boundary and presentation primitives while
+retaining their existing page roles and range-selection boundaries.
+
 ### V1.0
 
 Release scope and readiness criteria are not yet defined. The future directions listed above are not commitments for this release.

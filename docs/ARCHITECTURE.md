@@ -223,3 +223,43 @@ Automatic Name without changing favorite state. Tools -> LAN Scanner may
 render a safely matched custom name, but it remains a discovery surface with
 no management actions. No notes, device type inference, quick actions,
 background scan, new permission, or Wake-on-LAN implementation is introduced.
+
+## LAN Device Center Phase 2C — Scan Session Boundary
+
+The LAN Device Center keeps three related but separate concepts:
+
+1. `NetworkContext` is the current platform observation supplied by the shared
+   network repository.
+2. `LanScanSession` is a transient, current-network scan. It captures a
+   `sessionId`, the existing opaque saved-profile scope, an opaque network
+   fingerprint, the selected range, lifecycle state, observations, progress,
+   and a derived summary. It is not restored as a historical current result.
+3. `SavedDeviceProfile` is a local user-recognized profile persisted by the
+   existing Room v3 repository. Its favorite/custom-name fields and last-known
+   metadata are distinct from whether it was observed in the current session.
+
+The presentation flow remains:
+
+`NetworkRepository -> LanScannerViewModel -> LanScanSession /
+SavedDeviceProfile merge -> Device Center or Tools UI`
+
+The ViewModel captures the network fingerprint at scan start and assigns a
+generation to the scan and its enrichment jobs. Readiness updates compare the
+current context with the session-bound context through the centralized
+fingerprint. A changed fingerprint cancels the old job, invalidates enrichment,
+clears the old session and range result, and publishes the current context as a
+new not-scanned state. Generation checks also reject late scan, reverse-DNS,
+mDNS, and UPnP callbacks, so an old session cannot contaminate a new one.
+
+Saved profiles are filtered by the current opaque scope before presentation.
+After a completed scan, the pure `DeviceCenterPresentation` layer merges a
+matching observation and profile into one item, keeps current evidence and
+metadata from the observation, and applies profile-only custom name/favorite
+data. Profiles not observed in the session remain neutral `本次未发现` items;
+they are not inferred to be offline. Before a scan, current-scope profiles are
+shown as `尚未进行本次扫描`. Ordinary observations do not create profiles.
+
+This boundary does not change discovery evidence, TCP semantics, probe timeouts,
+scan concurrency, range validation, or Room schema. It also does not authorize
+device actions, quick checks, notes, background scanning, or new discovery
+protocols.

@@ -391,7 +391,8 @@ class LanScannerViewModelTest {
         viewModel.startScan()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value is LanScannerUiState.NetworkChanged)
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(LanScanNotice.NETWORK_CHANGED, state.notice)
         assertFalse(viewModel.uiState.value is LanScannerUiState.Error)
 
         viewModel.modifyRange()
@@ -399,13 +400,13 @@ class LanScannerViewModelTest {
     }
 
     @Test
-    fun `network changed terminal state is not replaced by readiness refresh`() = runTest {
+    fun `network change invalidates completed session and refreshes current readiness`() = runTest {
         val context = context("192.168.1.2", 30)
         val range = readyRange(context)
         val readinessFlow = MutableStateFlow(readiness(context))
         val viewModel = LanScannerViewModel(
             observeReadiness = ObserveLanScanReadiness { readinessFlow },
-            runScan = fakeRunner(session(context, range, emptyList(), LanScanStatus.NETWORK_CHANGED)),
+            runScan = fakeRunner(session(context, range, listOf(device("192.168.1.3")))),
             reverseDnsEnricher = noOpEnricher(),
             mdnsEnricher = noOpMdnsEnricher(),
         )
@@ -413,10 +414,105 @@ class LanScannerViewModelTest {
         advanceUntilIdle()
         viewModel.startScan()
         advanceUntilIdle()
-        readinessFlow.value = readiness(context.copy(ipv4Address = "192.168.1.3"))
+        val changedContext = context.copy(
+            ipv4Address = "192.168.2.3",
+            gateway = "192.168.2.1",
+        )
+        readinessFlow.value = readiness(changedContext)
         runCurrent()
 
-        assertTrue(viewModel.uiState.value is LanScannerUiState.NetworkChanged)
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(changedContext, state.readiness.networkContext)
+        assertEquals(LanScanNotice.NETWORK_CHANGED, state.notice)
+    }
+
+    @Test
+    fun `active network change cancels scan clears session and does not auto restart`() = runTest {
+        val initial = context("192.168.1.2", 30)
+        val changed = initial.copy(
+            ipv4Address = "192.168.1.3",
+            wifiName = "Guest",
+        )
+        val readinessFlow = MutableStateFlow(readiness(initial))
+        val cancellationObserved = AtomicBoolean(false)
+        var scanCalls = 0
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                scanCalls += 1
+                try {
+                    awaitCancellation()
+                } finally {
+                    cancellationObserved.set(true)
+                }
+            }
+        }
+        val viewModel = viewModel(
+            readiness(initial),
+            runner = runner,
+            readinessFlow = readinessFlow,
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        runCurrent()
+        assertTrue(viewModel.uiState.value is LanScannerUiState.Scanning)
+
+        readinessFlow.value = readiness(changed)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertTrue(cancellationObserved.get())
+        assertEquals(1, scanCalls)
+        assertEquals(changed, state.readiness.networkContext)
+        assertEquals(LanScanNotice.NETWORK_CHANGED, state.notice)
+    }
+
+    @Test
+    fun `custom range values survive network change without auto scan`() = runTest {
+        val initial = context("192.168.1.206", 24)
+        val changed = initial.copy(
+            ipv4Address = "10.0.1.206",
+            gateway = "10.0.1.1",
+        )
+        val readinessFlow = MutableStateFlow(readiness(initial))
+        val cancellationObserved = AtomicBoolean(false)
+        val runner = object : RunLanScan {
+            override suspend fun invoke(
+                probeConfig: LanScanProbeConfig,
+                onUpdate: (LanScanUpdate) -> Unit,
+            ): LanScanSession {
+                try {
+                    awaitCancellation()
+                } finally {
+                    cancellationObserved.set(true)
+                }
+            }
+        }
+        val viewModel = viewModel(
+            readiness(initial),
+            runner = runner,
+            readinessFlow = readinessFlow,
+        )
+
+        advanceUntilIdle()
+        viewModel.selectRangeMode(LanScanRangeMode.CUSTOM)
+        viewModel.onCustomStartAddressChanged("192.168.1.10")
+        viewModel.onCustomEndAddressChanged("192.168.1.20")
+        viewModel.startScan()
+        runCurrent()
+
+        readinessFlow.value = readiness(changed)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertTrue(cancellationObserved.get())
+        assertEquals(LanScanRangeMode.CUSTOM, state.rangeMode)
+        assertEquals("192.168.1.10", state.customStartAddress)
+        assertEquals("192.168.1.20", state.customEndAddress)
+        assertEquals(LanScanNotice.NETWORK_CHANGED, state.notice)
     }
 
     @Test
@@ -595,9 +691,9 @@ class LanScannerViewModelTest {
         )
         advanceUntilIdle()
 
-        val device = (viewModel.uiState.value as LanScannerUiState.Completed)
-            .session.discoveredDevices.single()
-        assertEquals(null, device.hostName)
+        val state = viewModel.uiState.value as LanScannerUiState.Ready
+        assertEquals(changed, state.readiness.networkContext)
+        assertEquals(LanScanNotice.NETWORK_CHANGED, state.notice)
     }
 
     @Test
@@ -808,14 +904,18 @@ class LanScannerViewModelTest {
             lastSeen = 1,
         )
 
-    private fun context(address: String, prefixLength: Int) = NetworkContext(
+    private fun context(
+        address: String,
+        prefixLength: Int,
+        wifiName: String? = null,
+    ) = NetworkContext(
         connectionType = ConnectionType.WIFI,
         ipv4Address = address,
         ipv6Address = null,
         gateway = "192.168.1.1",
         dnsServers = emptyList(),
         vpnActive = false,
-        wifiName = null,
+        wifiName = wifiName,
         wifiSignalLevel = null,
         activeNetworkAvailable = true,
         validated = true,

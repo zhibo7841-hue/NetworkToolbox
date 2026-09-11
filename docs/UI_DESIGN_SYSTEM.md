@@ -739,3 +739,32 @@ priority is: custom name, detected hostname / mDNS / UPnP identity, then the
 localized `未知设备` fallback. The IP address and confirmed discovery evidence
 remain visible. The custom name is presentation-only and does not replace the
 stored detected identity metadata or change favorite/star semantics.
+
+### LAN scan session-state pattern
+
+LAN Scanner and the Device Center use the same session-state language and
+compact `LanDeviceCard` primitive:
+
+- **尚未扫描当前网络**: the current network has no active scan session. Show
+  the start action and, when available, current-scope saved profiles with
+  `尚未进行本次扫描`.
+- **正在扫描**: show real scanned/total progress and the current discovered
+  count. Do not present saved profiles as online while the session is running.
+- **扫描完成**: show the completed session summary and current observations;
+  merge matching saved profiles into the same row and retain only one item per
+  device.
+- **扫描已停止**: retain only the partial observations from the current
+  session when the existing flow supports it; do not label absent profiles
+  offline.
+- **网络已发生变化**: clear the previous session and return to the current
+  network's not-scanned state. Explain that a manual scan is required; never
+  auto-start a scan or leave stale results visible.
+
+Saved profiles are neutral recognition records, not presence indicators. The
+UI must not use `在线` or `离线` for an unscanned or not-found profile. Status
+colors and actions follow the existing Material 3 hierarchy: primary start,
+outlined secondary rescan, and a neutral notice for network invalidation.
+Both entry points keep their existing roles: Device Center is current-network
+only, while Tools -> LAN Scanner retains automatic and custom IPv4 range
+selection. No new device actions, notes, background work, or discovery protocol
+is introduced by this pattern.

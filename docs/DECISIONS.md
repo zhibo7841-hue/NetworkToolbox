@@ -301,3 +301,34 @@ This log records the confirmed project decisions. New scope or changes to these 
   device actions.
 - Product boundary: Wake-on-LAN remains a later phase. Its data basis,
   permission behavior, and safety semantics require a separate decision.
+
+## Decision: v0.5 LAN Device Center Phase 2C — Scan Session and Network Consistency
+
+- Date: 2026-09-11
+- Status: Accepted
+- Decision: Current LAN observations belong to a transient `LanScanSession`.
+  Saved Device Profiles are a separate local persistence concept and are not a
+  synonym for current online state.
+- Network boundary: Every scan captures the existing opaque network scope and
+  a separate opaque network fingerprint. Session validity is not decided from
+  the device IP address alone; a same-subnet network change must be able to
+  invalidate the old session when the fingerprint changes.
+- Network change: When the observed fingerprint changes, the active scan is
+  cancelled, old observations and terminal summary data are discarded, and the
+  UI returns to the current network's not-scanned state. The app does not
+  automatically rescan, and switching back to a previous network does not
+  restore its old transient session.
+- Profiles: Profiles for the current scope may be shown before a scan with a
+  neutral `尚未进行本次扫描` state. A profile absent from a completed scan is
+  shown as `本次未发现`, never as online or offline. Only an intentional save
+  action creates a profile; ordinary scan observations only update a matching
+  existing profile's metadata.
+- Presentation: Device Center and Tools -> LAN Scanner reuse the same
+  profile/observation merge and compact device-card presentation while keeping
+  the Device Center current-network-only boundary and the Tools custom-range
+  workflow.
+- Persistence and scope: Room remains at version 3; no migration or schema
+  change is introduced. The session lifecycle is held by the ViewModel and
+  stale callbacks are rejected by scan generation. No Wake-on-LAN, quick
+  actions, notes, background scans, historical network manager, or new
+  discovery protocol is authorized by this decision.

@@ -27,6 +27,32 @@ class LanNetworkScopeTest {
     }
 
     @Test
+    fun `network fingerprint changes for a different wifi network in the same subnet`() {
+        val first = context(address = "10.0.1.20", wifiName = "HomeLab")
+        val second = context(address = "10.0.1.30", wifiName = "Guest")
+
+        assertNotEquals(
+            LanNetworkFingerprint.from(first),
+            LanNetworkFingerprint.from(second),
+        )
+    }
+
+    @Test
+    fun `network fingerprint does not use ssid as the sole network identity`() {
+        val first = context(address = "10.0.1.20", wifiName = "HomeLab")
+        val second = context(
+            address = "10.0.1.30",
+            gateway = "10.0.1.254",
+            wifiName = "HomeLab",
+        )
+
+        assertNotEquals(
+            LanNetworkFingerprint.from(first),
+            LanNetworkFingerprint.from(second),
+        )
+    }
+
+    @Test
     fun `scope is opaque and does not expose wifi name`() {
         val scope = LanNetworkScope.from(context(address = "10.0.1.20", wifiName = "PrivateHome"))
 

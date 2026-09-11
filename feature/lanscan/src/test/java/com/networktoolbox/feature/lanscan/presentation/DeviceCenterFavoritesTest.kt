@@ -71,6 +71,25 @@ class DeviceCenterFavoritesTest {
     }
 
     @Test
+    fun `saved profiles before scan are limited to current scope and stay neutral`() {
+        val context = context()
+        val scope = LanNetworkScope.from(context)!!
+        val items = DeviceCenterPresentation.savedProfilesBeforeScan(
+            favorites = listOf(
+                favorite(ip = "10.0.1.50", scope = scope),
+                favorite(ip = "10.0.1.60", scope = "other-scope"),
+            ),
+            context = context,
+        )
+
+        assertEquals(listOf("10.0.1.50"), items.map { it.card.ipAddress })
+        assertFalse(items.single().observedThisScan)
+        assertEquals("尚未进行本次扫描", items.single().card.evidence)
+        assertFalse(items.single().card.evidence.orEmpty().contains("在线"))
+        assertFalse(items.single().card.evidence.orEmpty().contains("离线"))
+    }
+
+    @Test
     fun `custom named nonfavorite profile remains visible when not observed`() {
         val context = context()
         val item = DeviceCenterPresentation.deviceList(

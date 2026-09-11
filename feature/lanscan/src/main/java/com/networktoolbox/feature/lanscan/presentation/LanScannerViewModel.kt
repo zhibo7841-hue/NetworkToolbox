@@ -11,6 +11,7 @@ import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
+import com.networktoolbox.feature.lanscan.domain.LanNetworkFingerprint
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanNetworkScope
@@ -72,6 +73,8 @@ class LanScannerViewModel @Inject constructor(
     private var upnpJob: Job? = null
     private var enrichmentGeneration: Long = 0L
     private var enrichmentNetworkContext: NetworkContext? = null
+    private var scanGeneration: Long = 0L
+    private var activeScanGeneration: Long? = null
     private val stopRequested = AtomicBoolean(false)
     private val customRangeCalculator = LanCustomRangeCalculator()
     private var rangeMode = LanScanRangeMode.CURRENT_NETWORK
@@ -86,10 +89,17 @@ class LanScannerViewModel @Inject constructor(
         viewModelScope.launch {
             observeReadiness().collect { readiness ->
                 latestReadiness = readiness
-                if (enrichmentNetworkContext?.isSameLanScanNetworkAs(readiness.networkContext) == false) {
+                val state = _uiState.value
+                if (enrichmentNetworkContext?.let {
+                        !LanNetworkFingerprint.matches(it, readiness.networkContext)
+                    } == true
+                ) {
                     invalidateEnrichment()
                 }
-                if (_uiState.value.canRefreshReadiness()) {
+
+                if (state.hasSessionBoundToDifferentNetwork(readiness.networkContext)) {
+                    invalidateForNetworkChange(readiness)
+                } else if (state.canRefreshReadiness()) {
                     _uiState.value = readiness.toUiState()
                 }
             }
@@ -178,7 +188,7 @@ class LanScannerViewModel @Inject constructor(
             return
         }
 
-        val generation = beginNewEnrichmentGeneration()
+        val generation = beginNewScanGeneration()
         stopRequested.set(false)
         val initialUpdate = LanScanUpdate(
             status = LanScanStatus.SCANNING,
@@ -186,12 +196,14 @@ class LanScannerViewModel @Inject constructor(
             totalHosts = range.hostCount,
             discoveredDevices = emptyList(),
             elapsedMs = 0,
+            sessionId = generation,
         )
         _uiState.value = LanScannerUiState.Scanning(
             networkContext = readiness.networkContext,
             range = range,
             startedAt = System.currentTimeMillis(),
             update = initialUpdate,
+            sessionId = generation,
         )
         lastScanRange = range
 
@@ -204,17 +216,38 @@ class LanScannerViewModel @Inject constructor(
                     runScan.invokeWithRange(
                         range = range,
                         probeConfig = LanScanProbeConfig(),
-                        onUpdate = ::publishScanUpdate,
+                        onUpdate = { update -> publishScanUpdate(generation, update) },
                     )
                 } else {
                     runScan(
                         probeConfig = LanScanProbeConfig(),
-                        onUpdate = ::publishScanUpdate,
+                        onUpdate = { update -> publishScanUpdate(generation, update) },
                     )
                 }
                 lastScanRange = session.range ?: range
-                if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
-                    _uiState.value = session.toUiState()
+                if (
+                    isCurrentScan(generation) &&
+                        !stopRequested.get() &&
+                        _uiState.value is LanScannerUiState.Scanning
+                ) {
+                    if (session.status == LanScanStatus.NETWORK_CHANGED ||
+                        session.status == LanScanStatus.INVALIDATED
+                    ) {
+                        invalidateForNetworkChange(
+                            readiness = latestReadiness,
+                            fallbackNotice = LanScanNotice.NETWORK_CHANGED,
+                        )
+                    } else {
+                        val boundSession = session.copy(
+                            sessionId = generation,
+                            networkScope = LanNetworkScope.from(session.initialNetworkContext),
+                            networkFingerprint = LanNetworkFingerprint.from(
+                                session.initialNetworkContext,
+                            ),
+                        )
+                        activeScanGeneration = null
+                        _uiState.value = boundSession.toUiState()
+                    }
                     if (session.status == LanScanStatus.COMPLETED) {
                         syncFavoritesWithDevices(
                             context = session.initialNetworkContext,
@@ -224,16 +257,19 @@ class LanScannerViewModel @Inject constructor(
                     }
                 }
             } catch (error: CancellationException) {
-                if (!stopRequested.get()) throw error
+                if (!stopRequested.get() && isCurrentScan(generation)) throw error
             } catch (_: Exception) {
-                if (!stopRequested.get()) {
+                if (!stopRequested.get() && isCurrentScan(generation)) {
                     _uiState.value = LanScannerUiState.Error(
                         message = "局域网扫描失败，请稍后重试。",
                         readiness = latestReadiness,
                     )
                 }
             } finally {
-                if (scanJob === currentJob) scanJob = null
+                if (scanJob === currentJob) {
+                    scanJob = null
+                    if (activeScanGeneration == generation) activeScanGeneration = null
+                }
             }
         }
     }
@@ -280,11 +316,13 @@ class LanScannerViewModel @Inject constructor(
             return
         }
         stopRequested.set(true)
+        val generation = activeScanGeneration
+        activeScanGeneration = null
         invalidateEnrichment()
         lastScanRange = current.range
         scanJob?.cancel()
         _uiState.value = LanScannerUiState.Cancelled(
-            session = current.toCancelledSession(),
+            session = current.toCancelledSession(sessionId = generation ?: current.sessionId),
         )
     }
 
@@ -579,6 +617,7 @@ class LanScannerViewModel @Inject constructor(
         LanScanStatus.COMPLETED -> LanScannerUiState.Completed(this)
         LanScanStatus.CANCELLED -> LanScannerUiState.Cancelled(this)
         LanScanStatus.NETWORK_CHANGED -> LanScannerUiState.NetworkChanged(this)
+        LanScanStatus.INVALIDATED -> LanScannerUiState.NetworkChanged(this)
         LanScanStatus.VPN_BLOCKED -> LanScannerUiState.VpnBlocked(
             readiness = LanScanReadiness(
                 networkContext = initialNetworkContext,
@@ -602,6 +641,8 @@ class LanScannerViewModel @Inject constructor(
         )
 
         LanScanStatus.ERROR,
+        LanScanStatus.FAILED,
+        LanScanStatus.NOT_SCANNED,
         LanScanStatus.IDLE,
         LanScanStatus.SCANNING,
         -> LanScannerUiState.Error(
@@ -610,7 +651,7 @@ class LanScannerViewModel @Inject constructor(
         )
     }
 
-    private fun LanScannerUiState.Scanning.toCancelledSession(): LanScanSession =
+    private fun LanScannerUiState.Scanning.toCancelledSession(sessionId: Long): LanScanSession =
         LanScanSession(
             status = LanScanStatus.CANCELLED,
             initialNetworkContext = networkContext,
@@ -621,10 +662,17 @@ class LanScannerViewModel @Inject constructor(
             startedAt = startedAt,
             finishedAt = System.currentTimeMillis(),
             errorMessage = "扫描已停止。",
+            sessionId = sessionId,
+            networkScope = LanNetworkScope.from(networkContext),
+            networkFingerprint = LanNetworkFingerprint.from(networkContext),
         )
 
-    private fun publishScanUpdate(update: LanScanUpdate) {
-        if (!stopRequested.get() && _uiState.value is LanScannerUiState.Scanning) {
+    private fun publishScanUpdate(generation: Long, update: LanScanUpdate) {
+        if (
+            !stopRequested.get() &&
+                activeScanGeneration == generation &&
+                _uiState.value is LanScannerUiState.Scanning
+        ) {
             val current = _uiState.value as LanScannerUiState.Scanning
             _uiState.value = current.copy(update = update)
         }
@@ -808,7 +856,7 @@ class LanScannerViewModel @Inject constructor(
         is LanScannerUiState.Scanning -> state.networkContext
         is LanScannerUiState.Completed -> state.session.initialNetworkContext
         is LanScannerUiState.Cancelled -> state.session.initialNetworkContext
-        is LanScannerUiState.NetworkChanged -> state.session.initialNetworkContext
+        is LanScannerUiState.NetworkChanged -> latestReadiness?.networkContext
         is LanScannerUiState.UnsupportedNetwork -> state.readiness.networkContext
         is LanScannerUiState.VpnBlocked -> state.readiness.networkContext
         is LanScannerUiState.Error -> state.readiness?.networkContext
@@ -825,12 +873,39 @@ class LanScannerViewModel @Inject constructor(
         is LanScannerUiState.Scanning -> state.update.discoveredDevices
         is LanScannerUiState.Completed -> state.session.discoveredDevices
         is LanScannerUiState.Cancelled -> state.session.discoveredDevices
-        is LanScannerUiState.NetworkChanged -> state.session.discoveredDevices
+        is LanScannerUiState.NetworkChanged -> emptyList()
     }
 
-    private fun beginNewEnrichmentGeneration(): Long {
+    private fun beginNewScanGeneration(): Long {
+        scanGeneration += 1L
+        activeScanGeneration = scanGeneration
         invalidateEnrichment()
-        return enrichmentGeneration
+        // One token guards both the scan callbacks and post-discovery
+        // enrichment. A late callback from an older session can therefore
+        // never mutate the current session.
+        enrichmentGeneration = scanGeneration
+        return scanGeneration
+    }
+
+    private fun isCurrentScan(generation: Long): Boolean = activeScanGeneration == generation
+
+    private fun invalidateForNetworkChange(
+        readiness: LanScanReadiness?,
+        fallbackNotice: LanScanNotice = LanScanNotice.NETWORK_CHANGED,
+    ) {
+        stopRequested.set(true)
+        activeScanGeneration = null
+        scanJob?.cancel()
+        invalidateEnrichment()
+        lastScanRange = null
+
+        if (readiness == null) {
+            _uiState.value = LanScannerUiState.Error(
+                message = "网络已发生变化，请稍后重试。",
+            )
+        } else {
+            _uiState.value = readiness.toUiState(notice = fallbackNotice)
+        }
     }
 
     private fun invalidateEnrichment() {
@@ -857,7 +932,9 @@ class LanScannerViewModel @Inject constructor(
         }
     }
 
-    private fun LanScanReadiness.toUiState(): LanScannerUiState = when (val result = rangeResult) {
+    private fun LanScanReadiness.toUiState(
+        notice: LanScanNotice? = null,
+    ): LanScannerUiState = when (val result = rangeResult) {
         is LanScanRangeResult.Ready -> LanScannerUiState.Ready(
             readiness = this,
             range = result.range,
@@ -865,6 +942,7 @@ class LanScannerViewModel @Inject constructor(
             customStartAddress = customStartAddress,
             customEndAddress = customEndAddress,
             customRangeResult = customRangeResult,
+            notice = notice,
         )
 
         is LanScanRangeResult.Rejected -> when (result.reason) {
@@ -884,16 +962,24 @@ class LanScannerViewModel @Inject constructor(
     }
 }
 
-private fun NetworkContext.isSameLanScanNetworkAs(
-    other: NetworkContext,
-): Boolean =
-    activeNetworkAvailable == other.activeNetworkAvailable &&
-        connectionType == other.connectionType &&
-        ipv4Address == other.ipv4Address &&
-        ipv4PrefixLength == other.ipv4PrefixLength &&
-        gateway == other.gateway &&
-        interfaceName == other.interfaceName &&
-        vpnActive == other.vpnActive
+private fun LanScannerUiState.hasSessionBoundToDifferentNetwork(
+    current: NetworkContext,
+): Boolean = boundNetworkContext()?.let { bound ->
+    !LanNetworkFingerprint.matches(bound, current)
+} == true
+
+private fun LanScannerUiState.boundNetworkContext(): NetworkContext? = when (this) {
+    is LanScannerUiState.Scanning -> networkContext
+    is LanScannerUiState.Completed -> session.initialNetworkContext
+    is LanScannerUiState.Cancelled -> session.initialNetworkContext
+    is LanScannerUiState.NetworkChanged -> session.initialNetworkContext
+    LanScannerUiState.Idle,
+    is LanScannerUiState.Ready,
+    is LanScannerUiState.UnsupportedNetwork,
+    is LanScannerUiState.VpnBlocked,
+    is LanScannerUiState.Error,
+    -> null
+}
 
 private fun NetworkContext.mdnsIdentityForUi(): String = listOf(
     connectionType.name,

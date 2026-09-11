@@ -1,15 +1,23 @@
 package com.networktoolbox.feature.lanscan.domain.model
 
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.feature.lanscan.domain.LanNetworkFingerprint
+import com.networktoolbox.feature.lanscan.domain.LanNetworkScope
 
 enum class LanScanStatus {
+    /** No scan session has been executed for the current network context. */
+    NOT_SCANNED,
     IDLE,
     SCANNING,
     COMPLETED,
     CANCELLED,
     NETWORK_CHANGED,
+    /** A terminal session marker retained for callers that persist session state. */
+    INVALIDATED,
     UNSUPPORTED_NETWORK,
     VPN_BLOCKED,
+    FAILED,
+    /** Backward-compatible name used by the pre-session API. */
     ERROR,
 }
 
@@ -245,6 +253,15 @@ data class LanScanUpdate(
     val newDevice: LanDevice? = null,
     val elapsedMs: Long? = null,
     val message: String? = null,
+    /** Lets presentation discard callbacks from a previous scan generation. */
+    val sessionId: Long = 0L,
+)
+
+data class LanScanSummary(
+    val scannedHosts: Int,
+    val totalHosts: Int,
+    val discoveredDeviceCount: Int,
+    val elapsedMs: Long,
 )
 
 data class LanScanSession(
@@ -261,9 +278,23 @@ data class LanScanSession(
     val errorMessage: String? = null,
     val networkChanged: Boolean = status == LanScanStatus.NETWORK_CHANGED,
     val statistics: LanScanStatistics = LanScanStatistics(),
+    /** ViewModel generation for this session; zero is retained for legacy fakes. */
+    val sessionId: Long = 0L,
+    /** Existing opaque saved-profile scope captured when the session starts. */
+    val networkScope: String? = LanNetworkScope.from(initialNetworkContext),
+    /** Opaque identity used for invalidation; raw network facts are not exposed. */
+    val networkFingerprint: String = LanNetworkFingerprint.from(initialNetworkContext),
 ) {
     val elapsedMs: Long
         get() = (finishedAt - startedAt).coerceAtLeast(0L)
+
+    val summary: LanScanSummary
+        get() = LanScanSummary(
+            scannedHosts = scannedHosts,
+            totalHosts = totalHosts,
+            discoveredDeviceCount = discoveredDevices.size,
+            elapsedMs = elapsedMs,
+        )
 }
 
 private fun String.toIpv4Number(): Long = split('.').fold(0L) { result, part ->

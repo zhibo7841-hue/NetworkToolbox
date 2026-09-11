@@ -125,6 +125,7 @@ object DeviceCenterPresentation {
         favorites: List<FavoriteDevice>,
         context: NetworkContext,
         includeUnseenFavorites: Boolean = true,
+        unseenEvidence: String = "本次未发现",
     ): List<DeviceCenterDeviceItem> {
         val scope = LanNetworkScope.from(context)
         val scopedFavorites = favorites.filter { it.networkScope == scope }
@@ -159,7 +160,7 @@ object DeviceCenterPresentation {
                         observedThisScan = false,
                         isFavorite = favorite.isFavorite,
                         detailKey = LanDeviceDetailRouteKey.forFavorite(favorite),
-                        card = card(favorite),
+                        card = card(favorite, unseenEvidence),
                     )
                 }
         } else {
@@ -174,6 +175,23 @@ object DeviceCenterPresentation {
             ),
         )
     }
+
+    /**
+     * Saved profiles are deliberately presented separately before the first
+     * scan of a scope. The neutral text describes the session state and never
+     * implies that the device is offline.
+     */
+    fun savedProfilesBeforeScan(
+        favorites: List<FavoriteDevice>,
+        context: NetworkContext,
+        unseenEvidence: String = "尚未进行本次扫描",
+    ): List<DeviceCenterDeviceItem> = deviceList(
+        devices = emptyList(),
+        favorites = favorites,
+        context = context,
+        includeUnseenFavorites = true,
+        unseenEvidence = unseenEvidence,
+    )
 
     fun detail(
         device: LanDevice,
@@ -261,7 +279,10 @@ object DeviceCenterPresentation {
             isFavorite = favorite?.isFavorite == true,
         )
 
-    private fun card(favorite: FavoriteDevice): LanDeviceCardPresentation =
+    private fun card(
+        favorite: FavoriteDevice,
+        evidence: String = "本次未发现",
+    ): LanDeviceCardPresentation =
         LanDeviceCardPresentation(
             displayName = DeviceDisplayNameResolver.resolve(
                 customName = favorite.customName,
@@ -273,7 +294,7 @@ object DeviceCenterPresentation {
             identitySummary = listOfNotNull(favorite.vendor, favorite.model)
                 .joinToString(" · ")
                 .takeIf(String::isNotBlank),
-            evidence = "本次未发现",
+            evidence = evidence,
             role = favoriteRole(favorite).takeIf(String::isNotBlank),
             macAddress = favorite.macAddress,
             isFavorite = favorite.isFavorite,

@@ -109,6 +109,34 @@ class DefaultLanDiscoveryEngineTest {
     }
 
     @Test
+    fun `session id is shared by progressive updates and terminal session`() = runTest {
+        val updates = mutableListOf<com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate>()
+        val context = context("192.168.1.2", 30, gateway = "192.168.1.1")
+        val session = DefaultLanDiscoveryEngine(
+            hostProbe = LanHostProbe { ipAddress, _ ->
+                LanHostProbeResult(
+                    ipAddress,
+                    listOf(LanDeviceEvidence(LanDiscoveryMethod.REACHABILITY)),
+                )
+            },
+        ).scan(
+            request = LanScanRequest(
+                networkContext = context,
+                probeConfig = LanScanProbeConfig(maxConcurrency = 1),
+            ),
+            currentNetworkContext = { context },
+            onUpdate = updates::add,
+        )
+
+        assertTrue(session.sessionId > 0L)
+        assertTrue(updates.isNotEmpty())
+        assertTrue(updates.all { it.sessionId == session.sessionId })
+        assertEquals(session.networkFingerprint, LanNetworkFingerprint.from(context))
+        assertEquals(session.networkScope, LanNetworkScope.from(context))
+        assertEquals(session.summary.discoveredDeviceCount, session.discoveredDevices.size)
+    }
+
+    @Test
     fun `local and gateway are deterministic devices even when probes are skipped`() = runTest {
         val probedHosts = mutableListOf<String>()
         val engine = DefaultLanDiscoveryEngine(

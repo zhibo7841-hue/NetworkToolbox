@@ -12,6 +12,11 @@ enum class LanScanRangeMode {
     CUSTOM,
 }
 
+enum class LanScanNotice {
+    /** The previous session was discarded because the active network changed. */
+    NETWORK_CHANGED,
+}
+
 sealed interface LanScannerUiState {
     data object Idle : LanScannerUiState
 
@@ -22,6 +27,7 @@ sealed interface LanScannerUiState {
         val customStartAddress: String = "",
         val customEndAddress: String = "",
         val customRangeResult: LanCustomRangeResult = LanCustomRangeResult.Incomplete,
+        val notice: LanScanNotice? = null,
     ) : LanScannerUiState
 
     data class Scanning(
@@ -29,6 +35,7 @@ sealed interface LanScannerUiState {
         val range: LanScanRange,
         val startedAt: Long,
         val update: LanScanUpdate,
+        val sessionId: Long = 0L,
     ) : LanScannerUiState
 
     data class Completed(

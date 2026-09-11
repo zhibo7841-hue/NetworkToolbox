@@ -11,4 +11,11 @@
     <string name="device_name_save">保存</string>
     <string name="device_name_restore">恢复自动名称</string>
     <string name="device_name_invalid">名称不能为空、不能包含控制字符，且最多 40 个字符。</string>
+    <string name="lan_scan_not_scanned_title">尚未扫描当前网络</string>
+    <string name="lan_scan_not_scanned_message">开始扫描以发现当前局域网设备。</string>
+    <string name="lan_scan_saved_devices_title">已保存设备</string>
+    <string name="lan_scan_saved_not_scanned">尚未进行本次扫描</string>
+    <string name="lan_scan_network_changed_title">网络已发生变化</string>
+    <string name="lan_scan_network_changed_message">旧扫描结果已清除，请在当前网络中手动开始扫描。</string>
+    <string name="lan_scan_network_changed_detail">部分结果来自不同网络环境，当前网络尚未扫描。</string>
 </resources>
