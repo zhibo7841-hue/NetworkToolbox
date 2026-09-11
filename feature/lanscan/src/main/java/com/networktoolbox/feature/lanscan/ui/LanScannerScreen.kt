@@ -29,7 +29,10 @@ import com.networktoolbox.core.designsystem.ToolScreenLayout
 import com.networktoolbox.core.designsystem.ToolStatusSummary
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.core.common.favorites.FavoriteDevice
+import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
+import com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
@@ -50,6 +53,7 @@ fun LanScannerScreen(
     onRangeModeChanged: (LanScanRangeMode) -> Unit = {},
     onCustomStartAddressChanged: (String) -> Unit = {},
     onCustomEndAddressChanged: (String) -> Unit = {},
+    savedProfiles: List<FavoriteDevice> = emptyList(),
     isTopLevelDestination: Boolean = false,
     onOpenMenu: () -> Unit = {},
 ) {
@@ -88,6 +92,7 @@ fun LanScannerScreen(
             is LanScannerUiState.Scanning -> ScanningContent(
                 state = state,
                 onStopScan = onStopScan,
+                savedProfiles = savedProfiles,
             )
 
             is LanScannerUiState.Completed -> SessionContent(
@@ -96,6 +101,7 @@ fun LanScannerScreen(
                 actionLabel = "重新扫描",
                 onAction = onRetry,
                 onModifyRange = onModifyRange,
+                savedProfiles = savedProfiles,
             )
 
             is LanScannerUiState.Cancelled -> SessionContent(
@@ -104,12 +110,14 @@ fun LanScannerScreen(
                 actionLabel = "重新扫描",
                 onAction = onRetry,
                 onModifyRange = onModifyRange,
+                savedProfiles = savedProfiles,
             )
 
             is LanScannerUiState.NetworkChanged -> NetworkChangedContent(
                 session = state.session,
                 onRetry = onRetry,
                 onModifyRange = onModifyRange,
+                savedProfiles = savedProfiles,
             )
 
             is LanScannerUiState.UnsupportedNetwork -> UnsupportedContent(
@@ -301,6 +309,7 @@ private fun NetworkSummaryCard(
 private fun ScanningContent(
     state: LanScannerUiState.Scanning,
     onStopScan: () -> Unit,
+    savedProfiles: List<FavoriteDevice>,
 ) {
     val update = state.update
     ToolRunningSection {
@@ -341,7 +350,7 @@ private fun ScanningContent(
     ) {
         Text("停止扫描")
     }
-    DeviceList(update.discoveredDevices)
+    DeviceList(update.discoveredDevices, state.networkContext, savedProfiles)
 }
 
 @Composable
@@ -351,6 +360,7 @@ private fun SessionContent(
     actionLabel: String,
     onAction: () -> Unit,
     onModifyRange: () -> Unit,
+    savedProfiles: List<FavoriteDevice>,
 ) {
     ToolResultSection {
         ToolStatusSummary(
@@ -391,7 +401,7 @@ private fun SessionContent(
     TextButton(onClick = onModifyRange) {
         Text("修改扫描范围 >")
     }
-    DeviceList(session.discoveredDevices)
+    DeviceList(session.discoveredDevices, session.initialNetworkContext, savedProfiles)
 }
 
 @Composable
@@ -399,6 +409,7 @@ private fun NetworkChangedContent(
     session: LanScanSession,
     onRetry: () -> Unit,
     onModifyRange: () -> Unit,
+    savedProfiles: List<FavoriteDevice>,
 ) {
     OutlinedNetworkCard {
         ToolStatusSummary(
@@ -419,7 +430,7 @@ private fun NetworkChangedContent(
     TextButton(onClick = onModifyRange) {
         Text("修改扫描范围 >")
     }
-    DeviceList(session.discoveredDevices)
+    DeviceList(session.discoveredDevices, session.initialNetworkContext, savedProfiles)
 }
 
 @Composable
@@ -492,7 +503,11 @@ private fun PrivacyHint() {
 }
 
 @Composable
-private fun DeviceList(devices: List<LanDevice>) {
+private fun DeviceList(
+    devices: List<LanDevice>,
+    context: NetworkContext,
+    savedProfiles: List<FavoriteDevice>,
+) {
     if (devices.isEmpty()) return
 
     Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
@@ -509,7 +524,12 @@ private fun DeviceList(devices: List<LanDevice>) {
             )
         }
         devices.forEach { device ->
-            LanDeviceCard(device = device, showMac = true)
+            val profile = LanFavoriteIdentity.candidate(device, context)?.let { candidate ->
+                savedProfiles.firstOrNull { saved ->
+                    FavoriteIdentityMatcher.matches(saved, candidate)
+                }
+            }
+            LanDeviceCard(device = device, showMac = true, savedProfile = profile)
         }
     }
 }

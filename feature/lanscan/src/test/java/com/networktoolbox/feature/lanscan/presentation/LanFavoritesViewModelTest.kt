@@ -6,6 +6,7 @@ import com.networktoolbox.core.common.favorites.FavoriteDeviceObservation
 import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.core.common.favorites.SavedDeviceRepository
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
@@ -183,7 +184,7 @@ class LanFavoritesViewModelTest {
             viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)!!.isFavorite.not(),
         )
 
-        repository.add(
+        repository.save(
             com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity.createFavorite(
                 device = device,
                 context = context,
@@ -196,7 +197,7 @@ class LanFavoritesViewModelTest {
         assertTrue(addedDetail!!.isFavorite)
         assertEquals("已收藏", addedDetail.favoriteStatusLabel)
 
-        repository.remove(viewModel.favoriteDevices.value.single().id)
+        repository.delete(viewModel.favoriteDevices.value.single().id)
         advanceUntilIdle()
 
         val removedDetail = viewModel.resolveDeviceDetail(route, viewModel.favoriteDevices.value)
@@ -303,10 +304,119 @@ class LanFavoritesViewModelTest {
         assertEquals("收藏失败，请重试。", viewModel.favoriteActionError.value)
     }
 
+    @Test
+    fun `custom name is persisted immediately without favoriting observed device`() = runTest {
+        val context = context()
+        val device = device("10.0.1.30")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+
+        viewModel.setCustomNameByRouteKey(route, "客厅 NAS")
+        advanceUntilIdle()
+
+        val profile = viewModel.savedProfiles.value.single()
+        assertEquals("客厅 NAS", profile.customName)
+        assertTrue(profile.isFavorite.not())
+        assertTrue(viewModel.favoriteDevices.value.isEmpty())
+        val detail = viewModel.resolveDeviceDetail(route, viewModel.savedProfiles.value)
+        assertNotNull(detail)
+        assertEquals("客厅 NAS", detail!!.displayName)
+        assertTrue(detail.isFavorite.not())
+        assertEquals(null, viewModel.customNameActionError.value)
+    }
+
+    @Test
+    fun `custom name and favorite can be changed and restored independently`() = runTest {
+        val context = context()
+        val device = device("10.0.1.31")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+
+        viewModel.setCustomNameByRouteKey(route, "主路由")
+        advanceUntilIdle()
+        viewModel.toggleFavoriteByRouteKey(route)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.savedProfiles.value.single().isFavorite)
+        assertEquals("主路由", viewModel.savedProfiles.value.single().customName)
+
+        viewModel.clearCustomNameByRouteKey(route)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.savedProfiles.value.single().isFavorite)
+        assertEquals(null, viewModel.savedProfiles.value.single().customName)
+        assertEquals("未知设备", viewModel.resolveDeviceDetail(route, viewModel.savedProfiles.value)!!.displayName)
+    }
+
+    @Test
+    fun `invalid custom name is rejected without creating a saved profile`() = runTest {
+        val context = context()
+        val device = device("10.0.1.32")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+
+        viewModel.setCustomNameByRouteKey(viewModel.detailRouteKey(device), "   ")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.savedProfiles.value.isEmpty())
+        assertEquals("名称不能为空、不能包含控制字符，且最多 40 个字符。", viewModel.customNameActionError.value)
+    }
+
+    @Test
+    fun `observation refresh changes detected metadata but not custom name`() = runTest {
+        val context = context()
+        val device = device("10.0.1.33")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+        viewModel.setCustomNameByRouteKey(route, "实验设备")
+        advanceUntilIdle()
+
+        repository.updateLastObserved(
+            id = viewModel.savedProfiles.value.single().id,
+            observation = FavoriteDeviceObservation(
+                lastKnownIpv4 = "10.0.1.34",
+                lastKnownDisplayName = "new-device.local",
+                lastKnownHostname = "new-device.local",
+                lastKnownMdnsName = null,
+                lastKnownUpnpName = null,
+                macAddress = null,
+                vendor = null,
+                model = null,
+                lastSeenAt = 100L,
+                isGateway = false,
+                isLocalDevice = false,
+            ),
+        )
+        advanceUntilIdle()
+
+        val profile = viewModel.savedProfiles.value.single()
+        assertEquals("实验设备", profile.customName)
+        assertEquals("new-device.local", profile.lastKnownDisplayName)
+    }
+
     private fun viewModel(
         context: NetworkContext,
         device: LanDevice,
-        repository: FavoriteDeviceRepository,
+        repository: SavedDeviceRepository,
     ) = LanScannerViewModel(
         observeReadiness = ObserveLanScanReadiness {
             flowOf(
@@ -336,7 +446,7 @@ class LanFavoritesViewModelTest {
         },
         reverseDnsEnricher = ReverseDnsEnricher { _, _ -> },
         mdnsEnricher = com.networktoolbox.feature.lanscan.domain.MdnsEnricher { _, _, _, _ -> },
-        favoriteRepository = repository,
+        savedDeviceRepository = repository,
     )
 
     private fun context() = NetworkContext(
@@ -368,22 +478,62 @@ class LanFavoritesViewModelTest {
 private class FakeFavoriteDeviceRepository(
     initialFavorites: List<FavoriteDevice> = emptyList(),
     private val failWrites: Boolean = false,
-) : FavoriteDeviceRepository {
+) : FavoriteDeviceRepository, SavedDeviceRepository {
     private val state = MutableStateFlow(initialFavorites)
     private var nextId = 1L
 
     override fun observeFavorites(): Flow<List<FavoriteDevice>> = state
 
-    override suspend fun add(favorite: FavoriteDevice): Long {
+    override fun observeProfiles(): Flow<List<FavoriteDevice>> = state
+
+    override suspend fun save(profile: FavoriteDevice): Long {
         if (failWrites) error("write failed")
-        val id = nextId++
-        state.value = state.value + favorite.copy(id = id)
+        val existing = state.value.firstOrNull { saved ->
+            saved.identityType == profile.identityType &&
+                saved.identityValue == profile.identityValue &&
+                saved.networkScope == profile.networkScope
+        }
+        if (existing != null) return existing.id
+        val id = if (profile.id > 0L) profile.id else nextId++
+        state.value = state.value + profile.copy(id = id)
         return id
     }
 
-    override suspend fun remove(id: Long) {
+    override suspend fun delete(id: Long) {
         if (failWrites) error("write failed")
         state.value = state.value.filterNot { it.id == id }
+    }
+
+    override suspend fun setFavorite(id: Long, isFavorite: Boolean) {
+        if (failWrites) error("write failed")
+        val existing = state.value.firstOrNull { it.id == id } ?: return
+        if (!isFavorite && existing.customName == null) {
+            delete(id)
+        } else {
+            state.value = state.value.map { profile ->
+                if (profile.id == id) profile.copy(isFavorite = isFavorite) else profile
+            }
+        }
+    }
+
+    override suspend fun setCustomName(id: Long, customName: String?) {
+        if (failWrites) error("write failed")
+        val existing = state.value.firstOrNull { it.id == id } ?: return
+        if (customName == null && !existing.isFavorite) {
+            delete(id)
+        } else {
+            state.value = state.value.map { profile ->
+                if (profile.id == id) profile.copy(customName = customName) else profile
+            }
+        }
+    }
+
+    override suspend fun add(favorite: FavoriteDevice): Long {
+        return save(favorite.copy(isFavorite = true))
+    }
+
+    override suspend fun remove(id: Long) {
+        delete(id)
     }
 
     override suspend fun updateLastObserved(id: Long, observation: FavoriteDeviceObservation) {

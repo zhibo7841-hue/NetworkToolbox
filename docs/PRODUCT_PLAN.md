@@ -270,6 +270,34 @@ visual debt. This line preserves the existing local-first, privacy, and
 evidence-based product principles; it does not authorize automatic repair,
 cloud analysis, or a new unrelated tool.
 
+### V0.5 Phase 2B — LAN Device Center: Saved Device Profile and Custom Device Name
+
+Phase 2B extends the Phase 2A Device Detail and Favorites foundation into a
+generic local Saved Device Profile. The approved scope includes:
+
+- Device Detail with an edit action for a user-defined display name.
+- A saved profile that can independently retain `isFavorite` and `customName`.
+- Local Room persistence for profile identity, network scope, last-known
+  observation metadata, favorite state, and custom presentation name.
+- Conservative identity matching using the existing MAC, protocol, and
+  network-scoped IPv4 rules. This phase does not change the matching strategy.
+- A display-name resolver whose priority is custom name, detected hostname /
+  mDNS / UPnP identity, then the neutral unknown-device fallback.
+
+Custom names are presentation overrides only. They do not rename a device,
+alter detected hostname / mDNS / UPnP values, or create a new discovery
+mechanism. A custom name may remain saved even when the device is not a
+favorite; removing a favorite therefore does not remove a custom name, and
+clearing a custom name does not clear the favorite flag. Ordinary scans only
+enrich an existing profile and never create profiles for every discovered
+host. Network scope continues to prevent a profile from being shown as the
+same device on another local network.
+
+This phase remains local-first and does not add notes, quick actions, device
+type inference, background scanning, cloud/account behavior, or new
+permissions. Wake-on-LAN remains the next separately approved phase and is
+not implemented or implied by this custom-name work.
+
 ### V1.0
 
 Release scope and readiness criteria are not yet defined. The future directions listed above are not commitments for this release.

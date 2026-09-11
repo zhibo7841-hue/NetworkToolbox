@@ -4,32 +4,65 @@ import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteDeviceObservation
 import com.networktoolbox.core.common.favorites.FavoriteDeviceCandidate
 import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
+import com.networktoolbox.core.common.favorites.DeviceDisplayNameResolver
 import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
+import com.networktoolbox.core.common.favorites.SavedDeviceProfile
+import com.networktoolbox.core.common.favorites.SavedDeviceRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class RoomFavoriteDeviceRepository @Inject constructor(
     private val favoriteDeviceDao: FavoriteDeviceDao,
-) : FavoriteDeviceRepository {
-    override fun observeFavorites(): Flow<List<FavoriteDevice>> =
+) : SavedDeviceRepository, FavoriteDeviceRepository {
+    override fun observeProfiles(): Flow<List<SavedDeviceProfile>> =
         favoriteDeviceDao.observeAll().map { entities ->
-            entities.mapNotNull(FavoriteDeviceEntity::toFavoriteDevice)
+            entities.mapNotNull(FavoriteDeviceEntity::toSavedDeviceProfile)
         }
 
-    override suspend fun add(favorite: FavoriteDevice): Long {
-        val insertedId = favoriteDeviceDao.insert(favorite.toEntity())
+    override suspend fun save(profile: SavedDeviceProfile): Long {
+        val insertedId = favoriteDeviceDao.insert(profile.toEntity())
         if (insertedId != -1L) return insertedId
 
         return favoriteDeviceDao.findByIdentity(
-            identityType = favorite.identityType.name,
-            identityValue = favorite.identityValue,
-            networkScope = favorite.networkScope,
+            identityType = profile.identityType.name,
+            identityValue = profile.identityValue,
+            networkScope = profile.networkScope,
         )?.id ?: 0L
     }
 
-    override suspend fun remove(id: Long) {
+    override suspend fun delete(id: Long) {
         favoriteDeviceDao.deleteById(id)
+    }
+
+    override suspend fun setFavorite(id: Long, isFavorite: Boolean) {
+        val existing = favoriteDeviceDao.findById(id) ?: return
+        val now = System.currentTimeMillis()
+        if (!isFavorite && existing.customName.isNullOrBlank()) {
+            favoriteDeviceDao.deleteById(id)
+        } else {
+            favoriteDeviceDao.updateFavorite(
+                id = id,
+                isFavorite = if (isFavorite) 1 else 0,
+                updatedAt = now,
+            )
+        }
+    }
+
+    override suspend fun setCustomName(id: Long, customName: String?) {
+        val normalized = customName?.let {
+            DeviceDisplayNameResolver.validateCustomName(it).getOrElse { error -> throw error }
+        }
+        val existing = favoriteDeviceDao.findById(id) ?: return
+        if (normalized == null && existing.isFavorite == 0) {
+            favoriteDeviceDao.deleteById(id)
+        } else {
+            favoriteDeviceDao.updateCustomName(
+                id = id,
+                customName = normalized,
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
     }
 
     override suspend fun updateLastObserved(id: Long, observation: FavoriteDeviceObservation) {
@@ -46,11 +79,25 @@ class RoomFavoriteDeviceRepository @Inject constructor(
             lastSeenAt = observation.lastSeenAt,
             isGateway = if (observation.isGateway) 1 else 0,
             isLocalDevice = if (observation.isLocalDevice) 1 else 0,
+            updatedAt = System.currentTimeMillis(),
         )
     }
 
-    override suspend fun findMatching(candidate: FavoriteDeviceCandidate): FavoriteDevice? =
+    override suspend fun findMatching(candidate: FavoriteDeviceCandidate): SavedDeviceProfile? =
         favoriteDeviceDao.getAll()
-            .mapNotNull(FavoriteDeviceEntity::toFavoriteDevice)
-            .firstOrNull { favorite -> FavoriteIdentityMatcher.matches(favorite, candidate) }
+            .mapNotNull(FavoriteDeviceEntity::toSavedDeviceProfile)
+            .firstOrNull { profile -> FavoriteIdentityMatcher.matches(profile, candidate) }
+
+    // Legacy FavoriteDeviceRepository facade. It intentionally exposes only
+    // explicitly favorited profiles to old callers.
+    override fun observeFavorites(): Flow<List<FavoriteDevice>> =
+        observeProfiles().map { profiles -> profiles.filter(SavedDeviceProfile::isFavorite) }
+
+    override suspend fun add(favorite: FavoriteDevice): Long =
+        save(favorite.copy(isFavorite = true))
+
+    override suspend fun remove(id: Long) {
+        delete(id)
+    }
+
 }

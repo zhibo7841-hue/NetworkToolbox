@@ -247,6 +247,33 @@ This log records the confirmed project decisions. New scope or changes to these 
   history behavior. The Device Center is a current-network entry point, not a
   new device-management feature.
 
+## Decision: v0.5 LAN Device Center Phase 2B — Saved Device Profile and Custom Device Name
+
+- Date: 2026-09-11
+- Status: Accepted
+- Decision: Phase 2B evolves the favorite-only persistence into a generic
+  local Saved Device Profile. A database row is not synonymous with a
+  favorite: the profile explicitly stores `isFavorite` and may independently
+  store `customName` and future device-action configuration fields.
+- Presentation: `customName` is a user-facing presentation override only. The
+  automatically detected hostname, mDNS, UPnP, and other identity metadata
+  remain retained as observed values and remain available to the detail view.
+  The custom name does not rename or mutate the device itself.
+- Independent state: Un-favoriting a profile does not delete a custom name.
+  Clearing a custom name does not un-favorite the device. A profile with
+  neither a favorite flag nor a custom name may be cleaned up as an orphan.
+- Identity: The existing conservative matcher and network-scope boundary are
+  unchanged. A valid MAC, reliable protocol identity, or network-scoped IPv4
+  identity remains the basis for matching; hostname alone is not an identity.
+- Persistence: Profiles remain on-device in Room through an additive v2 -> v3
+  migration. Existing favorite rows migrate to explicit `isFavorite = true`
+  with `customName = null`, while identity, scope, last-known metadata, and
+  History remain intact.
+- Consequence: LAN Scanner and Device Center may use the resolved custom
+  display name when a safe profile match exists, but they do not gain device
+  management actions. Wake-on-LAN remains a later phase requiring its own
+  product, permission, and safety decision.
+
 ## Decision: v0.5 LAN Device Center Phase 2A — Device Detail and Favorites
 
 - Date: 2026-09-11

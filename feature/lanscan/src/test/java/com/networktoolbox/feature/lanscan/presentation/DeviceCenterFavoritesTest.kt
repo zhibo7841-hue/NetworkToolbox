@@ -70,6 +70,44 @@ class DeviceCenterFavoritesTest {
         assertFalse(item.card.evidence.orEmpty().contains("离线"))
     }
 
+    @Test
+    fun `custom named nonfavorite profile remains visible when not observed`() {
+        val context = context()
+        val item = DeviceCenterPresentation.deviceList(
+            devices = emptyList(),
+            favorites = listOf(
+                favorite(
+                    ip = "10.0.1.51",
+                    scope = LanNetworkScope.from(context)!!,
+                ).copy(isFavorite = false, customName = "HomeLab NAS"),
+            ),
+            context = context,
+        ).single()
+
+        assertEquals("HomeLab NAS", item.card.displayName)
+        assertFalse(item.isFavorite)
+        assertFalse(item.observedThisScan)
+        assertEquals("本次未发现", item.card.evidence)
+    }
+
+    @Test
+    fun `custom name overrides detected identity without changing favorite state`() {
+        val context = context()
+        val item = DeviceCenterPresentation.deviceList(
+            devices = listOf(device("10.0.1.10")),
+            favorites = listOf(
+                favorite(
+                    ip = "10.0.1.10",
+                    scope = LanNetworkScope.from(context)!!,
+                ).copy(customName = "书房设备", isFavorite = false),
+            ),
+            context = context,
+        ).single()
+
+        assertEquals("书房设备", item.card.displayName)
+        assertFalse(item.isFavorite)
+    }
+
     private fun context() = NetworkContext(
         connectionType = ConnectionType.WIFI,
         ipv4Address = "10.0.1.206",

@@ -171,3 +171,55 @@ metadata, network relation, and observation status. Its star toggles the
 favorite through the ViewModel/repository without confirmation. No detail
 action performs port scanning, Wake-on-LAN, renaming, notes, OS inference, or
 background work.
+
+## LAN Device Center Phase 2B — Saved Device Profile and Custom Name
+
+Phase 2B makes the persistence abstraction explicit: `SavedDeviceProfile` is a
+local profile, while `isFavorite` is one independent user preference on that
+profile. A profile can therefore exist because it is favorited, because it has
+a custom name, or because both are present. A profile with neither value is
+eligible for repository-level orphan cleanup. Profile existence must never be
+used as a shortcut for favorite state.
+
+`core:common` owns `SavedDeviceProfile`, the `SavedDeviceRepository` contract,
+and the pure `DeviceDisplayNameResolver`. The repository supports observing
+all profiles, conservative identity lookup, explicit favorite updates,
+custom-name updates, last-observed metadata enrichment, and deletion. The
+legacy `FavoriteDeviceRepository` name remains only as a compatibility facade;
+new production callers use the saved-profile contract and inspect the
+explicit `isFavorite` field.
+
+`core:database` keeps the physical `favorite_devices` table for a minimal
+schema transition, but its Room model now represents saved profiles. Room
+version 3 is reached through the additive `MIGRATION_2_3`: `custom_name`,
+`is_favorite`, and `updated_at` are added without dropping or rewriting
+identity, scope, observation metadata, or `history_records`. Legacy rows
+default to `isFavorite = true`, `customName = null`, and preserve their
+existing timestamps and metadata.
+
+The existing `FavoriteIdentityMatcher` remains the only matching authority.
+Matching is network-scope-first and conservative: normalized MAC, reliable
+protocol identity, and network-scoped IPv4 retain their existing precedence;
+hostname is never promoted to identity. Strong identity never silently falls
+back to a weaker one. Rescans may update last-known detected metadata and
+roles, but never overwrite `customName`. The network scope prevents a custom
+name from leaking to a same-address host on another local network.
+
+The display-name pipeline is:
+
+`SavedDeviceProfile.customName` -> detected reverse-DNS / mDNS / UPnP display
+identity -> localized unknown-device fallback.
+
+The resolver trims input, rejects blank or control-character names, allows
+Unicode, and limits custom names to 40 Unicode code points. Names are not
+device identities and duplicate names are allowed. UI localization remains in
+resources; the resolver is pure Kotlin and does not depend on Compose or
+Android Context.
+
+Device Detail owns the edit interaction through `LanScannerViewModel` and the
+repository. The dialog saves immediately, updates the current detail and
+matching list through the observed profile flow, and provides Restore
+Automatic Name without changing favorite state. Tools -> LAN Scanner may
+render a safely matched custom name, but it remains a discovery surface with
+no management actions. No notes, device type inference, quick actions,
+background scan, new permission, or Wake-on-LAN implementation is introduced.

@@ -5,6 +5,7 @@ import com.networktoolbox.core.common.favorites.FavoriteDeviceCandidate
 import com.networktoolbox.core.common.favorites.FavoriteDeviceObservation
 import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
 import com.networktoolbox.core.common.favorites.FavoriteIdentityType
+import com.networktoolbox.core.common.favorites.SavedDeviceRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -113,6 +114,78 @@ class RoomFavoriteDeviceRepositoryTest {
         assertEquals(1, secondRepository.observeFavorites().first().size)
     }
 
+    @Test
+    fun `custom name and favorite state are independent`() = runBlocking {
+        val repository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val id = repository.save(favorite())
+
+        repository.setCustomName(id, "客厅网关")
+        repository.setFavorite(id, false)
+
+        val saved = repository.observeProfiles().first().single()
+        assertEquals("客厅网关", saved.customName)
+        assertEquals(false, saved.isFavorite)
+
+        repository.setFavorite(id, true)
+        assertTrue(repository.observeProfiles().first().single().isFavorite)
+
+        repository.setCustomName(id, null)
+        val restored = repository.observeProfiles().first().single()
+        assertEquals(null, restored.customName)
+        assertTrue(restored.isFavorite)
+    }
+
+    @Test
+    fun `nonfavorite custom profile survives and is removed when both values clear`() = runBlocking {
+        val repository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val id = repository.save(favorite().copy(isFavorite = false, customName = "HomeLab NAS"))
+
+        assertEquals(1, repository.observeProfiles().first().size)
+        assertEquals(0, repository.observeFavorites().first().size)
+
+        repository.setCustomName(id, null)
+
+        assertTrue(repository.observeProfiles().first().isEmpty())
+    }
+
+    @Test
+    fun `saved profile keeps custom name while observation metadata is refreshed`() = runBlocking {
+        val repository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val id = repository.save(favorite().copy(customName = "主路由"))
+
+        repository.updateLastObserved(
+            id,
+            FavoriteDeviceObservation(
+                lastKnownIpv4 = "10.0.1.99",
+                lastKnownDisplayName = "router.local",
+                lastKnownHostname = "router.local",
+                lastKnownMdnsName = null,
+                lastKnownUpnpName = null,
+                macAddress = null,
+                vendor = "Example",
+                model = "Router",
+                lastSeenAt = 99L,
+                isGateway = true,
+                isLocalDevice = false,
+            ),
+        )
+
+        val saved = repository.observeProfiles().first().single()
+        assertEquals("主路由", saved.customName)
+        assertEquals("10.0.1.99", saved.lastKnownIpv4)
+        assertEquals(99L, saved.lastSeenAt)
+    }
+
+    @Test
+    fun `saving same identity does not create duplicate profile`() = runBlocking {
+        val repository: SavedDeviceRepository = RoomFavoriteDeviceRepository(FakeFavoriteDeviceDao())
+        val firstId = repository.save(favorite())
+        val secondId = repository.save(favorite().copy(id = 0L, customName = "same device"))
+
+        assertEquals(firstId, secondId)
+        assertEquals(1, repository.observeProfiles().first().size)
+    }
+
     private fun favorite(
         ip: String = "10.0.1.20",
         identityValue: String = "AA:BB:CC:DD:EE:FF",
@@ -167,6 +240,9 @@ private class FakeFavoriteDeviceDao : FavoriteDeviceDao {
             it.networkScope == networkScope
     }
 
+    override suspend fun findById(id: Long): FavoriteDeviceEntity? =
+        entities.firstOrNull { it.id == id }
+
     override suspend fun updateObserved(
         id: Long,
         lastKnownIpv4: String?,
@@ -180,6 +256,7 @@ private class FakeFavoriteDeviceDao : FavoriteDeviceDao {
         lastSeenAt: Long,
         isGateway: Int,
         isLocalDevice: Int,
+        updatedAt: Long,
     ) {
         val index = entities.indexOfFirst { it.id == id }
         if (index < 0) return
@@ -196,6 +273,27 @@ private class FakeFavoriteDeviceDao : FavoriteDeviceDao {
             lastSeenAt = lastSeenAt,
             isGateway = isGateway,
             isLocalDevice = isLocalDevice,
+            updatedAt = updatedAt,
+        )
+        publish()
+    }
+
+    override suspend fun updateFavorite(id: Long, isFavorite: Int, updatedAt: Long) {
+        val index = entities.indexOfFirst { it.id == id }
+        if (index < 0) return
+        entities[index] = entities[index].copy(
+            isFavorite = isFavorite,
+            updatedAt = updatedAt,
+        )
+        publish()
+    }
+
+    override suspend fun updateCustomName(id: Long, customName: String?, updatedAt: Long) {
+        val index = entities.indexOfFirst { it.id == id }
+        if (index < 0) return
+        entities[index] = entities[index].copy(
+            customName = customName,
+            updatedAt = updatedAt,
         )
         publish()
     }

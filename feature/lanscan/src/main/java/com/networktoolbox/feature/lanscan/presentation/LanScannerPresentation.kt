@@ -1,5 +1,7 @@
 package com.networktoolbox.feature.lanscan.presentation
 
+import com.networktoolbox.core.common.favorites.DeviceDisplayNameResolver
+import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
@@ -19,6 +21,12 @@ object LanScannerPresentation {
     fun deviceDisplayName(device: LanDevice): String = devicePrimaryText(device)
         .takeIf { it.isNotBlank() && it != device.ipAddress }
         ?: "未知设备"
+
+    fun deviceDisplayName(device: LanDevice, savedProfile: FavoriteDevice?): String =
+        DeviceDisplayNameResolver.resolve(
+            customName = savedProfile?.customName,
+            detectedName = devicePrimaryText(device).takeUnless { it == device.ipAddress },
+        )
 
     fun deviceAddressText(device: LanDevice): String? = device.ipAddress.takeIf {
         devicePrimaryText(device) != device.ipAddress

@@ -22,7 +22,7 @@ object DatabaseModule {
         context,
         NetworkToolboxDatabase::class.java,
         DATABASE_NAME,
-    ).addMigrations(MIGRATION_1_2).build()
+    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
     @Provides
     @Singleton
@@ -45,9 +45,9 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideFavoriteDeviceRepository(
+    fun provideSavedDeviceRepository(
         favoriteDeviceDao: FavoriteDeviceDao,
-    ): com.networktoolbox.core.common.favorites.FavoriteDeviceRepository =
+    ): com.networktoolbox.core.common.favorites.SavedDeviceRepository =
         RoomFavoriteDeviceRepository(favoriteDeviceDao)
 
     private const val DATABASE_NAME = "networktoolbox.db"

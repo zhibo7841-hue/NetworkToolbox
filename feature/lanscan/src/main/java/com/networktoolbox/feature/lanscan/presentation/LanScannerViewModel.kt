@@ -2,10 +2,11 @@ package com.networktoolbox.feature.lanscan.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.networktoolbox.core.common.favorites.DeviceDisplayNameResolver
 import com.networktoolbox.core.common.favorites.FavoriteDevice
-import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
 import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
-import com.networktoolbox.core.common.favorites.NoOpFavoriteDeviceRepository
+import com.networktoolbox.core.common.favorites.NoOpSavedDeviceRepository
+import com.networktoolbox.core.common.favorites.SavedDeviceRepository
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
@@ -51,14 +52,18 @@ class LanScannerViewModel @Inject constructor(
     private val reverseDnsEnricher: ReverseDnsEnricher,
     private val mdnsEnricher: MdnsEnricher,
     private val upnpEnricher: UpnpEnricher = NoOpUpnpEnricher,
-    private val favoriteRepository: FavoriteDeviceRepository = NoOpFavoriteDeviceRepository,
+    private val savedDeviceRepository: SavedDeviceRepository = NoOpSavedDeviceRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<LanScannerUiState>(LanScannerUiState.Idle)
     val uiState: StateFlow<LanScannerUiState> = _uiState.asStateFlow()
     private val _favoriteDevices = MutableStateFlow<List<FavoriteDevice>>(emptyList())
     val favoriteDevices: StateFlow<List<FavoriteDevice>> = _favoriteDevices.asStateFlow()
+    private val _savedProfiles = MutableStateFlow<List<FavoriteDevice>>(emptyList())
+    val savedProfiles: StateFlow<List<FavoriteDevice>> = _savedProfiles.asStateFlow()
     private val _favoriteActionError = MutableStateFlow<String?>(null)
     val favoriteActionError: StateFlow<String?> = _favoriteActionError.asStateFlow()
+    private val _customNameActionError = MutableStateFlow<String?>(null)
+    val customNameActionError: StateFlow<String?> = _customNameActionError.asStateFlow()
 
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
@@ -90,9 +95,12 @@ class LanScannerViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            favoriteRepository
-                .observeFavorites()
-                .collect { favorites -> _favoriteDevices.value = favorites }
+            savedDeviceRepository
+                .observeProfiles()
+                .collect { profiles ->
+                    _savedProfiles.value = profiles
+                    _favoriteDevices.value = profiles.filter { it.isFavorite }
+                }
         }
     }
 
@@ -302,8 +310,11 @@ class LanScannerViewModel @Inject constructor(
                         toggleObservedFavorite(target.device, target.context)
                     }
 
-                    is DeviceDetailActionTarget.SavedFavorite -> {
-                        favoriteRepository.remove(target.favorite.id)
+                    is DeviceDetailActionTarget.SavedProfile -> {
+                        savedDeviceRepository.setFavorite(
+                            id = target.profile.id,
+                            isFavorite = !target.profile.isFavorite,
+                        )
                     }
 
                     null -> Unit
@@ -316,11 +327,13 @@ class LanScannerViewModel @Inject constructor(
         val context = currentNetworkContext()
         val candidate = context?.let { LanFavoriteIdentity.candidate(device, it) }
         val favorite = candidate?.let { current ->
-            _favoriteDevices.value.firstOrNull { saved ->
+            _savedProfiles.value.firstOrNull { saved ->
                 FavoriteIdentityMatcher.matches(saved, current)
             }
         }
-        return favorite?.let(LanDeviceDetailRouteKey::forFavorite)
+        return favorite
+            ?.takeIf { it.isFavorite }
+            ?.let(LanDeviceDetailRouteKey::forFavorite)
             ?: LanDeviceDetailRouteKey.forObserved(
                 context?.let(LanNetworkScope::from),
                 device.ipAddress,
@@ -330,7 +343,7 @@ class LanScannerViewModel @Inject constructor(
     /** Resolves a detail route against the current scan or a saved favorite. */
     fun resolveDeviceDetail(
         routeKey: String?,
-        favorites: List<FavoriteDevice> = _favoriteDevices.value,
+        favorites: List<FavoriteDevice> = _savedProfiles.value,
     ): DeviceDetailPresentation? {
         val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return null
         val context = currentNetworkContext() ?: return null
@@ -431,13 +444,13 @@ class LanScannerViewModel @Inject constructor(
                         device -> isMatchingFavoriteRouteObservation(device, parsed, context)
                     }
                     ?.let { device -> DeviceDetailActionTarget.Observed(device, context) }
-                    ?: _favoriteDevices.value
+                    ?: _savedProfiles.value
                         .firstOrNull { favorite ->
                             favorite.networkScope == parsed.networkScope &&
                                 favorite.identityType == parsed.identityType &&
                                 favorite.identityValue == parsed.identityValue
                         }
-                        ?.let(DeviceDetailActionTarget::SavedFavorite)
+                        ?.let(DeviceDetailActionTarget::SavedProfile)
             }
         }
     }
@@ -457,15 +470,84 @@ class LanScannerViewModel @Inject constructor(
         context: NetworkContext,
     ) {
         val candidate = LanFavoriteIdentity.candidate(device, context) ?: return
-        val existing = favoriteRepository.findMatching(candidate)
+        val existing = savedDeviceRepository.findMatching(candidate)
         if (existing != null) {
-            favoriteRepository.remove(existing.id)
+            savedDeviceRepository.setFavorite(
+                id = existing.id,
+                isFavorite = !existing.isFavorite,
+            )
         } else {
-            LanFavoriteIdentity.createFavorite(
+            LanFavoriteIdentity.createSavedProfile(
                 device = device,
                 context = context,
                 now = System.currentTimeMillis(),
-            )?.let { favoriteRepository.add(it) }
+            )?.let { savedDeviceRepository.save(it) }
+        }
+    }
+
+    /** Saves a user-defined presentation name without changing favorite state. */
+    fun setCustomNameByRouteKey(routeKey: String?, rawName: String) {
+        viewModelScope.launch {
+            _customNameActionError.value = null
+            val normalized = DeviceDisplayNameResolver.normalizeCustomName(rawName)
+            if (normalized == null) {
+                _customNameActionError.value = "名称不能为空、不能包含控制字符，且最多 40 个字符。"
+                return@launch
+            }
+            runCustomNameOperation {
+                updateCustomNameByRouteKey(routeKey, normalized)
+            }
+        }
+    }
+
+    /** Restores the detected/neutral name while preserving the favorite flag. */
+    fun clearCustomNameByRouteKey(routeKey: String?) {
+        viewModelScope.launch {
+            _customNameActionError.value = null
+            runCustomNameOperation {
+                updateCustomNameByRouteKey(routeKey, null)
+            }
+        }
+    }
+
+    private suspend fun runCustomNameOperation(operation: suspend () -> Unit) {
+        try {
+            operation()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            _customNameActionError.value = "设备名称保存失败，请重试。"
+        }
+    }
+
+    private suspend fun updateCustomNameByRouteKey(routeKey: String?, customName: String?) {
+        val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return
+        val context = currentNetworkContext() ?: return
+        val scope = LanNetworkScope.from(context) ?: return
+        when (val target = resolveDeviceDetailActionTarget(parsed, context, scope)) {
+            is DeviceDetailActionTarget.Observed -> {
+                val candidate = LanFavoriteIdentity.candidate(target.device, target.context) ?: return
+                val existing = savedDeviceRepository.findMatching(candidate)
+                if (existing != null) {
+                    savedDeviceRepository.setCustomName(existing.id, customName)
+                } else if (customName != null) {
+                    LanFavoriteIdentity.createSavedProfile(
+                        device = target.device,
+                        context = target.context,
+                        now = System.currentTimeMillis(),
+                    )?.let { profile ->
+                        savedDeviceRepository.save(
+                            profile.copy(isFavorite = false, customName = customName),
+                        )
+                    }
+                }
+            }
+
+            is DeviceDetailActionTarget.SavedProfile -> {
+                savedDeviceRepository.setCustomName(target.profile.id, customName)
+            }
+
+            null -> Unit
         }
     }
 
@@ -488,8 +570,8 @@ class LanScannerViewModel @Inject constructor(
             val context: NetworkContext,
         ) : DeviceDetailActionTarget
 
-        data class SavedFavorite(
-            val favorite: FavoriteDevice,
+        data class SavedProfile(
+            val profile: FavoriteDevice,
         ) : DeviceDetailActionTarget
     }
 
@@ -698,9 +780,9 @@ class LanScannerViewModel @Inject constructor(
     private fun syncFavoriteObservation(context: NetworkContext, device: com.networktoolbox.feature.lanscan.domain.model.LanDevice) {
         viewModelScope.launch {
             val candidate = LanFavoriteIdentity.candidate(device, context) ?: return@launch
-            val favorite = favoriteRepository.findMatching(candidate) ?: return@launch
-            favoriteRepository.updateLastObserved(
-                id = favorite.id,
+            val profile = savedDeviceRepository.findMatching(candidate) ?: return@launch
+            savedDeviceRepository.updateLastObserved(
+                id = profile.id,
                 observation = LanFavoriteIdentity.observedMetadata(device),
             )
         }
@@ -712,9 +794,9 @@ class LanScannerViewModel @Inject constructor(
     ) {
         devices.forEach { device ->
             val candidate = LanFavoriteIdentity.candidate(device, context) ?: return@forEach
-            val favorite = favoriteRepository.findMatching(candidate) ?: return@forEach
-            favoriteRepository.updateLastObserved(
-                id = favorite.id,
+            val profile = savedDeviceRepository.findMatching(candidate) ?: return@forEach
+            savedDeviceRepository.updateLastObserved(
+                id = profile.id,
                 observation = LanFavoriteIdentity.observedMetadata(device),
             )
         }

@@ -4,6 +4,7 @@ import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteDeviceCandidate
 import com.networktoolbox.core.common.favorites.FavoriteDeviceObservation
 import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
+import com.networktoolbox.core.common.favorites.SavedDeviceProfile
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.identity
 
@@ -25,11 +26,11 @@ object LanFavoriteIdentity {
         )
     }
 
-    fun createFavorite(
+    fun createSavedProfile(
         device: LanDevice,
         context: com.networktoolbox.core.network.model.NetworkContext,
         now: Long,
-    ): FavoriteDevice? {
+    ): SavedDeviceProfile? {
         val candidate = candidate(device, context) ?: return null
         val identity = device.identity
         val displayName = identity.displayName.value.takeUnless { it == device.ipAddress }
@@ -47,7 +48,7 @@ object LanFavoriteIdentity {
             ?: identity.modelDescription?.value
             ?: identity.modelNumber?.value
 
-        return FavoriteDevice(
+        return SavedDeviceProfile(
             identityType = candidate.identity.type,
             identityValue = candidate.identity.value,
             networkScope = candidate.networkScope,
@@ -65,6 +66,13 @@ object LanFavoriteIdentity {
             isLocalDevice = device.isLocalDevice,
         )
     }
+
+    /** Compatibility name retained for the pre-Phase-2B favorite flow. */
+    fun createFavorite(
+        device: LanDevice,
+        context: com.networktoolbox.core.network.model.NetworkContext,
+        now: Long,
+    ): FavoriteDevice? = createSavedProfile(device, context, now)
 
     fun observedMetadata(device: LanDevice): FavoriteDeviceObservation = run {
         val identity = device.identity

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="device_detail_title">设备详情</string>
+    <string name="device_detail_unavailable_title">设备信息已不可用</string>
+    <string name="device_detail_unavailable_message">该设备不在当前扫描结果或本地保存的设备中。</string>
+    <string name="device_detail_edit_name_description">编辑设备名称</string>
+    <string name="device_name_title">设备名称</string>
+    <string name="device_name_helper">仅保存在本机，不会修改设备本身。</string>
+    <string name="device_name_placeholder">输入设备名称</string>
+    <string name="device_name_cancel">取消</string>
+    <string name="device_name_save">保存</string>
+    <string name="device_name_restore">恢复自动名称</string>
+    <string name="device_name_invalid">名称不能为空、不能包含控制字符，且最多 40 个字符。</string>
+</resources>

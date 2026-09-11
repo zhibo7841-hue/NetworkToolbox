@@ -105,6 +105,34 @@ class DeviceDetailPresentationTest {
         assertEquals("取消收藏", detail.favoriteToggleContentDescription)
     }
 
+    @Test
+    fun `custom name is shown for a nonfavorite saved detail`() {
+        val favorite = FavoriteDevice(
+            id = 2L,
+            identityType = FavoriteIdentityType.NETWORK_IP,
+            identityValue = "10.0.1.53",
+            networkScope = "scope",
+            lastKnownIpv4 = "10.0.1.53",
+            lastKnownDisplayName = "printer.local",
+            lastKnownHostname = "printer.local",
+            lastKnownMdnsName = null,
+            lastKnownUpnpName = null,
+            macAddress = null,
+            vendor = null,
+            model = null,
+            createdAt = 1L,
+            lastSeenAt = 1L,
+            customName = "书房打印机",
+            isFavorite = false,
+        )
+
+        val detail = DeviceCenterPresentation.detail(favorite, context())
+
+        assertEquals("书房打印机", detail.displayName)
+        assertFalse(detail.isFavorite)
+        assertEquals("书房打印机", detail.customName)
+    }
+
     private fun context() = NetworkContext(
         connectionType = ConnectionType.WIFI,
         ipv4Address = "10.0.1.206",

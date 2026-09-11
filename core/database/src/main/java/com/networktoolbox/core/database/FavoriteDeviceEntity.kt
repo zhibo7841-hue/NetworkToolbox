@@ -6,6 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteIdentityType
+import com.networktoolbox.core.common.favorites.SavedDeviceProfile
 
 @Entity(
     tableName = "favorite_devices",
@@ -48,6 +49,12 @@ data class FavoriteDeviceEntity(
     val isGateway: Int,
     @ColumnInfo(name = "is_local_device")
     val isLocalDevice: Int,
+    @ColumnInfo(name = "custom_name")
+    val customName: String? = null,
+    @ColumnInfo(name = "is_favorite")
+    val isFavorite: Int = 1,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = createdAt,
 )
 
 fun FavoriteDevice.toEntity(): FavoriteDeviceEntity = FavoriteDeviceEntity(
@@ -67,10 +74,13 @@ fun FavoriteDevice.toEntity(): FavoriteDeviceEntity = FavoriteDeviceEntity(
     lastSeenAt = lastSeenAt,
     isGateway = if (isGateway) 1 else 0,
     isLocalDevice = if (isLocalDevice) 1 else 0,
+    customName = customName,
+    isFavorite = if (isFavorite) 1 else 0,
+    updatedAt = updatedAt,
 )
 
-fun FavoriteDeviceEntity.toFavoriteDevice(): FavoriteDevice? = runCatching {
-    FavoriteDevice(
+fun FavoriteDeviceEntity.toSavedDeviceProfile(): SavedDeviceProfile? = runCatching {
+    SavedDeviceProfile(
         id = id,
         identityType = FavoriteIdentityType.valueOf(identityType),
         identityValue = identityValue,
@@ -87,5 +97,11 @@ fun FavoriteDeviceEntity.toFavoriteDevice(): FavoriteDevice? = runCatching {
         lastSeenAt = lastSeenAt,
         isGateway = isGateway != 0,
         isLocalDevice = isLocalDevice != 0,
+        customName = customName,
+        isFavorite = isFavorite != 0,
+        updatedAt = updatedAt,
     )
 }.getOrNull()
+
+/** Compatibility mapper for pre-Phase-2B database callers. */
+fun FavoriteDeviceEntity.toFavoriteDevice(): FavoriteDevice? = toSavedDeviceProfile()

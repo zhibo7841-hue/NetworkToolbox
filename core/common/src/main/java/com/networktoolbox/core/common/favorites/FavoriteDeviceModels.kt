@@ -48,7 +48,14 @@ data class FavoriteDeviceObservation(
     val isLocalDevice: Boolean,
 )
 
-data class FavoriteDevice(
+/**
+ * A locally saved device profile.
+ *
+ * A profile is not synonymous with a favorite. [isFavorite] is an explicit
+ * presentation preference so a user-defined name can survive independently
+ * from the star/favorite state.
+ */
+data class SavedDeviceProfile(
     val id: Long = 0L,
     val identityType: FavoriteIdentityType,
     val identityValue: String,
@@ -65,6 +72,9 @@ data class FavoriteDevice(
     val lastSeenAt: Long?,
     val isGateway: Boolean = false,
     val isLocalDevice: Boolean = false,
+    val customName: String? = null,
+    val isFavorite: Boolean = true,
+    val updatedAt: Long = createdAt,
 ) {
     init {
         require(identityValue.isNotBlank()) { "Favorite identity value must not be blank." }
@@ -74,3 +84,6 @@ data class FavoriteDevice(
     val identity: FavoriteDeviceIdentity
         get() = FavoriteDeviceIdentity(identityType, identityValue)
 }
+
+/** Source-compatible name retained for existing LAN Scanner integrations. */
+typealias FavoriteDevice = SavedDeviceProfile

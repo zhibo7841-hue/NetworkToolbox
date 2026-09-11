@@ -713,3 +713,29 @@ observed groups; in-scope favorites absent from the current scan remain at the
 end with the neutral state `本次未发现`. This state never uses an offline
 label or an error color. Cards retain the shared compact primary/secondary
 layout and the existing role/evidence semantics.
+
+### Device Detail Edit Name Pattern
+
+Device Detail may expose one compact edit-name action in the secondary-page
+header. It opens a Material 3 `AlertDialog` titled `设备名称` with the current
+custom name prefilled, or an empty field when the device uses its automatic
+name. The supporting text explains that the value is stored only on the
+device and does not rename the physical device. `取消` and `保存` are the
+primary dialog actions; when a custom name exists, `恢复自动名称` clears only
+the custom override and leaves the favorite flag unchanged. There is no list
+inline editor and no `删除设备名称` action.
+
+Custom names are trimmed, Unicode-compatible, limited to 40 Unicode code
+points, and rejected when blank or containing control characters. Validation
+is owned by the pure domain resolver; the UI only presents the localized
+validation state. A successful save updates the current detail and any
+matching device card through the saved-profile flow without requiring a
+rescan or navigation reset.
+
+### Device Card Custom Display Name
+
+When a device card has a safely matched saved profile, its display name
+priority is: custom name, detected hostname / mDNS / UPnP identity, then the
+localized `未知设备` fallback. The IP address and confirmed discovery evidence
+remain visible. The custom name is presentation-only and does not replace the
+stored detected identity metadata or change favorite/star semantics.

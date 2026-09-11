@@ -29,6 +29,9 @@ interface FavoriteDeviceDao {
         networkScope: String,
     ): FavoriteDeviceEntity?
 
+    @Query("SELECT * FROM favorite_devices WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): FavoriteDeviceEntity?
+
     @Query(
         "UPDATE favorite_devices SET " +
             "last_known_ipv4 = :lastKnownIpv4, " +
@@ -39,9 +42,10 @@ interface FavoriteDeviceDao {
             "mac_address = :macAddress, " +
             "vendor = :vendor, " +
             "model = :model, " +
-            "last_seen_at = :lastSeenAt, " +
-            "is_gateway = :isGateway, " +
-            "is_local_device = :isLocalDevice " +
+        "last_seen_at = :lastSeenAt, " +
+        "is_gateway = :isGateway, " +
+            "is_local_device = :isLocalDevice, " +
+            "updated_at = :updatedAt " +
             "WHERE id = :id",
     )
     suspend fun updateObserved(
@@ -57,7 +61,14 @@ interface FavoriteDeviceDao {
         lastSeenAt: Long,
         isGateway: Int,
         isLocalDevice: Int,
+        updatedAt: Long,
     )
+
+    @Query("UPDATE favorite_devices SET is_favorite = :isFavorite, updated_at = :updatedAt WHERE id = :id")
+    suspend fun updateFavorite(id: Long, isFavorite: Int, updatedAt: Long)
+
+    @Query("UPDATE favorite_devices SET custom_name = :customName, updated_at = :updatedAt WHERE id = :id")
+    suspend fun updateCustomName(id: Long, customName: String?, updatedAt: Long)
 
     @Query("DELETE FROM favorite_devices WHERE id = :id")
     suspend fun deleteById(id: Long)

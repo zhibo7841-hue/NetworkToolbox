@@ -172,8 +172,9 @@ class MainActivity : ComponentActivity() {
             val reportUiState by reportViewModel.uiState.collectAsState()
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
-            val favoriteDevices by lanScannerViewModel.favoriteDevices.collectAsState()
+            val savedDeviceProfiles by lanScannerViewModel.savedProfiles.collectAsState()
             val favoriteActionError by lanScannerViewModel.favoriteActionError.collectAsState()
+            val customNameActionError by lanScannerViewModel.customNameActionError.collectAsState()
             val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
             var navigationState by rememberSaveable(stateSaver = AppNavigationState.Saver) {
                 mutableStateOf(AppNavigationState())
@@ -361,7 +362,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 TopLevelDestination.DEVICES -> LanDeviceCenterScreen(
                                     uiState = lanScannerUiState,
-                                    favorites = favoriteDevices,
+                                    favorites = savedDeviceProfiles,
                                     onStartScan = lanScannerViewModel::startCurrentNetworkScan,
                                     onStopScan = lanScannerViewModel::stopScan,
                                     onRescan = lanScannerViewModel::rescanCurrentNetwork,
@@ -448,6 +449,7 @@ class MainActivity : ComponentActivity() {
                             )
                             ToolScreen.LAN_SCAN -> LanScannerScreen(
                                 uiState = lanScannerUiState,
+                                savedProfiles = savedDeviceProfiles,
                                 onStartScan = lanScannerViewModel::startScan,
                                 onStopScan = lanScannerViewModel::stopScan,
                                 onRetry = lanScannerViewModel::rescan,
@@ -460,12 +462,24 @@ class MainActivity : ComponentActivity() {
                             ToolScreen.DEVICE_DETAIL -> DeviceDetailScreen(
                                 detail = lanScannerViewModel.resolveDeviceDetail(
                                     routeKey = navigationState.deviceDetailKey,
-                                    favorites = favoriteDevices,
+                                    favorites = savedDeviceProfiles,
                                 ),
                                 favoriteErrorMessage = favoriteActionError,
+                                customNameErrorMessage = customNameActionError,
                                 onBack = ::goBack,
                                 onToggleFavorite = {
                                     lanScannerViewModel.toggleFavoriteByRouteKey(
+                                        navigationState.deviceDetailKey,
+                                    )
+                                },
+                                onSaveCustomName = { name ->
+                                    lanScannerViewModel.setCustomNameByRouteKey(
+                                        navigationState.deviceDetailKey,
+                                        name,
+                                    )
+                                },
+                                onRestoreAutomaticName = {
+                                    lanScannerViewModel.clearCustomNameByRouteKey(
                                         navigationState.deviceDetailKey,
                                     )
                                 },

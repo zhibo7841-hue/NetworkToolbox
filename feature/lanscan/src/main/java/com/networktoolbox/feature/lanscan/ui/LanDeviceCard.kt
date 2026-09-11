@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkToolboxComponentShapes
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
+import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.presentation.DeviceCenterPresentation
 import com.networktoolbox.feature.lanscan.presentation.LanDeviceCardPresentation
@@ -38,11 +39,12 @@ fun LanDeviceCard(
     modifier: Modifier = Modifier,
     showMac: Boolean = false,
     isFavorite: Boolean = false,
+    savedProfile: FavoriteDevice? = null,
     onClick: (() -> Unit)? = null,
 ) {
     LanDeviceCard(
         presentation = LanDeviceCardPresentation(
-            displayName = DeviceCenterPresentation.deviceDisplayName(device),
+            displayName = DeviceCenterPresentation.deviceDisplayName(device, savedProfile),
             ipAddress = device.ipAddress,
             identitySummary = DeviceCenterPresentation.deviceIdentitySummary(device),
             evidence = DeviceCenterPresentation.deviceEvidence(device),

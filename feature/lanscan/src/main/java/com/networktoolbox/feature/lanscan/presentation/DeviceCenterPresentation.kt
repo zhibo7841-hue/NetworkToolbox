@@ -2,6 +2,7 @@ package com.networktoolbox.feature.lanscan.presentation
 
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
+import com.networktoolbox.core.common.favorites.DeviceDisplayNameResolver
 import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteIdentityMatcher
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
@@ -61,6 +62,7 @@ data class DeviceDetailPresentation(
     val networkScope: String?,
     val observedThisScan: Boolean,
     val lastSeenAt: Long?,
+    val customName: String? = null,
     val isFavorite: Boolean,
     val canToggleFavorite: Boolean,
 ) {
@@ -90,9 +92,15 @@ object DeviceCenterPresentation {
             ?.takeIf { context.connectionType == ConnectionType.WIFI },
     )
 
-    /** Returns a real aggregated name, or the neutral fallback required by Devices. */
-    fun deviceDisplayName(device: LanDevice): String =
-        LanScannerPresentation.deviceDisplayName(device)
+    /** Resolves custom override before the detected identity and neutral fallback. */
+    fun deviceDisplayName(device: LanDevice): String = deviceDisplayName(device, null)
+
+    fun deviceDisplayName(device: LanDevice, favorite: FavoriteDevice?): String =
+        DeviceDisplayNameResolver.resolve(
+            customName = favorite?.customName,
+            detectedName = LanScannerPresentation.devicePrimaryText(device)
+                .takeUnless { it == device.ipAddress },
+        )
 
     fun deviceAddress(device: LanDevice): String = device.ipAddress
 
@@ -127,13 +135,15 @@ object DeviceCenterPresentation {
                     FavoriteIdentityMatcher.matches(saved, current)
                 }
             }
-            val detailKey = favorite?.let(LanDeviceDetailRouteKey::forFavorite)
+            val detailKey = favorite
+                ?.takeIf { it.isFavorite }
+                ?.let(LanDeviceDetailRouteKey::forFavorite)
                 ?: LanDeviceDetailRouteKey.forObserved(scope, device.ipAddress)
             DeviceCenterDeviceItem(
                 device = device,
                 favorite = favorite,
                 observedThisScan = true,
-                isFavorite = favorite != null,
+                isFavorite = favorite?.isFavorite == true,
                 detailKey = detailKey,
                 card = card(device, favorite),
             )
@@ -141,12 +151,13 @@ object DeviceCenterPresentation {
         val observedFavoriteKeys = observedItems.mapNotNull { it.favorite?.let(::favoriteKey) }.toSet()
         val unseenItems = if (includeUnseenFavorites) {
             scopedFavorites
+                .filter { it.isFavorite || it.customName != null }
                 .filterNot { favorite -> favoriteKey(favorite) in observedFavoriteKeys }
                 .map { favorite ->
                     DeviceCenterDeviceItem(
                         favorite = favorite,
                         observedThisScan = false,
-                        isFavorite = true,
+                        isFavorite = favorite.isFavorite,
                         detailKey = LanDeviceDetailRouteKey.forFavorite(favorite),
                         card = card(favorite),
                     )
@@ -189,7 +200,7 @@ object DeviceCenterPresentation {
             .ifEmpty { listOfNotNull(favorite?.lastKnownUpnpName) }
         return DeviceDetailPresentation(
             detailKey = detailKey,
-            displayName = deviceDisplayName(device),
+            displayName = deviceDisplayName(device, favorite),
             ipAddress = device.ipAddress,
             macAddress = FavoriteIdentityMatcher.normalizeMac(device.macAddress)
                 ?: favorite?.macAddress,
@@ -205,7 +216,8 @@ object DeviceCenterPresentation {
             networkScope = LanNetworkScope.from(context)?.let { "当前局域网" },
             observedThisScan = observedThisScan,
             lastSeenAt = device.lastSeen,
-            isFavorite = favorite != null,
+            customName = favorite?.customName,
+            isFavorite = favorite?.isFavorite == true,
             canToggleFavorite = LanNetworkScope.from(context) != null,
         )
     }
@@ -216,10 +228,12 @@ object DeviceCenterPresentation {
         detailKey: String = LanDeviceDetailRouteKey.forFavorite(favorite),
     ): DeviceDetailPresentation = DeviceDetailPresentation(
         detailKey = detailKey,
-        displayName = favorite.lastKnownDisplayName
-            ?.trim()
-            ?.takeIf { it.isNotBlank() && it != favorite.lastKnownIpv4 }
-            ?: "未知设备",
+        displayName = DeviceDisplayNameResolver.resolve(
+            customName = favorite.customName,
+            detectedName = favorite.lastKnownDisplayName
+                ?.trim()
+                ?.takeIf { it.isNotBlank() && it != favorite.lastKnownIpv4 },
+        ),
         ipAddress = favorite.lastKnownIpv4,
         macAddress = FavoriteIdentityMatcher.normalizeMac(favorite.macAddress),
         vendor = favorite.vendor,
@@ -231,27 +245,30 @@ object DeviceCenterPresentation {
         networkScope = LanNetworkScope.from(context)?.let { "当前局域网" },
         observedThisScan = false,
         lastSeenAt = favorite.lastSeenAt,
-        isFavorite = true,
+        customName = favorite.customName,
+        isFavorite = favorite.isFavorite,
         canToggleFavorite = LanNetworkScope.from(context) != null,
     )
 
     private fun card(device: LanDevice, favorite: FavoriteDevice?): LanDeviceCardPresentation =
         LanDeviceCardPresentation(
-            displayName = deviceDisplayName(device),
+            displayName = deviceDisplayName(device, favorite),
             ipAddress = device.ipAddress,
             identitySummary = deviceIdentitySummary(device),
             evidence = deviceEvidence(device),
             role = deviceRole(device).takeIf(String::isNotBlank),
             macAddress = device.macAddress,
-            isFavorite = favorite != null,
+            isFavorite = favorite?.isFavorite == true,
         )
 
     private fun card(favorite: FavoriteDevice): LanDeviceCardPresentation =
         LanDeviceCardPresentation(
-            displayName = favorite.lastKnownDisplayName
-                ?.trim()
-                ?.takeIf { it.isNotBlank() && it != favorite.lastKnownIpv4 }
-                ?: "未知设备",
+            displayName = DeviceDisplayNameResolver.resolve(
+                customName = favorite.customName,
+                detectedName = favorite.lastKnownDisplayName
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() && it != favorite.lastKnownIpv4 },
+            ),
             ipAddress = favorite.lastKnownIpv4 ?: "地址未知",
             identitySummary = listOfNotNull(favorite.vendor, favorite.model)
                 .joinToString(" · ")
@@ -259,7 +276,7 @@ object DeviceCenterPresentation {
             evidence = "本次未发现",
             role = favoriteRole(favorite).takeIf(String::isNotBlank),
             macAddress = favorite.macAddress,
-            isFavorite = true,
+            isFavorite = favorite.isFavorite,
         )
 
     private fun itemGroup(item: DeviceCenterDeviceItem): Int = when {
