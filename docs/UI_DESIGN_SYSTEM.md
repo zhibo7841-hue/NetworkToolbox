@@ -768,3 +768,21 @@ Both entry points keep their existing roles: Device Center is current-network
 only, while Tools -> LAN Scanner retains automatic and custom IPv4 range
 selection. No new device actions, notes, background work, or discovery protocol
 is introduced by this pattern.
+
+### LAN Scanner and Device Center role-separated scan pattern
+
+LAN Scanner answers what the current one-shot scan actually discovered. It
+shows only current-session observations, with matching saved-profile custom
+names and favorite state applied as enrichment. It never appends an unmatched
+saved profile.
+
+Device Center manages saved profiles in the current network scope. Before a
+scan it shows saved profiles neutrally; during a scan unmatched profiles say
+`等待本次扫描结果`; after completion they are separated as `本次未发现`.
+Stopped or failed scans use incomplete-coverage wording instead of a not-found
+or offline conclusion.
+
+Both entry points share start, running progress and stop, terminal summary,
+failure, and outlined rescan placement. LAN Scanner retains current/custom
+range selection, while Device Center remains current-network-only. No device
+actions, background work, or new discovery protocol is introduced.

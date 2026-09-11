@@ -110,6 +110,72 @@ class DeviceCenterFavoritesTest {
     }
 
     @Test
+    fun `lan scanner only shows observations while retaining matched profile enrichment`() {
+        val context = context()
+        val scope = LanNetworkScope.from(context)!!
+        val profiles = listOf(
+            favorite(ip = "10.0.1.10", scope = scope, id = 1L)
+                .copy(customName = "ImmortalWrt"),
+            favorite(ip = "10.0.1.20", scope = scope, id = 2L)
+                .copy(customName = "Linksys"),
+            favorite(ip = "10.0.1.30", scope = scope, id = 3L)
+                .copy(customName = "docker"),
+        )
+
+        val items = DeviceCenterPresentation.deviceList(
+            devices = listOf(device("10.0.1.10")),
+            favorites = profiles,
+            context = context,
+            includeUnseenFavorites = false,
+        )
+
+        assertEquals(listOf("10.0.1.10"), items.map { it.card.ipAddress })
+        assertEquals("ImmortalWrt", items.single().card.displayName)
+        assertTrue(items.single().observedThisScan)
+    }
+
+    @Test
+    fun `device center saved group contains only profiles not observed in current scan`() {
+        val context = context()
+        val scope = LanNetworkScope.from(context)!!
+        val profiles = listOf(
+            favorite(ip = "10.0.1.10", scope = scope, id = 1L),
+            favorite(ip = "10.0.1.20", scope = scope, id = 2L),
+            favorite(ip = "10.0.1.30", scope = scope, id = 3L),
+        )
+
+        val items = DeviceCenterPresentation.savedProfilesNotObserved(
+            devices = listOf(device("10.0.1.10")),
+            favorites = profiles,
+            context = context,
+            unseenEvidence = "等待本次扫描结果",
+        )
+
+        assertEquals(listOf("10.0.1.20", "10.0.1.30"), items.map { it.card.ipAddress })
+        assertTrue(items.all { !it.observedThisScan })
+        assertTrue(items.all { it.card.evidence == "等待本次扫描结果" })
+    }
+
+    @Test
+    fun `stopped scan saved group does not use not found conclusion`() {
+        val context = context()
+        val scope = LanNetworkScope.from(context)!!
+
+        val items = DeviceCenterPresentation.savedProfilesNotObserved(
+            devices = listOf(device("10.0.1.10")),
+            favorites = listOf(
+                favorite(ip = "10.0.1.20", scope = scope),
+            ),
+            context = context,
+            unseenEvidence = "扫描未完成，尚未发现",
+        )
+
+        assertEquals("扫描未完成，尚未发现", items.single().card.evidence)
+        assertFalse(items.single().card.evidence.orEmpty().contains("本次未发现"))
+        assertFalse(items.single().card.evidence.orEmpty().contains("离线"))
+    }
+
+    @Test
     fun `custom name overrides detected identity without changing favorite state`() {
         val context = context()
         val item = DeviceCenterPresentation.deviceList(

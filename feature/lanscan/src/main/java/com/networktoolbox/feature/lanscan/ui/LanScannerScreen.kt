@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lan
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,8 +22,6 @@ import com.networktoolbox.core.designsystem.PrimaryActionButton
 import com.networktoolbox.core.designsystem.SecondaryActionButton
 import com.networktoolbox.core.designsystem.StatusVisualState
 import com.networktoolbox.core.designsystem.ToolInputSection
-import com.networktoolbox.core.designsystem.ToolResultSection
-import com.networktoolbox.core.designsystem.ToolRunningSection
 import com.networktoolbox.core.designsystem.ToolScreenHeader
 import com.networktoolbox.core.designsystem.ToolScreenLayout
 import com.networktoolbox.core.designsystem.ToolStatusSummary
@@ -36,7 +33,6 @@ import com.networktoolbox.feature.lanscan.domain.LanCustomRangeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanScanRange
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
-import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import com.networktoolbox.feature.lanscan.presentation.DeviceCenterPresentation
 import com.networktoolbox.feature.lanscan.presentation.LanScanRangeMode
 import com.networktoolbox.feature.lanscan.presentation.LanScannerPresentation
@@ -88,7 +84,6 @@ fun LanScannerScreen(
                 onRangeModeChanged = onRangeModeChanged,
                 onCustomStartAddressChanged = onCustomStartAddressChanged,
                 onCustomEndAddressChanged = onCustomEndAddressChanged,
-                savedProfiles = savedProfiles,
                 notice = state.notice,
             )
 
@@ -99,19 +94,15 @@ fun LanScannerScreen(
             )
 
             is LanScannerUiState.Completed -> SessionContent(
-                title = "扫描完成",
                 session = state.session,
-                actionLabel = "重新扫描",
-                onAction = onRetry,
+                onRescan = onRetry,
                 onModifyRange = onModifyRange,
                 savedProfiles = savedProfiles,
             )
 
             is LanScannerUiState.Cancelled -> SessionContent(
-                title = "扫描已停止",
                 session = state.session,
-                actionLabel = "重新扫描",
-                onAction = onRetry,
+                onRescan = onRetry,
                 onModifyRange = onModifyRange,
                 savedProfiles = savedProfiles,
             )
@@ -145,7 +136,6 @@ private fun ReadyContent(
     onRangeModeChanged: (LanScanRangeMode) -> Unit,
     onCustomStartAddressChanged: (String) -> Unit,
     onCustomEndAddressChanged: (String) -> Unit,
-    savedProfiles: List<FavoriteDevice>,
     notice: com.networktoolbox.feature.lanscan.presentation.LanScanNotice?,
 ) {
     RangeModeSelector(
@@ -193,20 +183,11 @@ private fun ReadyContent(
         }
     }
 
-    SavedProfilesBeforeScan(
-        context = context,
-        savedProfiles = savedProfiles,
-    )
-
-    PrivacyHint()
-    PrimaryActionButton(
-        onClick = onStartScan,
+    LanScanStartCard(
+        onStartScan = onStartScan,
         enabled = rangeMode == LanScanRangeMode.CURRENT_NETWORK ||
             customRangeResult is LanCustomRangeResult.Valid,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text("开始扫描")
-    }
+    )
 }
 
 @Composable
@@ -333,97 +314,27 @@ private fun ScanningContent(
     savedProfiles: List<FavoriteDevice>,
 ) {
     val update = state.update
-    ToolRunningSection {
-        ToolStatusSummary(
-            title = "正在扫描",
-            status = StatusVisualState.RUNNING,
-            label = "扫描中",
-        )
-        Text(
-            "范围：${state.range.displayLabel}",
-            style = NetworkToolboxTextStyles.TechnicalData,
-        )
-        Text(
-            "${update.scannedHosts} / ${update.totalHosts}",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text("已发现 ${update.discoveredDevices.size} 台设备")
-        LinearProgressIndicator(
-            progress = {
-                LanScannerPresentation.progressFraction(
-                    scannedHosts = update.scannedHosts,
-                    totalHosts = update.totalHosts,
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        update.elapsedMs?.let { elapsed ->
-            Text(
-                "已用时 ${LanScannerPresentation.elapsedText(elapsed)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-    SecondaryActionButton(
-        onClick = onStopScan,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text("停止扫描")
-    }
+    LanScanRunningCard(
+        rangeLabel = state.range.displayLabel,
+        update = update,
+        onStopScan = onStopScan,
+    )
     DeviceList(
         devices = update.discoveredDevices,
         context = state.networkContext,
         savedProfiles = savedProfiles,
-        includeUnseenProfiles = false,
     )
 }
 
 @Composable
 private fun SessionContent(
-    title: String,
     session: LanScanSession,
-    actionLabel: String,
-    onAction: () -> Unit,
+    onRescan: () -> Unit,
     onModifyRange: () -> Unit,
     savedProfiles: List<FavoriteDevice>,
 ) {
-    ToolResultSection {
-        ToolStatusSummary(
-            title = title,
-            status = if (session.status == LanScanStatus.COMPLETED) {
-                StatusVisualState.NORMAL
-            } else {
-                StatusVisualState.CANCELLED
-            },
-            label = if (session.status == LanScanStatus.COMPLETED) "已完成" else "已停止",
-        )
-        session.range?.let { range ->
-            Text(range.displayLabel, style = NetworkToolboxTextStyles.TechnicalData)
-            if (session.rangeWasLimited) {
-                Text(
-                    "原始范围 ${range.originalCidr}，本次已限制为当前 /24。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (session.status == LanScanStatus.COMPLETED) {
-            Text(LanScannerPresentation.sessionSummary(session))
-        } else {
-            Text(
-                "已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址 · " +
-                    "发现 ${session.discoveredDevices.size} 台设备 · " +
-                    LanScannerPresentation.elapsedText(session.elapsedMs),
-            )
-        }
-    }
-    SecondaryActionButton(
-        onClick = onAction,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(actionLabel)
-    }
+    LanScanSessionSummaryCard(session = session)
+    LanScanRescanButton(onRescan = onRescan)
     TextButton(onClick = onModifyRange) {
         Text("修改扫描范围 >")
     }
@@ -431,7 +342,6 @@ private fun SessionContent(
         devices = session.discoveredDevices,
         context = session.initialNetworkContext,
         savedProfiles = savedProfiles,
-        includeUnseenProfiles = true,
     )
 }
 
@@ -490,17 +400,10 @@ private fun ErrorContent(
     message: String,
     onRetry: () -> Unit,
 ) {
-    OutlinedNetworkCard {
-        ToolStatusSummary(
-            title = "扫描失败",
-            status = StatusVisualState.ERROR,
-            label = "失败",
-        )
-        Text(message)
-    }
-    SecondaryActionButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
-        Text("重试")
-    }
+    LanScanFailureSection(
+        message = message,
+        onRetry = onRetry,
+    )
 }
 
 @Composable
@@ -516,26 +419,16 @@ private fun LoadingCard() {
 }
 
 @Composable
-private fun PrivacyHint() {
-    Text(
-        "扫描只在当前本地网络中进行，结果保存在设备本地，不会上传。",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-@Composable
 private fun DeviceList(
     devices: List<LanDevice>,
     context: NetworkContext,
     savedProfiles: List<FavoriteDevice>,
-    includeUnseenProfiles: Boolean,
 ) {
     val deviceItems = DeviceCenterPresentation.deviceList(
         devices = devices,
         favorites = savedProfiles,
         context = context,
-        includeUnseenFavorites = includeUnseenProfiles,
+        includeUnseenFavorites = false,
     )
     if (deviceItems.isEmpty()) return
 
@@ -547,53 +440,16 @@ private fun DeviceList(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                if (observedCount > 0) "已发现设备" else "已保存设备",
+                stringResource(R.string.lan_scan_found_group),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                (if (observedCount > 0) observedCount else deviceItems.size).toString(),
+                observedCount.toString(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelLarge,
             )
         }
         deviceItems.forEach { deviceItem ->
-            LanDeviceCard(
-                presentation = deviceItem.card,
-                showMac = true,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SavedProfilesBeforeScan(
-    context: NetworkContext,
-    savedProfiles: List<FavoriteDevice>,
-) {
-    val items = DeviceCenterPresentation.savedProfilesBeforeScan(
-        favorites = savedProfiles,
-        context = context,
-        unseenEvidence = stringResource(R.string.lan_scan_saved_not_scanned),
-    )
-    if (items.isEmpty()) return
-
-    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                stringResource(R.string.lan_scan_saved_devices_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                items.size.toString(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-        items.forEach { deviceItem ->
             LanDeviceCard(
                 presentation = deviceItem.card,
                 showMac = true,

@@ -342,3 +342,21 @@ SSH/Telnet-related scope is limited to service discovery, port detection, and ba
 - Do not require an account for the core product.
 - Do not include advertising or hidden tracking as part of the product principles.
 - Do not present network observations as more certain than the available evidence supports.
+
+### V0.5 Phase 2C-A — LAN Scanner and Device Center role separation
+
+- LAN Scanner is a one-shot scan tool and shows only observations produced by
+  the current scan session. A matching saved profile may enrich an observed row
+  with custom name and favorite state; unmatched profiles are never appended.
+- Device Center is the persistent current-network device-management surface.
+  It shows current-scope saved profiles before scanning and separates current
+  observations from saved profiles not observed after a completed scan.
+- During scanning, unmatched profiles remain neutral `等待本次扫描结果`.
+  Stopped or failed scans use incomplete-coverage wording and never infer
+  offline status.
+- Both entry points share scan-state actions and visual hierarchy while keeping
+  the scanner's current/custom range boundary and Device Center's
+  current-network-only boundary.
+
+This clarification does not authorize Wake-on-LAN, quick actions, notes,
+background scans, new discovery protocols, or a Room schema change.

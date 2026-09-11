@@ -6,6 +6,7 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
+import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import com.networktoolbox.feature.lanscan.domain.model.identity
 import java.util.Locale
 
@@ -72,8 +73,15 @@ object LanScannerPresentation {
         ).joinToString(" · ").takeIf(String::isNotBlank)
     }
 
-    fun sessionSummary(session: LanScanSession): String =
-        "${session.totalHosts} 个地址 · ${session.discoveredDevices.size} 台设备 · ${elapsedText(session.elapsedMs)}"
+    fun sessionSummary(session: LanScanSession): String = if (
+        session.status == LanScanStatus.COMPLETED
+    ) {
+        "${session.totalHosts} 个地址 · ${session.discoveredDevices.size} 台设备 · " +
+            elapsedText(session.elapsedMs)
+    } else {
+        "已扫描 ${session.scannedHosts} / ${session.totalHosts} 个地址 · " +
+            "发现 ${session.discoveredDevices.size} 台设备 · ${elapsedText(session.elapsedMs)}"
+    }
 
     fun elapsedText(elapsedMs: Long): String = when {
         elapsedMs < 1_000L -> "$elapsedMs 毫秒"

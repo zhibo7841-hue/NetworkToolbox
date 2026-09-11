@@ -7,10 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
@@ -18,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
-import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
 import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
 import com.networktoolbox.core.designsystem.OutlinedNetworkCard
 import com.networktoolbox.core.designsystem.ToolScreenLazyLayout
@@ -27,9 +23,7 @@ import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.feature.lanscan.R
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
-import com.networktoolbox.feature.lanscan.domain.model.LanScanSession
 import com.networktoolbox.feature.lanscan.presentation.DeviceCenterPresentation
-import com.networktoolbox.feature.lanscan.presentation.LanScannerPresentation
 import com.networktoolbox.feature.lanscan.presentation.LanScannerUiState
 
 /**
@@ -51,6 +45,9 @@ fun LanDeviceCenterScreen(
     onOpenDevice: (String) -> Unit = {},
 ) {
     val savedProfileEvidence = stringResource(R.string.lan_scan_saved_not_scanned)
+    val waitingProfileEvidence = stringResource(R.string.lan_scan_waiting_saved)
+    val notFoundProfileEvidence = stringResource(R.string.lan_scan_not_found_saved)
+    val unfinishedProfileEvidence = stringResource(R.string.lan_scan_unfinished_saved)
 
     ToolScreenLazyLayout(modifier = modifier) {
         item {
@@ -93,13 +90,23 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 item {
-                    DeviceCenterScanningCard(state = state, onStopScan = onStopScan)
+                    LanScanRunningCard(
+                        rangeLabel = state.range.displayLabel,
+                        update = state.update,
+                        onStopScan = onStopScan,
+                    )
                 }
-                deviceCenterDeviceList(
+                deviceCenterObservedDeviceList(
                     devices = state.update.discoveredDevices,
                     favorites = favorites,
                     context = state.networkContext,
-                    includeUnseenFavorites = false,
+                    onOpenDevice = onOpenDevice,
+                )
+                deviceCenterSavedProfileList(
+                    devices = state.update.discoveredDevices,
+                    favorites = favorites,
+                    context = state.networkContext,
+                    unseenEvidence = waitingProfileEvidence,
                     onOpenDevice = onOpenDevice,
                 )
             }
@@ -112,17 +119,21 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 item {
-                    DeviceCenterSessionCard(
-                        title = "扫描完成",
-                        session = state.session,
-                        showLimitedWarning = true,
-                    )
+                    LanScanSessionSummaryCard(session = state.session)
                 }
-                item { DeviceCenterRescanButton(onRescan = onRescan) }
-                deviceCenterDeviceList(
+                item { LanScanRescanButton(onRescan = onRescan) }
+                deviceCenterObservedDeviceList(
                     devices = state.session.discoveredDevices,
                     favorites = favorites,
                     context = state.session.initialNetworkContext,
+                    onOpenDevice = onOpenDevice,
+                )
+                deviceCenterSavedProfileList(
+                    devices = state.session.discoveredDevices,
+                    favorites = favorites,
+                    context = state.session.initialNetworkContext,
+                    unseenEvidence = notFoundProfileEvidence,
+                    titleRes = R.string.lan_scan_not_found_group,
                     onOpenDevice = onOpenDevice,
                 )
             }
@@ -135,17 +146,20 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 item {
-                    DeviceCenterSessionCard(
-                        title = "扫描已停止",
-                        session = state.session,
-                        showLimitedWarning = false,
-                    )
+                    LanScanSessionSummaryCard(session = state.session)
                 }
-                item { DeviceCenterRescanButton(onRescan = onRescan) }
-                deviceCenterDeviceList(
+                item { LanScanRescanButton(onRescan = onRescan) }
+                deviceCenterObservedDeviceList(
                     devices = state.session.discoveredDevices,
                     favorites = favorites,
                     context = state.session.initialNetworkContext,
+                    onOpenDevice = onOpenDevice,
+                )
+                deviceCenterSavedProfileList(
+                    devices = state.session.discoveredDevices,
+                    favorites = favorites,
+                    context = state.session.initialNetworkContext,
+                    unseenEvidence = unfinishedProfileEvidence,
                     onOpenDevice = onOpenDevice,
                 )
             }
@@ -193,8 +207,20 @@ fun LanDeviceCenterScreen(
                         )
                     }
                 }
-                item { DeviceCenterMessageCard(title = "扫描失败", message = state.message) }
-                item { DeviceCenterRescanButton(onRescan = onRescan, label = "重试") }
+                item {
+                    LanScanFailureSection(
+                        message = state.message,
+                        onRetry = onRescan,
+                    )
+                }
+                state.readiness?.let { readiness ->
+                    deviceCenterSavedProfileList(
+                        favorites = favorites,
+                        context = readiness.networkContext,
+                        unseenEvidence = savedProfileEvidence,
+                        onOpenDevice = onOpenDevice,
+                    )
+                }
             }
         }
     }
@@ -259,112 +285,19 @@ private fun DeviceCenterReadyCard(
             }
         }
     }
-    OutlinedNetworkCard {
-        Text(
-            stringResource(R.string.lan_scan_not_scanned_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            stringResource(R.string.lan_scan_not_scanned_message),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(
-            onClick = onStartScan,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("开始扫描")
-        }
-        Text(
-            "扫描只在本机当前局域网中进行，结果保存在设备本地，不会上传。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-}
-
-@Composable
-private fun DeviceCenterScanningCard(
-    state: LanScannerUiState.Scanning,
-    onStopScan: () -> Unit,
-) {
-    val update = state.update
-    OutlinedNetworkCard {
-        Text("正在扫描", style = MaterialTheme.typography.titleMedium)
-        Text(state.range.displayLabel, style = NetworkToolboxTextStyles.TechnicalData)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("${update.scannedHosts} / ${update.totalHosts}")
-            Text(
-                "已发现 ${update.discoveredDevices.size} 台设备",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        LinearProgressIndicator(
-            progress = {
-                LanScannerPresentation.progressFraction(
-                    scannedHosts = update.scannedHosts,
-                    totalHosts = update.totalHosts,
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        update.elapsedMs?.let { elapsed ->
-            Text(
-                "已用时 ${LanScannerPresentation.elapsedText(elapsed)}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        OutlinedButton(
-            onClick = onStopScan,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("停止扫描")
-        }
-    }
-}
-
-@Composable
-private fun DeviceCenterSessionCard(
-    title: String,
-    session: LanScanSession,
-    showLimitedWarning: Boolean,
-) {
-    OutlinedNetworkCard {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        session.range?.let { range ->
-            Text(range.displayLabel, style = NetworkToolboxTextStyles.TechnicalData)
-            if (showLimitedWarning && session.rangeWasLimited) {
-                Text(
-                    "当前网络范围较大，本次扫描已限制为当前 /24。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-        Text(LanScannerPresentation.sessionSummary(session))
-    }
-}
-
-@Composable
-private fun DeviceCenterRescanButton(
-    onRescan: () -> Unit,
-    label: String = "重新扫描",
-) {
-    OutlinedButton(onClick = onRescan, modifier = Modifier.fillMaxWidth()) {
-        Text(label)
-    }
+    LanScanStartCard(onStartScan = onStartScan)
 }
 
 private fun LazyListScope.deviceCenterSavedProfileList(
+    devices: List<LanDevice> = emptyList(),
     favorites: List<FavoriteDevice>,
     context: com.networktoolbox.core.network.model.NetworkContext,
     unseenEvidence: String,
+    titleRes: Int = R.string.lan_scan_saved_devices_title,
     onOpenDevice: (String) -> Unit,
 ) {
-    val items = DeviceCenterPresentation.savedProfilesBeforeScan(
+    val items = DeviceCenterPresentation.savedProfilesNotObserved(
+        devices = devices,
         favorites = favorites,
         context = context,
         unseenEvidence = unseenEvidence,
@@ -378,7 +311,7 @@ private fun LazyListScope.deviceCenterSavedProfileList(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                stringResource(R.string.lan_scan_saved_devices_title),
+                stringResource(titleRes),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
@@ -387,6 +320,55 @@ private fun LazyListScope.deviceCenterSavedProfileList(
                 style = MaterialTheme.typography.labelLarge,
             )
         }
+    }
+    items(
+        items = items,
+        key = { it.detailKey },
+    ) { deviceItem ->
+        LanDeviceCard(
+            presentation = deviceItem.card,
+            onClick = { onOpenDevice(deviceItem.detailKey) },
+        )
+    }
+}
+
+private fun LazyListScope.deviceCenterObservedDeviceList(
+    devices: List<LanDevice>,
+    favorites: List<FavoriteDevice>,
+    context: com.networktoolbox.core.network.model.NetworkContext,
+    onOpenDevice: (String) -> Unit,
+) {
+    val items = DeviceCenterPresentation.deviceList(
+        devices = devices,
+        favorites = favorites,
+        context = context,
+        includeUnseenFavorites = false,
+    )
+    item {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                stringResource(R.string.lan_scan_found_group),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                items.size.toString(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+    }
+    if (items.isEmpty()) {
+        item {
+            Text(
+                stringResource(R.string.lan_scan_no_observations),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
     }
     items(
         items = items,
@@ -415,61 +397,6 @@ private fun DeviceCenterLoadingCard() {
     OutlinedNetworkCard {
         Text("正在读取网络状态", style = MaterialTheme.typography.titleMedium)
         Text("请稍候…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-private fun LazyListScope.deviceCenterDeviceList(
-    devices: List<LanDevice>,
-    favorites: List<FavoriteDevice>,
-    context: com.networktoolbox.core.network.model.NetworkContext,
-    includeUnseenFavorites: Boolean = true,
-    onOpenDevice: (String) -> Unit,
-) {
-    val deviceItems = DeviceCenterPresentation.deviceList(
-        devices = devices,
-        favorites = favorites,
-        context = context,
-        includeUnseenFavorites = includeUnseenFavorites,
-    )
-    if (deviceItems.isEmpty()) {
-        item {
-            OutlinedNetworkCard {
-                Text("未发现局域网设备", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "当前扫描范围内没有获得可确认的设备响应。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        return
-    }
-
-    val observedCount = deviceItems.count { it.observedThisScan }
-    item {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                if (observedCount > 0) "已发现设备" else "已保存设备",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                (if (observedCount > 0) observedCount else deviceItems.size).toString(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
-    items(
-        items = deviceItems,
-        key = { it.detailKey },
-    ) { deviceItem ->
-        LanDeviceCard(
-            presentation = deviceItem.card,
-            onClick = { onOpenDevice(deviceItem.detailKey) },
-        )
     }
 }
 

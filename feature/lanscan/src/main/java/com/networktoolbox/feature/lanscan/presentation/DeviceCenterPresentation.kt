@@ -193,6 +193,24 @@ object DeviceCenterPresentation {
         unseenEvidence = unseenEvidence,
     )
 
+    /**
+     * Returns only the current-scope profiles that have not matched one of
+     * the supplied observations. Device Center uses this to keep its saved
+     * group separate from the current scan group.
+     */
+    fun savedProfilesNotObserved(
+        devices: List<LanDevice>,
+        favorites: List<FavoriteDevice>,
+        context: NetworkContext,
+        unseenEvidence: String,
+    ): List<DeviceCenterDeviceItem> = deviceList(
+        devices = devices,
+        favorites = favorites,
+        context = context,
+        includeUnseenFavorites = true,
+        unseenEvidence = unseenEvidence,
+    ).filterNot(DeviceCenterDeviceItem::observedThisScan)
+
     fun detail(
         device: LanDevice,
         favorite: FavoriteDevice?,

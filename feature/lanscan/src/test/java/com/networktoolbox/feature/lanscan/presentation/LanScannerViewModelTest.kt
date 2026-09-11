@@ -578,6 +578,15 @@ class LanScannerViewModelTest {
             "254 个地址 · 2 台设备 · 1 毫秒",
             LanScannerPresentation.sessionSummary(completedSession),
         )
+        assertEquals(
+            "已扫描 66 / 254 个地址 · 发现 2 台设备 · 1 毫秒",
+            LanScannerPresentation.sessionSummary(
+                completedSession.copy(
+                    status = LanScanStatus.CANCELLED,
+                    scannedHosts = 66,
+                ),
+            ),
+        )
     }
 
     @Test

@@ -332,3 +332,24 @@ This log records the confirmed project decisions. New scope or changes to these 
   stale callbacks are rejected by scan generation. No Wake-on-LAN, quick
   actions, notes, background scans, historical network manager, or new
   discovery protocol is authorized by this decision.
+
+## Decision: v0.5 Phase 2C-A — One-shot Scanner and Persistent Device Center
+
+- Date: 2026-09-12
+- Status: Accepted
+- Decision: Tools -> LAN Scanner is a one-shot current-session observation
+  viewer; Device Center is the persistent manager for saved profiles in the
+  current scope.
+- Boundary: an unmatched `SavedDeviceProfile` never enters LAN Scanner; a
+  matching profile only enriches an observation. Device Center shows saved
+  profiles before a scan and separates `本次发现` / `本次未发现` after a
+  completed scan.
+- State semantics: during a scan unmatched profiles say `等待本次扫描结果`;
+  after user stop or failure they use incomplete-coverage language, never
+  `离线` or `本次未发现`.
+- UI: both surfaces share start, running-stop, completed/stopped/failed, and
+  rescan actions; the scanner keeps current/custom ranges, while Device Center
+  remains current-network-only.
+- Consequence: no Wake-on-LAN, quick actions, notes, background scans, new
+  discovery protocol, or Room schema change; discovery evidence and matching
+  remain unchanged.

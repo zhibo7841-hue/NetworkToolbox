@@ -263,3 +263,23 @@ This boundary does not change discovery evidence, TCP semantics, probe timeouts,
 scan concurrency, range validation, or Room schema. It also does not authorize
 device actions, quick checks, notes, background scanning, or new discovery
 protocols.
+
+## LAN Scanner / Device Center role boundary
+
+Tools -> LAN Scanner is observation-only for the current `LanScanSession`. Its
+result count and list are derived from session observations; saved profiles may
+only enrich a matching observed row with custom name and favorite state.
+Unmatched saved profiles are never appended to the scanner result.
+
+The Device Center is the persistent current-network profile surface. It can show
+current-scope saved profiles before a scan, keeps them in a separate waiting
+group while a scan is running, and separates current observations from profiles
+not observed after a completed scan. Stopped or failed scans retain incomplete
+coverage wording and do not infer that a saved profile is offline.
+
+Both surfaces use the same scan action pattern and presentation primitives for
+start, real progress, stop, terminal summary, failure, and rescan. Their scope
+boundaries remain different: the scanner supports its existing automatic and
+custom range flow, while Device Center remains current-network-only. This is a
+presentation and role boundary; discovery evidence, Network Change handling,
+and Room v3 persistence are unchanged.
