@@ -2,6 +2,8 @@ package com.networktoolbox.feature.lanscan.presentation
 
 import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteIdentityType
+import com.networktoolbox.core.common.wol.MacAddress
+import com.networktoolbox.core.common.wol.WakeOnLanConfig
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
 import com.networktoolbox.feature.lanscan.domain.LanNetworkScope
@@ -10,6 +12,7 @@ import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,6 +71,71 @@ class DeviceCenterFavoritesTest {
         assertFalse(item.observedThisScan)
         assertEquals("本次未发现", item.card.evidence)
         assertFalse(item.card.evidence.orEmpty().contains("离线"))
+        assertNull(item.card.quickWake)
+    }
+
+    @Test
+    fun `unseen saved profile with wol config exposes compact quick wake`() {
+        val context = context()
+        val profile = favorite(
+            ip = "10.0.1.50",
+            scope = LanNetworkScope.from(context)!!,
+        ).copy(
+            customName = "VAIO",
+            wolConfig = WakeOnLanConfig(MacAddress.parse("02:11:22:33:44:55")!!),
+        )
+
+        val item = DeviceCenterPresentation.deviceList(
+            devices = emptyList(),
+            favorites = listOf(profile),
+            context = context,
+        ).single()
+
+        assertFalse(item.observedThisScan)
+        assertEquals("唤醒 VAIO", item.card.quickWake?.contentDescription)
+    }
+
+    @Test
+    fun `observed saved profile hides quick wake even when wol is configured`() {
+        val context = context()
+        val profile = favorite(
+            ip = "10.0.1.50",
+            scope = LanNetworkScope.from(context)!!,
+        ).copy(
+            wolConfig = WakeOnLanConfig(MacAddress.parse("02:11:22:33:44:55")!!),
+        )
+
+        val item = DeviceCenterPresentation.deviceList(
+            devices = listOf(device("10.0.1.50")),
+            favorites = listOf(profile),
+            context = context,
+        ).single()
+
+        assertTrue(item.observedThisScan)
+        assertNull(item.card.quickWake)
+    }
+
+    @Test
+    fun `quick wake presentation does not change saved profile state or list order`() {
+        val context = context()
+        val scope = LanNetworkScope.from(context)!!
+        val configured = favorite(ip = "10.0.1.50", scope = scope, id = 1L).copy(
+            customName = "主机",
+            wolConfig = WakeOnLanConfig(MacAddress.parse("02:11:22:33:44:55")!!),
+        )
+        val ordinary = favorite(ip = "10.0.1.10", scope = scope, id = 2L)
+        val profiles = listOf(configured, ordinary)
+
+        val items = DeviceCenterPresentation.deviceList(
+            devices = emptyList(),
+            favorites = profiles,
+            context = context,
+        )
+
+        assertEquals(listOf("10.0.1.10", "10.0.1.50"), items.map { it.card.ipAddress })
+        assertTrue(items.last().card.quickWake != null)
+        assertEquals(configured, profiles.first())
+        assertEquals(ordinary, profiles.last())
     }
 
     @Test

@@ -525,6 +525,41 @@ class LanFavoritesViewModelTest {
     }
 
     @Test
+    fun `device center quick wake route reuses existing sender for unseen profile`() = runTest {
+        val context = context()
+        val observedDevice = device("10.0.1.34")
+        val savedDevice = device("10.0.1.50")
+        val config = WakeOnLanConfig(MacAddress.parse("02:AA:BB:CC:DD:EF")!!)
+        val profile = LanFavoriteIdentity.createFavorite(savedDevice, context, now = 1L)!!
+            .copy(id = 10L, customName = "VAIO", wolConfig = config)
+        var sendCount = 0
+        val repository = FakeFavoriteDeviceRepository(initialFavorites = listOf(profile))
+        val viewModel = viewModel(
+            context = context,
+            device = observedDevice,
+            repository = repository,
+            sendWakeOnLan = SendWakeOnLan {
+                sendCount += 1
+                WakeOnLanResult.Sent("10.0.1.255", config.udpPort)
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val before = viewModel.savedProfiles.value.single()
+        val event = async { viewModel.deviceDetailEvents.first() }
+        runCurrent()
+
+        viewModel.sendWakeOnLanByRouteKey(LanDeviceDetailRouteKey.forFavorite(profile))
+        advanceUntilIdle()
+
+        assertEquals(1, sendCount)
+        assertEquals(DeviceDetailEvent.WakePacketSent, event.await())
+        assertEquals(before, viewModel.savedProfiles.value.single())
+    }
+
+    @Test
     fun `saving wake configuration emits an event and persists a wol only profile`() = runTest {
         val context = context()
         val device = device("10.0.1.37")

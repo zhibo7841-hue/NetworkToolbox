@@ -370,6 +370,8 @@ class MainActivity : ComponentActivity() {
                                     onOpenDevice = { key ->
                                         navigationState = navigationState.openDeviceDetail(key)
                                     },
+                                    onQuickWake = lanScannerViewModel::sendWakeOnLanByRouteKey,
+                                    deviceDetailEvents = lanScannerViewModel.deviceDetailEvents,
                                 )
                             }
                             ToolScreen.PRIVACY -> PrivacyScreen(onBack = ::goBack)

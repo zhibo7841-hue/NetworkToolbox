@@ -400,3 +400,27 @@ This log records the confirmed project decisions. New scope or changes to these 
 - Consequence: Final wake verification, remote wake, automatic support
   discovery, background/scheduled behavior, and Phase 2 device actions remain
   future decisions and are not implied by this implementation.
+
+## Decision: v0.5 Wake-on-LAN Phase 2 — Device Center Quick Wake
+
+- Date: 2026-09-12
+- Status: Accepted
+- Product action: A saved device profile that has a valid Wake-on-LAN
+  configuration may expose a compact Quick Wake action in the Device Center
+  when it is not observed in the current scan. Currently observed devices and
+  one-time scan observations do not expose this card action by default.
+- Reuse: Quick Wake calls the existing `SendWakeOnLanUseCase` through the
+  existing `LanScannerViewModel` route-key action. Magic Packet construction,
+  UDP transport, current physical-network binding, scope validation, and
+  failure semantics are not duplicated.
+- Feedback: The action reports only the one-shot `唤醒包已发送` or the
+  existing user-facing failure message. It does not claim successful power-on,
+  reachability, or device support, and repeated user actions produce a fresh
+  transient event.
+- Safety boundary: Current-network scope and the existing eligible
+  Wi-Fi/Ethernet IPv4 rules remain authoritative. Cellular, unavailable,
+  mismatched, or otherwise ineligible contexts do not send. No profile,
+  favorite, custom name, scan order, or History record is changed.
+- Consequence: Scheduling, batch wake, repeated broadcast, WAN/Internet wake,
+  cloud/relay/router-proxy paths, wake verification, new permissions, and
+  additional persistence remain out of scope.

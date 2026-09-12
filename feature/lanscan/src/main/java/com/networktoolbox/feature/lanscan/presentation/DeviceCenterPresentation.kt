@@ -39,6 +39,12 @@ data class LanDeviceCardPresentation(
     val role: String? = null,
     val macAddress: String? = null,
     val isFavorite: Boolean = false,
+    val quickWake: QuickWakePresentation? = null,
+)
+
+/** A compact, accessible action shown only for an eligible saved profile. */
+data class QuickWakePresentation(
+    val contentDescription: String,
 )
 
 data class DeviceCenterDeviceItem(
@@ -227,7 +233,7 @@ object DeviceCenterPresentation {
                         observedThisScan = false,
                         isFavorite = favorite.isFavorite,
                         detailKey = LanDeviceDetailRouteKey.forFavorite(favorite),
-                        card = card(favorite, unseenEvidence),
+                        card = card(favorite, context, unseenEvidence),
                     )
                 }
         } else {
@@ -378,15 +384,17 @@ object DeviceCenterPresentation {
 
     private fun card(
         favorite: FavoriteDevice,
+        context: NetworkContext,
         evidence: String = "本次未发现",
-    ): LanDeviceCardPresentation =
-        LanDeviceCardPresentation(
-            displayName = DeviceDisplayNameResolver.resolve(
-                customName = favorite.customName,
-                detectedName = favorite.lastKnownDisplayName
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() && it != favorite.lastKnownIpv4 },
-            ),
+    ): LanDeviceCardPresentation {
+        val displayName = DeviceDisplayNameResolver.resolve(
+            customName = favorite.customName,
+            detectedName = favorite.lastKnownDisplayName
+                ?.trim()
+                ?.takeIf { it.isNotBlank() && it != favorite.lastKnownIpv4 },
+        )
+        return LanDeviceCardPresentation(
+            displayName = displayName,
             ipAddress = favorite.lastKnownIpv4 ?: "地址未知",
             identitySummary = listOfNotNull(favorite.vendor, favorite.model)
                 .joinToString(" · ")
@@ -395,7 +403,17 @@ object DeviceCenterPresentation {
             role = favoriteRole(favorite).takeIf(String::isNotBlank),
             macAddress = favorite.macAddress,
             isFavorite = favorite.isFavorite,
+            quickWake = favorite.wolConfig
+                ?.takeIf {
+                    wakeOnLan(
+                        config = it,
+                        savedNetworkScope = favorite.networkScope,
+                        context = context,
+                    ).canSend
+                }
+                ?.let { QuickWakePresentation(contentDescription = "唤醒 $displayName") },
         )
+    }
 
     private fun itemGroup(item: DeviceCenterDeviceItem): Int = when {
         item.observedThisScan && item.isFavorite -> 0

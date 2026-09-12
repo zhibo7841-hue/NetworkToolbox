@@ -1,15 +1,22 @@
 package com.networktoolbox.feature.lanscan.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,8 +30,11 @@ import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.feature.lanscan.R
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
+import com.networktoolbox.feature.lanscan.presentation.DeviceDetailEvent
 import com.networktoolbox.feature.lanscan.presentation.DeviceCenterPresentation
 import com.networktoolbox.feature.lanscan.presentation.LanScannerUiState
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Top-level LAN Device Center foundation.
@@ -43,20 +53,33 @@ fun LanDeviceCenterScreen(
     modifier: Modifier = Modifier,
     favorites: List<FavoriteDevice> = emptyList(),
     onOpenDevice: (String) -> Unit = {},
+    onQuickWake: (String) -> Unit = {},
+    deviceDetailEvents: Flow<DeviceDetailEvent> = emptyFlow(),
 ) {
     val savedProfileEvidence = stringResource(R.string.lan_scan_saved_not_scanned)
     val waitingProfileEvidence = stringResource(R.string.lan_scan_waiting_saved)
     val notFoundProfileEvidence = stringResource(R.string.lan_scan_not_found_saved)
     val unfinishedProfileEvidence = stringResource(R.string.lan_scan_unfinished_saved)
 
-    ToolScreenLazyLayout(modifier = modifier) {
-        item {
-            NetworkToolboxTopLevelHeader(
-                title = "设备",
-                description = null,
-                onOpenMenu = onOpenMenu,
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(deviceDetailEvents) {
+        deviceDetailEvents.collect { event ->
+            snackbarHostState.showSnackbar(
+                message = event.message,
+                duration = SnackbarDuration.Short,
             )
         }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        ToolScreenLazyLayout(modifier = Modifier.fillMaxSize()) {
+            item {
+                NetworkToolboxTopLevelHeader(
+                    title = "设备",
+                    description = null,
+                    onOpenMenu = onOpenMenu,
+                )
+            }
 
         when (val state = uiState) {
             LanScannerUiState.Idle -> item { DeviceCenterLoadingCard() }
@@ -79,6 +102,7 @@ fun LanDeviceCenterScreen(
                     context = state.readiness.networkContext,
                     unseenEvidence = savedProfileEvidence,
                     onOpenDevice = onOpenDevice,
+                    onQuickWake = onQuickWake,
                 )
             }
 
@@ -108,6 +132,7 @@ fun LanDeviceCenterScreen(
                     context = state.networkContext,
                     unseenEvidence = waitingProfileEvidence,
                     onOpenDevice = onOpenDevice,
+                    onQuickWake = onQuickWake,
                 )
             }
 
@@ -135,6 +160,7 @@ fun LanDeviceCenterScreen(
                     unseenEvidence = notFoundProfileEvidence,
                     titleRes = R.string.lan_scan_not_found_group,
                     onOpenDevice = onOpenDevice,
+                    onQuickWake = onQuickWake,
                 )
             }
 
@@ -161,6 +187,7 @@ fun LanDeviceCenterScreen(
                     context = state.session.initialNetworkContext,
                     unseenEvidence = unfinishedProfileEvidence,
                     onOpenDevice = onOpenDevice,
+                    onQuickWake = onQuickWake,
                 )
             }
 
@@ -219,10 +246,18 @@ fun LanDeviceCenterScreen(
                         context = readiness.networkContext,
                         unseenEvidence = savedProfileEvidence,
                         onOpenDevice = onOpenDevice,
+                        onQuickWake = onQuickWake,
                     )
                 }
             }
+            }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(NetworkToolboxSpacing.MD),
+        )
     }
 }
 
@@ -295,6 +330,7 @@ private fun LazyListScope.deviceCenterSavedProfileList(
     unseenEvidence: String,
     titleRes: Int = R.string.lan_scan_saved_devices_title,
     onOpenDevice: (String) -> Unit,
+    onQuickWake: (String) -> Unit,
 ) {
     val items = DeviceCenterPresentation.savedProfilesNotObserved(
         devices = devices,
@@ -328,6 +364,11 @@ private fun LazyListScope.deviceCenterSavedProfileList(
         LanDeviceCard(
             presentation = deviceItem.card,
             onClick = { onOpenDevice(deviceItem.detailKey) },
+            onQuickWake = if (deviceItem.card.quickWake != null) {
+                { onQuickWake(deviceItem.detailKey) }
+            } else {
+                null
+            },
         )
     }
 }

@@ -389,3 +389,29 @@ shortcut must not be treated as a local broadcast target. The action does not
 run from Device Center cards, Quick Actions, Ping, TCP checks, or
 diagnostics, and it does not add a new discovery protocol or alter LAN scan
 evidence.
+
+### V0.5 Phase 2E — Wake-on-LAN Phase 2: Device Center Quick Wake
+
+Wake-on-LAN Phase 2 adds a compact, manual Quick Wake action to saved device
+profiles in the current-network Device Center. It is an extension of the
+Phase 1 local wake path, not a new sender or discovery mechanism:
+
+- A Quick Wake action is shown only for a saved profile with a valid unicast
+  MAC and valid UDP port, when that profile belongs to the current eligible
+  local network and is not observed in the current scan.
+- The action reuses the existing Phase 1 validation, current-network scope
+  check, directed-broadcast resolution, Magic Packet sender, and one-shot
+  success/failure feedback. `唤醒包已发送` reports packet handoff only; it
+  does not claim that the device powered on or became reachable.
+- One-time scan observations and currently discovered devices do not expose a
+  Device Center Quick Wake button. A saved profile without Wake-on-LAN
+  configuration remains an ordinary profile and is configured from Device
+  Detail.
+- The action remains local and manual: no scheduling, batching, repeated
+  broadcast, WAN/Internet wake, cloud relay, router proxy, automatic scan,
+  wake verification, new permissions, or separate persistence is introduced.
+  Cellular and ineligible network-scope contexts do not send a packet.
+
+This phase keeps the existing Device Center ordering, scan state, profile
+fields, and History behavior unchanged. A Quick Wake action does not mutate a
+profile, trigger another probe, or create a detection-history record.

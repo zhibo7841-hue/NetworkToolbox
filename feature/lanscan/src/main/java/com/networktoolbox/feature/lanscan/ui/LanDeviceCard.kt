@@ -19,10 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkToolboxComponentShapes
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTextStyles
+import com.networktoolbox.core.designsystem.SecondaryActionButton
 import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.presentation.DeviceCenterPresentation
@@ -64,6 +67,7 @@ fun LanDeviceCard(
     modifier: Modifier = Modifier,
     showMac: Boolean = false,
     onClick: (() -> Unit)? = null,
+    onQuickWake: (() -> Unit)? = null,
 ) {
     val clickModifier = onClick?.let {
         Modifier.clickable(
@@ -128,23 +132,38 @@ fun LanDeviceCard(
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                presentation.role?.let { role ->
-                    Text(
-                        role,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.XS),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    presentation.role?.let { role ->
+                        Text(
+                            role,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                    if (presentation.isFavorite) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = "已收藏",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(start = NetworkToolboxSpacing.XS)
+                                .size(18.dp),
+                        )
+                    }
                 }
-                if (presentation.isFavorite) {
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        contentDescription = "已收藏",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(start = NetworkToolboxSpacing.XS)
-                            .size(18.dp),
-                    )
+                if (presentation.quickWake != null && onQuickWake != null) {
+                    SecondaryActionButton(
+                        modifier = Modifier.semantics {
+                            contentDescription = presentation.quickWake.contentDescription
+                        },
+                        onClick = onQuickWake,
+                    ) {
+                        Text("唤醒")
+                    }
                 }
             }
         }
