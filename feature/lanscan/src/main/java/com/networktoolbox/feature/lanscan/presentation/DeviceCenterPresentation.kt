@@ -14,6 +14,7 @@ import com.networktoolbox.core.common.ipv4.IPv4Address
 import com.networktoolbox.core.common.wol.IPv4BroadcastResolution
 import com.networktoolbox.core.common.wol.IPv4BroadcastResolver
 import com.networktoolbox.core.common.wol.WakeOnLanConfig
+import java.util.Locale
 
 /**
  * Small presentation values for the top-level Devices destination.
@@ -54,6 +55,19 @@ data class DeviceCenterDeviceItem(
     val isFavorite: Boolean,
     val detailKey: String,
     val card: LanDeviceCardPresentation,
+)
+
+enum class DeviceCenterFilter {
+    ALL,
+    DISCOVERED,
+    NOT_DISCOVERED,
+    FAVORITES,
+}
+
+data class DeviceCenterSearchState(
+    val isSearchActive: Boolean = false,
+    val query: String = "",
+    val filter: DeviceCenterFilter = DeviceCenterFilter.ALL,
 )
 
 data class DeviceDetailPresentation(
@@ -117,6 +131,26 @@ data class WakeOnLanDetailPresentation(
 }
 
 object DeviceCenterPresentation {
+    /**
+     * Applies the Device Center's local-only query and filter without changing
+     * the ordering supplied by [deviceList].
+     */
+    fun filterDeviceItems(
+        items: List<DeviceCenterDeviceItem>,
+        query: String,
+        filter: DeviceCenterFilter,
+    ): List<DeviceCenterDeviceItem> {
+        val normalizedQuery = query.trim().lowercase(Locale.ROOT)
+        return items.filter { item ->
+            matchesFilter(item, filter) && (
+                normalizedQuery.isEmpty() ||
+                    searchableValues(item).any { value ->
+                        value.lowercase(Locale.ROOT).contains(normalizedQuery)
+                    }
+                )
+        }
+    }
+
     fun wakeOnLan(
         config: WakeOnLanConfig?,
         savedNetworkScope: String?,
@@ -436,6 +470,46 @@ object DeviceCenterPresentation {
         if (favorite.isLocalDevice) add("本机")
         if (favorite.isGateway) add("网关")
     }.joinToString(" · ")
+
+    private fun matchesFilter(
+        item: DeviceCenterDeviceItem,
+        filter: DeviceCenterFilter,
+    ): Boolean = when (filter) {
+        DeviceCenterFilter.ALL -> true
+        DeviceCenterFilter.DISCOVERED -> item.observedThisScan
+        DeviceCenterFilter.NOT_DISCOVERED -> !item.observedThisScan
+        DeviceCenterFilter.FAVORITES -> item.isFavorite
+    }
+
+    private fun searchableValues(item: DeviceCenterDeviceItem): List<String> = buildList {
+        fun addValue(value: String?) {
+            value?.trim()?.takeIf(String::isNotBlank)?.let(::add)
+        }
+
+        addValue(item.card.displayName)
+        addValue(item.card.ipAddress)
+        item.device?.let { device ->
+            val identity = device.identity
+            addValue(device.ipAddress)
+            addValue(device.hostName)
+            addValue(identity.displayName.value)
+            addValue(identity.hostname?.value)
+            addValue(identity.manufacturer?.value)
+            addValue(identity.modelName?.value)
+            addValue(identity.modelNumber?.value)
+            addValue(identity.modelDescription?.value)
+        }
+        item.favorite?.let { favorite ->
+            addValue(favorite.customName)
+            addValue(favorite.lastKnownIpv4)
+            addValue(favorite.lastKnownDisplayName)
+            addValue(favorite.lastKnownHostname)
+            addValue(favorite.lastKnownMdnsName)
+            addValue(favorite.lastKnownUpnpName)
+            addValue(favorite.vendor)
+            addValue(favorite.model)
+        }
+    }
 
     private fun ipv4SortValue(value: String): Long = IPv4Address.parse(value)?.value ?: Long.MAX_VALUE
 

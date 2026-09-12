@@ -174,6 +174,7 @@ class MainActivity : ComponentActivity() {
             val subnetUiState by subnetViewModel.uiState.collectAsState()
             val lanScannerUiState by lanScannerViewModel.uiState.collectAsState()
             val savedDeviceProfiles by lanScannerViewModel.savedProfiles.collectAsState()
+            val deviceCenterSearchState by lanScannerViewModel.deviceCenterSearchState.collectAsState()
             val favoriteActionError by lanScannerViewModel.favoriteActionError.collectAsState()
             val customNameActionError by lanScannerViewModel.customNameActionError.collectAsState()
             val tracerouteUiState by tracerouteViewModel.uiState.collectAsState()
@@ -400,9 +401,15 @@ class MainActivity : ComponentActivity() {
                                 TopLevelDestination.DEVICES -> LanDeviceCenterScreen(
                                     uiState = lanScannerUiState,
                                     favorites = savedDeviceProfiles,
+                                    searchState = deviceCenterSearchState,
                                     onStartScan = lanScannerViewModel::startCurrentNetworkScan,
                                     onStopScan = lanScannerViewModel::stopScan,
                                     onRescan = lanScannerViewModel::rescanCurrentNetwork,
+                                    onOpenSearch = lanScannerViewModel::openDeviceCenterSearch,
+                                    onCloseSearch = lanScannerViewModel::closeDeviceCenterSearch,
+                                    onClearSearch = lanScannerViewModel::clearDeviceCenterSearchQuery,
+                                    onSearchQueryChanged = lanScannerViewModel::onDeviceCenterSearchQueryChanged,
+                                    onFilterChanged = lanScannerViewModel::setDeviceCenterFilter,
                                     onOpenMenu = ::openDrawer,
                                     onOpenDevice = { key ->
                                         navigationState = navigationState.openDeviceDetail(key)

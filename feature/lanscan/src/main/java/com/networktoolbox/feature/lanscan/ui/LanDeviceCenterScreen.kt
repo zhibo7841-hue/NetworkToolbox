@@ -6,10 +6,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -20,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.networktoolbox.core.designsystem.NetworkToolboxSpacing
 import com.networktoolbox.core.designsystem.NetworkToolboxTopLevelHeader
@@ -29,9 +40,11 @@ import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.feature.lanscan.R
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
-import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.presentation.DeviceDetailEvent
+import com.networktoolbox.feature.lanscan.presentation.DeviceCenterDeviceItem
+import com.networktoolbox.feature.lanscan.presentation.DeviceCenterFilter
 import com.networktoolbox.feature.lanscan.presentation.DeviceCenterPresentation
+import com.networktoolbox.feature.lanscan.presentation.DeviceCenterSearchState
 import com.networktoolbox.feature.lanscan.presentation.LanScannerUiState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -52,6 +65,12 @@ fun LanDeviceCenterScreen(
     onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier,
     favorites: List<FavoriteDevice> = emptyList(),
+    searchState: DeviceCenterSearchState = DeviceCenterSearchState(),
+    onOpenSearch: () -> Unit = {},
+    onCloseSearch: () -> Unit = {},
+    onClearSearch: () -> Unit = {},
+    onSearchQueryChanged: (String) -> Unit = {},
+    onFilterChanged: (DeviceCenterFilter) -> Unit = {},
     onOpenDevice: (String) -> Unit = {},
     onQuickWake: (String) -> Unit = {},
     deviceDetailEvents: Flow<DeviceDetailEvent> = emptyFlow(),
@@ -60,6 +79,19 @@ fun LanDeviceCenterScreen(
     val waitingProfileEvidence = stringResource(R.string.lan_scan_waiting_saved)
     val notFoundProfileEvidence = stringResource(R.string.lan_scan_not_found_saved)
     val unfinishedProfileEvidence = stringResource(R.string.lan_scan_unfinished_saved)
+    val visibleItems = deviceCenterVisibleItems(
+        uiState = uiState,
+        favorites = favorites,
+        searchState = searchState,
+        savedProfileEvidence = savedProfileEvidence,
+        waitingProfileEvidence = waitingProfileEvidence,
+        notFoundProfileEvidence = notFoundProfileEvidence,
+        unfinishedProfileEvidence = unfinishedProfileEvidence,
+    )
+    val hasSearchOrFilter = searchState.query.trim().isNotEmpty() ||
+        searchState.filter != DeviceCenterFilter.ALL
+    val showNoMatch = hasSearchOrFilter && visibleItems != null &&
+        visibleItems.discovered.isEmpty() && visibleItems.notDiscovered.isEmpty()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(deviceDetailEvents) {
@@ -78,7 +110,42 @@ fun LanDeviceCenterScreen(
                     title = "设备",
                     description = null,
                     onOpenMenu = onOpenMenu,
+                    trailingContent = {
+                        IconButton(
+                            onClick = if (searchState.isSearchActive) {
+                                onCloseSearch
+                            } else {
+                                onOpenSearch
+                            },
+                        ) {
+                            Icon(
+                                imageVector = if (searchState.isSearchActive) {
+                                    Icons.Outlined.Close
+                                } else {
+                                    Icons.Outlined.Search
+                                },
+                                contentDescription = if (searchState.isSearchActive) {
+                                    "关闭搜索"
+                                } else {
+                                    "搜索设备"
+                                },
+                            )
+                        }
+                    },
                 )
+            }
+
+            item {
+                DeviceCenterSearchControls(
+                    searchState = searchState,
+                    onSearchQueryChanged = onSearchQueryChanged,
+                    onClearSearch = onClearSearch,
+                    onFilterChanged = onFilterChanged,
+                )
+            }
+
+            if (showNoMatch) {
+                item { DeviceCenterNoMatchState() }
             }
 
         when (val state = uiState) {
@@ -98,9 +165,7 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 deviceCenterSavedProfileList(
-                    favorites = favorites,
-                    context = state.readiness.networkContext,
-                    unseenEvidence = savedProfileEvidence,
+                    items = visibleItems?.notDiscovered.orEmpty(),
                     onOpenDevice = onOpenDevice,
                     onQuickWake = onQuickWake,
                 )
@@ -121,16 +186,12 @@ fun LanDeviceCenterScreen(
                     )
                 }
                 deviceCenterObservedDeviceList(
-                    devices = state.update.discoveredDevices,
-                    favorites = favorites,
-                    context = state.networkContext,
+                    items = visibleItems?.discovered.orEmpty(),
+                    showEmptyMessage = !hasSearchOrFilter,
                     onOpenDevice = onOpenDevice,
                 )
                 deviceCenterSavedProfileList(
-                    devices = state.update.discoveredDevices,
-                    favorites = favorites,
-                    context = state.networkContext,
-                    unseenEvidence = waitingProfileEvidence,
+                    items = visibleItems?.notDiscovered.orEmpty(),
                     onOpenDevice = onOpenDevice,
                     onQuickWake = onQuickWake,
                 )
@@ -148,16 +209,12 @@ fun LanDeviceCenterScreen(
                 }
                 item { LanScanRescanButton(onRescan = onRescan) }
                 deviceCenterObservedDeviceList(
-                    devices = state.session.discoveredDevices,
-                    favorites = favorites,
-                    context = state.session.initialNetworkContext,
+                    items = visibleItems?.discovered.orEmpty(),
+                    showEmptyMessage = !hasSearchOrFilter,
                     onOpenDevice = onOpenDevice,
                 )
                 deviceCenterSavedProfileList(
-                    devices = state.session.discoveredDevices,
-                    favorites = favorites,
-                    context = state.session.initialNetworkContext,
-                    unseenEvidence = notFoundProfileEvidence,
+                    items = visibleItems?.notDiscovered.orEmpty(),
                     titleRes = R.string.lan_scan_not_found_group,
                     onOpenDevice = onOpenDevice,
                     onQuickWake = onQuickWake,
@@ -176,16 +233,12 @@ fun LanDeviceCenterScreen(
                 }
                 item { LanScanRescanButton(onRescan = onRescan) }
                 deviceCenterObservedDeviceList(
-                    devices = state.session.discoveredDevices,
-                    favorites = favorites,
-                    context = state.session.initialNetworkContext,
+                    items = visibleItems?.discovered.orEmpty(),
+                    showEmptyMessage = !hasSearchOrFilter,
                     onOpenDevice = onOpenDevice,
                 )
                 deviceCenterSavedProfileList(
-                    devices = state.session.discoveredDevices,
-                    favorites = favorites,
-                    context = state.session.initialNetworkContext,
-                    unseenEvidence = unfinishedProfileEvidence,
+                    items = visibleItems?.notDiscovered.orEmpty(),
                     onOpenDevice = onOpenDevice,
                     onQuickWake = onQuickWake,
                 )
@@ -242,9 +295,7 @@ fun LanDeviceCenterScreen(
                 }
                 state.readiness?.let { readiness ->
                     deviceCenterSavedProfileList(
-                        favorites = favorites,
-                        context = readiness.networkContext,
-                        unseenEvidence = savedProfileEvidence,
+                        items = visibleItems?.notDiscovered.orEmpty(),
                         onOpenDevice = onOpenDevice,
                         onQuickWake = onQuickWake,
                     )
@@ -257,6 +308,181 @@ fun LanDeviceCenterScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(NetworkToolboxSpacing.MD),
+        )
+    }
+}
+
+private data class DeviceCenterVisibleItems(
+    val discovered: List<DeviceCenterDeviceItem>,
+    val notDiscovered: List<DeviceCenterDeviceItem>,
+)
+
+private fun deviceCenterVisibleItems(
+    uiState: LanScannerUiState,
+    favorites: List<FavoriteDevice>,
+    searchState: DeviceCenterSearchState,
+    savedProfileEvidence: String,
+    waitingProfileEvidence: String,
+    notFoundProfileEvidence: String,
+    unfinishedProfileEvidence: String,
+): DeviceCenterVisibleItems? {
+    val baseItems: List<DeviceCenterDeviceItem>
+    val notDiscoveredAvailable: Boolean
+    when (val state = uiState) {
+        LanScannerUiState.Idle,
+        is LanScannerUiState.NetworkChanged,
+        is LanScannerUiState.UnsupportedNetwork,
+        is LanScannerUiState.VpnBlocked,
+        -> return null
+
+        is LanScannerUiState.Ready -> {
+            baseItems = DeviceCenterPresentation.deviceList(
+                devices = emptyList(),
+                favorites = favorites,
+                context = state.readiness.networkContext,
+                includeUnseenFavorites = true,
+                unseenEvidence = savedProfileEvidence,
+            )
+            notDiscoveredAvailable = false
+        }
+
+        is LanScannerUiState.Scanning -> {
+            baseItems = DeviceCenterPresentation.deviceList(
+                devices = state.update.discoveredDevices,
+                favorites = favorites,
+                context = state.networkContext,
+                includeUnseenFavorites = true,
+                unseenEvidence = waitingProfileEvidence,
+            )
+            notDiscoveredAvailable = false
+        }
+
+        is LanScannerUiState.Completed -> {
+            baseItems = DeviceCenterPresentation.deviceList(
+                devices = state.session.discoveredDevices,
+                favorites = favorites,
+                context = state.session.initialNetworkContext,
+                includeUnseenFavorites = true,
+                unseenEvidence = notFoundProfileEvidence,
+            )
+            notDiscoveredAvailable = true
+        }
+
+        is LanScannerUiState.Cancelled -> {
+            baseItems = DeviceCenterPresentation.deviceList(
+                devices = state.session.discoveredDevices,
+                favorites = favorites,
+                context = state.session.initialNetworkContext,
+                includeUnseenFavorites = true,
+                unseenEvidence = unfinishedProfileEvidence,
+            )
+            notDiscoveredAvailable = false
+        }
+
+        is LanScannerUiState.Error -> {
+            val readiness = state.readiness ?: return null
+            baseItems = DeviceCenterPresentation.deviceList(
+                devices = emptyList(),
+                favorites = favorites,
+                context = readiness.networkContext,
+                includeUnseenFavorites = true,
+                unseenEvidence = savedProfileEvidence,
+            )
+            notDiscoveredAvailable = false
+        }
+    }
+
+    val filteredItems = DeviceCenterPresentation.filterDeviceItems(
+        items = baseItems,
+        query = searchState.query,
+        filter = searchState.filter,
+    ).let { items ->
+        if (searchState.filter == DeviceCenterFilter.NOT_DISCOVERED && !notDiscoveredAvailable) {
+            emptyList()
+        } else {
+            items
+        }
+    }
+    return DeviceCenterVisibleItems(
+        discovered = filteredItems.filter(DeviceCenterDeviceItem::observedThisScan),
+        notDiscovered = filteredItems.filterNot(DeviceCenterDeviceItem::observedThisScan),
+    )
+}
+
+@Composable
+private fun DeviceCenterSearchControls(
+    searchState: DeviceCenterSearchState,
+    onSearchQueryChanged: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    onFilterChanged: (DeviceCenterFilter) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM)) {
+        if (searchState.isSearchActive) {
+            OutlinedTextField(
+                value = searchState.query,
+                onValueChange = onSearchQueryChanged,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("搜索设备名称、IP、主机名") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = null,
+                    )
+                },
+                trailingIcon = if (searchState.query.isNotBlank()) {
+                    {
+                        IconButton(
+                            onClick = onClearSearch,
+                            modifier = Modifier.semantics {
+                                contentDescription = "清除搜索"
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = null,
+                            )
+                        }
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+        ) {
+            DeviceCenterFilter.entries.forEach { filter ->
+                FilterChip(
+                    selected = searchState.filter == filter,
+                    onClick = { onFilterChanged(filter) },
+                    label = { Text(filter.label()) },
+                    modifier = Modifier.semantics {
+                        contentDescription = "筛选：${filter.label()}"
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun DeviceCenterFilter.label(): String = when (this) {
+    DeviceCenterFilter.ALL -> "全部"
+    DeviceCenterFilter.DISCOVERED -> "本次发现"
+    DeviceCenterFilter.NOT_DISCOVERED -> "本次未发现"
+    DeviceCenterFilter.FAVORITES -> "收藏"
+}
+
+@Composable
+private fun DeviceCenterNoMatchState() {
+    OutlinedNetworkCard {
+        Text("没有匹配的设备", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "尝试修改搜索内容或筛选条件",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -324,20 +550,11 @@ private fun DeviceCenterReadyCard(
 }
 
 private fun LazyListScope.deviceCenterSavedProfileList(
-    devices: List<LanDevice> = emptyList(),
-    favorites: List<FavoriteDevice>,
-    context: com.networktoolbox.core.network.model.NetworkContext,
-    unseenEvidence: String,
+    items: List<DeviceCenterDeviceItem>,
     titleRes: Int = R.string.lan_scan_saved_devices_title,
     onOpenDevice: (String) -> Unit,
     onQuickWake: (String) -> Unit,
 ) {
-    val items = DeviceCenterPresentation.savedProfilesNotObserved(
-        devices = devices,
-        favorites = favorites,
-        context = context,
-        unseenEvidence = unseenEvidence,
-    )
     if (items.isEmpty()) return
 
     item {
@@ -374,17 +591,11 @@ private fun LazyListScope.deviceCenterSavedProfileList(
 }
 
 private fun LazyListScope.deviceCenterObservedDeviceList(
-    devices: List<LanDevice>,
-    favorites: List<FavoriteDevice>,
-    context: com.networktoolbox.core.network.model.NetworkContext,
+    items: List<DeviceCenterDeviceItem>,
+    showEmptyMessage: Boolean,
     onOpenDevice: (String) -> Unit,
 ) {
-    val items = DeviceCenterPresentation.deviceList(
-        devices = devices,
-        favorites = favorites,
-        context = context,
-        includeUnseenFavorites = false,
-    )
+    if (items.isEmpty() && !showEmptyMessage) return
     item {
         Row(
             modifier = Modifier.fillMaxWidth(),

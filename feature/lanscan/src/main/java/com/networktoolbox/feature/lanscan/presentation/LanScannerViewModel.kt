@@ -74,6 +74,9 @@ class LanScannerViewModel @Inject constructor(
     val favoriteDevices: StateFlow<List<FavoriteDevice>> = _favoriteDevices.asStateFlow()
     private val _savedProfiles = MutableStateFlow<List<FavoriteDevice>>(emptyList())
     val savedProfiles: StateFlow<List<FavoriteDevice>> = _savedProfiles.asStateFlow()
+    private val _deviceCenterSearchState = MutableStateFlow(DeviceCenterSearchState())
+    val deviceCenterSearchState: StateFlow<DeviceCenterSearchState> =
+        _deviceCenterSearchState.asStateFlow()
     private val _favoriteActionError = MutableStateFlow<String?>(null)
     val favoriteActionError: StateFlow<String?> = _favoriteActionError.asStateFlow()
     private val _customNameActionError = MutableStateFlow<String?>(null)
@@ -106,6 +109,12 @@ class LanScannerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             observeReadiness().collect { readiness ->
+                val previousNetworkContext = latestReadiness?.networkContext
+                if (previousNetworkContext != null &&
+                    !LanNetworkFingerprint.matches(previousNetworkContext, readiness.networkContext)
+                ) {
+                    _deviceCenterSearchState.value = DeviceCenterSearchState()
+                }
                 latestReadiness = readiness
                 val state = _uiState.value
                 if (enrichmentNetworkContext?.let {
@@ -160,6 +169,26 @@ class LanScannerViewModel @Inject constructor(
             rangeMode = LanScanRangeMode.CURRENT_NETWORK
             publishReadinessState()
         }
+    }
+
+    fun openDeviceCenterSearch() {
+        _deviceCenterSearchState.value = _deviceCenterSearchState.value.copy(isSearchActive = true)
+    }
+
+    fun closeDeviceCenterSearch() {
+        _deviceCenterSearchState.value = DeviceCenterSearchState()
+    }
+
+    fun clearDeviceCenterSearchQuery() {
+        _deviceCenterSearchState.value = _deviceCenterSearchState.value.copy(query = "")
+    }
+
+    fun onDeviceCenterSearchQueryChanged(value: String) {
+        _deviceCenterSearchState.value = _deviceCenterSearchState.value.copy(query = value)
+    }
+
+    fun setDeviceCenterFilter(filter: DeviceCenterFilter) {
+        _deviceCenterSearchState.value = _deviceCenterSearchState.value.copy(filter = filter)
     }
 
     fun modifyRange() {

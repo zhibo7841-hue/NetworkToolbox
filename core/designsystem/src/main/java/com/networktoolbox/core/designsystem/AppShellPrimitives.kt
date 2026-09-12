@@ -40,6 +40,7 @@ fun NetworkToolboxTopLevelHeader(
     description: String?,
     onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -60,5 +61,6 @@ fun NetworkToolboxTopLevelHeader(
                 )
             }
         }
+        trailingContent?.invoke()
     }
 }
