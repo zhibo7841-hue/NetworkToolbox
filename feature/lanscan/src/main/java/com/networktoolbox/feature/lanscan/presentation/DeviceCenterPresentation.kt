@@ -82,6 +82,10 @@ data class DeviceDetailPresentation(
 
     val favoriteToggleContentDescription: String
         get() = if (isFavorite) "取消收藏" else "收藏设备"
+
+    /** A validated IPv4 target for the existing Ping/TCP tool entry points. */
+    val networkToolTarget: String?
+        get() = FavoriteIdentityMatcher.normalizeIpv4(ipAddress)
 }
 
 enum class WakeOnLanAvailability {

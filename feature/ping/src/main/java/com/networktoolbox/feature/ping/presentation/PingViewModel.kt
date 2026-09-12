@@ -70,6 +70,17 @@ class PingViewModel @Inject constructor(
     private var sessionJob: Job? = null
     private var continuousParametersEdited = false
 
+    /** Applies a one-time navigation target without starting a Ping session. */
+    fun applyNavigationTarget(target: String?) {
+        if (_uiState.value.status is PingStatus.Running) return
+        _uiState.update {
+            it.copy(
+                targetInput = target?.trim().orEmpty(),
+                status = PingStatus.Idle,
+            )
+        }
+    }
+
     fun onTargetChanged(target: String) {
         if (_uiState.value.status is PingStatus.Running) return
         _uiState.update { it.copy(targetInput = target, status = PingStatus.Idle) }

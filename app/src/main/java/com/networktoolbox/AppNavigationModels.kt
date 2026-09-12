@@ -61,6 +61,8 @@ internal data class AppNavigationState(
     val toolOrigin: NavigationOrigin = NavigationOrigin.HOME,
     val toolBackDestination: ToolScreen = ToolScreen.NONE,
     val deviceDetailKey: String? = null,
+    /** A one-time target supplied by a Device Detail tool entry. */
+    val toolInitialTarget: String? = null,
 ) {
     fun openTool(screen: ToolScreen): AppNavigationState = copy(
         topLevelDestination = TopLevelDestination.TOOLS,
@@ -72,6 +74,7 @@ internal data class AppNavigationState(
         },
         toolBackDestination = toolScreen.takeIf { it != ToolScreen.NONE } ?: ToolScreen.NONE,
         deviceDetailKey = null,
+        toolInitialTarget = null,
     )
 
     fun openSecondaryDestination(screen: ToolScreen): AppNavigationState = copy(
@@ -83,6 +86,7 @@ internal data class AppNavigationState(
         },
         toolBackDestination = ToolScreen.NONE,
         deviceDetailKey = null,
+        toolInitialTarget = null,
     )
 
     fun openDeviceDetail(key: String): AppNavigationState = copy(
@@ -91,6 +95,21 @@ internal data class AppNavigationState(
         toolOrigin = NavigationOrigin.DEVICES,
         toolBackDestination = ToolScreen.NONE,
         deviceDetailKey = key,
+        toolInitialTarget = null,
+    )
+
+    /** Opens an existing tool with a transient target and a Device Detail back path. */
+    fun openToolFromDeviceDetail(
+        screen: ToolScreen,
+        detailKey: String,
+        initialTarget: String,
+    ): AppNavigationState = copy(
+        topLevelDestination = TopLevelDestination.DEVICES,
+        toolScreen = screen,
+        toolOrigin = NavigationOrigin.DEVICES,
+        toolBackDestination = ToolScreen.DEVICE_DETAIL,
+        deviceDetailKey = detailKey,
+        toolInitialTarget = initialTarget,
     )
 
     fun selectTopLevel(destination: TopLevelDestination): AppNavigationState = copy(
@@ -98,6 +117,7 @@ internal data class AppNavigationState(
         toolScreen = ToolScreen.NONE,
         toolBackDestination = ToolScreen.NONE,
         deviceDetailKey = null,
+        toolInitialTarget = null,
     )
 
     fun goBack(): AppNavigationState = when {
@@ -107,17 +127,20 @@ internal data class AppNavigationState(
             toolScreen = ToolScreen.NONE,
             toolBackDestination = ToolScreen.NONE,
             deviceDetailKey = null,
+            toolInitialTarget = null,
         )
         toolBackDestination != ToolScreen.NONE -> copy(
             toolScreen = toolBackDestination,
             toolBackDestination = ToolScreen.NONE,
-            deviceDetailKey = null,
+            deviceDetailKey = deviceDetailKey.takeIf { toolBackDestination == ToolScreen.DEVICE_DETAIL },
+            toolInitialTarget = null,
         )
         else -> copy(
             topLevelDestination = toolOrigin.backDestination(),
             toolScreen = ToolScreen.NONE,
             toolBackDestination = ToolScreen.NONE,
             deviceDetailKey = null,
+            toolInitialTarget = null,
         )
     }
 
@@ -130,6 +153,7 @@ internal data class AppNavigationState(
                     state.toolOrigin.name,
                     state.toolBackDestination.name,
                     state.deviceDetailKey,
+                    state.toolInitialTarget,
                 )
             },
             restore = { saved ->
@@ -144,6 +168,7 @@ internal data class AppNavigationState(
                         ?.let { value -> runCatching { ToolScreen.valueOf(value) }.getOrNull() }
                         ?: ToolScreen.NONE,
                     deviceDetailKey = saved.getOrNull(4) as? String,
+                    toolInitialTarget = saved.getOrNull(5) as? String,
                 )
             },
         )

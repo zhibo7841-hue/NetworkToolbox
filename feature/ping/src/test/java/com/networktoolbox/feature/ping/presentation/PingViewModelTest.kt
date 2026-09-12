@@ -51,6 +51,29 @@ class PingViewModelTest {
     }
 
     @Test
+    fun deviceDetailNavigationTargetIsPrefilledWithoutStartingPing() {
+        val savedRecords = mutableListOf<HistoryRecord>()
+        val viewModel = viewModelFor(successfulResult(), savedRecords)
+
+        viewModel.applyNavigationTarget("10.0.1.10")
+
+        assertEquals("10.0.1.10", viewModel.uiState.value.targetInput)
+        assertEquals(PingStatus.Idle, viewModel.uiState.value.status)
+        assertTrue(savedRecords.isEmpty())
+    }
+
+    @Test
+    fun standardPingEntryClearsTransientDeviceTarget() {
+        val viewModel = viewModelFor(successfulResult())
+        viewModel.applyNavigationTarget("10.0.1.10")
+
+        viewModel.applyNavigationTarget(null)
+
+        assertEquals("", viewModel.uiState.value.targetInput)
+        assertEquals(PingStatus.Idle, viewModel.uiState.value.status)
+    }
+
+    @Test
     fun quickModeUsesFiveProbesAtFiveHundredMillisecondIntervals() = runTest {
         val engine = FakePingSessionEngine(successfulResult(sentPackets = 5))
         val viewModel = viewModelFor(engine)

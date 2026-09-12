@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.port.presentation
 
+import com.networktoolbox.core.common.history.HistoryRecord
 import com.networktoolbox.core.common.history.HistoryRecorder
 import com.networktoolbox.core.network.tcp.TcpProbeResult
 import com.networktoolbox.feature.port.FakeTcpPortChecker
@@ -37,6 +38,30 @@ class TcpViewModelTest {
 
         assertEquals("", viewModel.uiState.value.hostInput)
         assertEquals("", viewModel.uiState.value.portInput)
+        assertEquals(TcpStatus.Idle, viewModel.uiState.value.status)
+    }
+
+    @Test
+    fun deviceDetailNavigationHostIsPrefilledWithoutStartingCheck() {
+        val savedRecords = mutableListOf<HistoryRecord>()
+        val viewModel = viewModelFor(successResult(), savedRecords)
+
+        viewModel.applyNavigationHost("10.0.1.10")
+
+        assertEquals("10.0.1.10", viewModel.uiState.value.hostInput)
+        assertEquals("", viewModel.uiState.value.portInput)
+        assertEquals(TcpStatus.Idle, viewModel.uiState.value.status)
+        assertTrue(savedRecords.isEmpty())
+    }
+
+    @Test
+    fun standardTcpEntryClearsTransientDeviceHost() {
+        val viewModel = viewModelFor(successResult())
+        viewModel.applyNavigationHost("10.0.1.10")
+
+        viewModel.applyNavigationHost(null)
+
+        assertEquals("", viewModel.uiState.value.hostInput)
         assertEquals(TcpStatus.Idle, viewModel.uiState.value.status)
     }
 
@@ -88,11 +113,14 @@ class TcpViewModelTest {
         assertEquals(TcpStatus.Error(expected), viewModel.uiState.value.status)
     }
 
-    private fun viewModelFor(result: TcpProbeResult): TcpViewModel =
+    private fun viewModelFor(
+        result: TcpProbeResult,
+        savedRecords: MutableList<HistoryRecord> = mutableListOf(),
+    ): TcpViewModel =
         TcpViewModel(
             CheckTcpPortUseCase(
                 tcpPortChecker = FakeTcpPortChecker(result),
-                historyRecorder = HistoryRecorder { },
+                historyRecorder = HistoryRecorder { savedRecords += it },
             ),
         )
 

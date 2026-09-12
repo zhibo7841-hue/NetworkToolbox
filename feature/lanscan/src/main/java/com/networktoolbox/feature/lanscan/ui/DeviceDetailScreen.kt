@@ -63,6 +63,8 @@ fun DeviceDetailScreen(
     onRestoreAutomaticName: () -> Unit = {},
     favoriteErrorMessage: String? = null,
     customNameErrorMessage: String? = null,
+    onOpenPing: (String) -> Unit = {},
+    onOpenTcp: (String) -> Unit = {},
     onSaveWakeOnLan: (String, String) -> Unit = { _, _ -> },
     onSendWakeOnLan: () -> Unit = {},
     deviceDetailEvents: Flow<DeviceDetailEvent> = emptyFlow(),
@@ -215,6 +217,39 @@ fun DeviceDetailScreen(
         DeviceDetailSection(title = "网络关系") {
             detail.role?.takeIf(String::isNotBlank)?.let { ToolResultRow("角色", it) }
             detail.networkScope?.takeIf(String::isNotBlank)?.let { ToolResultRow("范围", it) }
+        }
+
+        DeviceDetailSection(title = "网络检测") {
+            detail.networkToolTarget?.let { target ->
+                if (!detail.observedThisScan) {
+                    Text(
+                        "将使用最近保存的 IPv4 地址。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.SM),
+                ) {
+                    SecondaryActionButton(
+                        modifier = Modifier.weight(1f),
+                        onClick = { onOpenPing(target) },
+                    ) {
+                        Text("Ping")
+                    }
+                    SecondaryActionButton(
+                        modifier = Modifier.weight(1f),
+                        onClick = { onOpenTcp(target) },
+                    ) {
+                        Text("端口检测")
+                    }
+                }
+            } ?: Text(
+                "当前没有可用的 IPv4 地址，暂无法快速检测。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         DeviceDetailSection(title = stringResource(com.networktoolbox.feature.lanscan.R.string.wol_section_title)) {

@@ -170,6 +170,32 @@ class AppNavigationStateTest {
     }
 
     @Test
+    fun existingToolsOpenedFromDeviceDetail_returnToTheSameDetail() {
+        listOf(ToolScreen.PING, ToolScreen.TCP).forEach { tool ->
+            val detailKey = "favorite:scope:type:value"
+            val state = AppNavigationState()
+                .openDeviceDetail(detailKey)
+                .openToolFromDeviceDetail(
+                    screen = tool,
+                    detailKey = detailKey,
+                    initialTarget = "10.0.1.10",
+                )
+
+            assertEquals(TopLevelDestination.DEVICES, state.topLevelDestination)
+            assertEquals(tool, state.toolScreen)
+            assertEquals(ToolScreen.DEVICE_DETAIL, state.toolBackDestination)
+            assertEquals("10.0.1.10", state.toolInitialTarget)
+
+            val returned = state.goBack()
+            assertEquals(TopLevelDestination.DEVICES, returned.topLevelDestination)
+            assertEquals(ToolScreen.DEVICE_DETAIL, returned.toolScreen)
+            assertEquals(detailKey, returned.deviceDetailKey)
+            assertEquals(ToolScreen.NONE, returned.toolBackDestination)
+            assertEquals(null, returned.toolInitialTarget)
+        }
+    }
+
+    @Test
     fun openingAnotherDestination_clearsDeviceDetailKey() {
         val state = AppNavigationState()
             .openDeviceDetail("favorite:scope:type:value")

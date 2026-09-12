@@ -28,6 +28,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -201,6 +202,18 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            LaunchedEffect(toolScreen, navigationState.toolInitialTarget) {
+                when (toolScreen) {
+                    ToolScreen.PING -> pingViewModel.applyNavigationTarget(
+                        navigationState.toolInitialTarget,
+                    )
+                    ToolScreen.TCP -> tcpViewModel.applyNavigationHost(
+                        navigationState.toolInitialTarget,
+                    )
+                    else -> Unit
+                }
+            }
+
             fun openDrawer() {
                 drawerScope.launch { drawerState.open() }
             }
@@ -219,10 +232,34 @@ class MainActivity : ComponentActivity() {
                 }
                 restoredDiagnosticReport = null
                 restoredAutomaticDiagnosticResult = null
+                when (screen) {
+                    ToolScreen.PING -> pingViewModel.applyNavigationTarget(null)
+                    ToolScreen.TCP -> tcpViewModel.applyNavigationHost(null)
+                    else -> Unit
+                }
                 navigationState = navigationState.openTool(screen)
                 if (screen == ToolScreen.HISTORY) {
                     historyViewModel.load()
                 }
+            }
+
+            fun openToolFromDeviceDetail(screen: ToolScreen, target: String) {
+                if (screen != ToolScreen.PING && screen != ToolScreen.TCP) return
+                val detailKey = navigationState.deviceDetailKey ?: return
+                val normalizedTarget = target.trim().takeIf(String::isNotBlank) ?: return
+                closeDrawer()
+                restoredDiagnosticReport = null
+                restoredAutomaticDiagnosticResult = null
+                when (screen) {
+                    ToolScreen.PING -> pingViewModel.applyNavigationTarget(normalizedTarget)
+                    ToolScreen.TCP -> tcpViewModel.applyNavigationHost(normalizedTarget)
+                    else -> return
+                }
+                navigationState = navigationState.openToolFromDeviceDetail(
+                    screen = screen,
+                    detailKey = detailKey,
+                    initialTarget = normalizedTarget,
+                )
             }
 
             fun selectTopLevel(destination: TopLevelDestination) {
@@ -484,6 +521,12 @@ class MainActivity : ComponentActivity() {
                                     lanScannerViewModel.clearCustomNameByRouteKey(
                                         navigationState.deviceDetailKey,
                                     )
+                                },
+                                onOpenPing = { target ->
+                                    openToolFromDeviceDetail(ToolScreen.PING, target)
+                                },
+                                onOpenTcp = { target ->
+                                    openToolFromDeviceDetail(ToolScreen.TCP, target)
                                 },
                                 onSaveWakeOnLan = { macAddress, udpPort ->
                                     lanScannerViewModel.saveWakeOnLanByRouteKey(

@@ -92,6 +92,28 @@ class DeviceDetailPresentationTest {
     }
 
     @Test
+    fun `detail exposes the validated ipv4 target for existing tools`() {
+        val detail = DeviceCenterPresentation.detail(
+            device = device("10.0.1.10"),
+            favorite = null,
+            context = context(),
+        )
+
+        assertEquals("10.0.1.10", detail.networkToolTarget)
+    }
+
+    @Test
+    fun `detail without a valid ipv4 has no tool target`() {
+        val detail = DeviceCenterPresentation.detail(
+            device = device("not-an-ip"),
+            favorite = null,
+            context = context(),
+        )
+
+        assertNull(detail.networkToolTarget)
+    }
+
+    @Test
     fun `detail exposes observed identity fields and roles`() {
         val detail = DeviceCenterPresentation.detail(
             device = device("10.0.1.1", gateway = true).copy(

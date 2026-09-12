@@ -36,6 +36,17 @@ class TcpViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TcpUiState())
     val uiState: StateFlow<TcpUiState> = _uiState.asStateFlow()
 
+    /** Applies a one-time navigation host without starting a TCP check. */
+    fun applyNavigationHost(host: String?) {
+        if (_uiState.value.status is TcpStatus.Loading) return
+        _uiState.update {
+            it.copy(
+                hostInput = host?.trim().orEmpty(),
+                status = TcpStatus.Idle,
+            )
+        }
+    }
+
     fun onHostChanged(host: String) {
         if (_uiState.value.status is TcpStatus.Loading) return
 
