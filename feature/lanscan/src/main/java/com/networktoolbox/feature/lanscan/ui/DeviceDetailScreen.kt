@@ -1,9 +1,12 @@
 package com.networktoolbox.feature.lanscan.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -15,14 +18,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -38,10 +46,13 @@ import com.networktoolbox.core.designsystem.SecondaryActionButton
 import com.networktoolbox.core.designsystem.SecondaryInformationHeader
 import com.networktoolbox.core.designsystem.ToolResultRow
 import com.networktoolbox.core.designsystem.ToolScreenLayout
+import com.networktoolbox.feature.lanscan.presentation.DeviceDetailEvent
 import com.networktoolbox.feature.lanscan.presentation.DeviceDetailPresentation
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
 fun DeviceDetailScreen(
@@ -54,10 +65,22 @@ fun DeviceDetailScreen(
     customNameErrorMessage: String? = null,
     onSaveWakeOnLan: (String, String) -> Unit = { _, _ -> },
     onSendWakeOnLan: () -> Unit = {},
-    wakeOnLanActionMessage: String? = null,
-    wakeOnLanActionErrorMessage: String? = null,
+    deviceDetailEvents: Flow<DeviceDetailEvent> = emptyFlow(),
     modifier: Modifier = Modifier,
 ) {
+    val scrollState = rememberSaveable(detail?.detailKey, saver = ScrollState.Saver) {
+        ScrollState(initial = 0)
+    }
+    val snackbarHostState = remember(detail?.detailKey) { SnackbarHostState() }
+    LaunchedEffect(detail?.detailKey, deviceDetailEvents) {
+        deviceDetailEvents.collect { event ->
+            snackbarHostState.showSnackbar(
+                message = event.message,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
+
     var showNameDialog by rememberSaveable(detail?.detailKey) { mutableStateOf(false) }
     var showWakeOnLanDialog by rememberSaveable(detail?.detailKey) { mutableStateOf(false) }
     var draftName by rememberSaveable(detail?.detailKey) {
@@ -81,7 +104,11 @@ fun DeviceDetailScreen(
             ?: WakeOnLanConfig.DEFAULT_UDP_PORT.toString()
     }
 
-    ToolScreenLayout(modifier = modifier) {
+    Box(modifier = modifier.fillMaxSize()) {
+        ToolScreenLayout(
+            modifier = Modifier.fillMaxSize(),
+            scrollState = scrollState,
+        ) {
         SecondaryInformationHeader(
             title = stringResource(com.networktoolbox.feature.lanscan.R.string.device_detail_title),
             onBack = onBack,
@@ -222,12 +249,6 @@ fun DeviceDetailScreen(
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
-            }
-            wakeOnLanActionMessage?.let { message ->
-                Text(message, color = MaterialTheme.colorScheme.primary)
-            }
-            wakeOnLanActionErrorMessage?.let { message ->
-                Text(message, color = MaterialTheme.colorScheme.error)
             }
             SecondaryActionButton(
                 modifier = Modifier.fillMaxWidth(),
@@ -394,6 +415,13 @@ fun DeviceDetailScreen(
                 },
             )
         }
+
+        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 

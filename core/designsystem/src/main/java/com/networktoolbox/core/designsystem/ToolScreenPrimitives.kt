@@ -1,5 +1,6 @@
 package com.networktoolbox.core.designsystem
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -36,13 +37,15 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ToolScreenLayout(
     modifier: Modifier = Modifier,
+    scrollState: ScrollState? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val rememberedScrollState = scrollState ?: rememberScrollState()
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberedScrollState)
                 .padding(horizontal = NetworkToolboxSpacing.XL, vertical = NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
             content = content,

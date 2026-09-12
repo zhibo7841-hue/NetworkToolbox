@@ -4,16 +4,22 @@ import com.networktoolbox.core.common.favorites.FavoriteDevice
 import com.networktoolbox.core.common.favorites.FavoriteDeviceCandidate
 import com.networktoolbox.core.common.favorites.FavoriteDeviceObservation
 import com.networktoolbox.core.common.favorites.FavoriteDeviceRepository
+import com.networktoolbox.core.common.favorites.SavedDeviceRepository
 import com.networktoolbox.core.network.model.ConnectionType
 import com.networktoolbox.core.network.model.NetworkContext
-import com.networktoolbox.core.common.favorites.SavedDeviceRepository
+import com.networktoolbox.core.common.wol.MacAddress
 import com.networktoolbox.core.common.wol.WakeOnLanConfig
+import com.networktoolbox.core.common.wol.WakeOnLanFailureReason
+import com.networktoolbox.core.common.wol.WakeOnLanResult
+import com.networktoolbox.feature.lanscan.domain.LanFavoriteIdentity
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeCalculator
 import com.networktoolbox.feature.lanscan.domain.LanScanRangeResult
 import com.networktoolbox.feature.lanscan.domain.LanScanReadiness
+import com.networktoolbox.feature.lanscan.domain.NoOpSendWakeOnLan
 import com.networktoolbox.feature.lanscan.domain.ObserveLanScanReadiness
 import com.networktoolbox.feature.lanscan.domain.ReverseDnsEnricher
 import com.networktoolbox.feature.lanscan.domain.RunLanScan
+import com.networktoolbox.feature.lanscan.domain.SendWakeOnLan
 import com.networktoolbox.feature.lanscan.domain.model.LanDevice
 import com.networktoolbox.feature.lanscan.domain.model.LanDeviceEvidence
 import com.networktoolbox.feature.lanscan.domain.model.LanDiscoveryMethod
@@ -23,12 +29,15 @@ import com.networktoolbox.feature.lanscan.domain.model.LanScanStatus
 import com.networktoolbox.feature.lanscan.domain.model.LanScanUpdate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -414,10 +423,142 @@ class LanFavoritesViewModelTest {
         assertEquals("new-device.local", profile.lastKnownDisplayName)
     }
 
+    @Test
+    fun `successful wake emits one shot event without changing saved profile`() = runTest {
+        val context = context()
+        val device = device("10.0.1.34")
+        val config = WakeOnLanConfig(MacAddress.parse("00:11:22:33:44:55")!!)
+        val profile = LanFavoriteIdentity.createFavorite(device, context, now = 1L)!!
+            .copy(id = 7L, customName = "客厅主机", wolConfig = config)
+        val repository = FakeFavoriteDeviceRepository(initialFavorites = listOf(profile))
+        val viewModel = viewModel(
+            context = context,
+            device = device,
+            repository = repository,
+            sendWakeOnLan = SendWakeOnLan {
+                WakeOnLanResult.Sent("10.0.1.255", config.udpPort)
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val before = viewModel.savedProfiles.value.single()
+        val event = async { viewModel.deviceDetailEvents.first() }
+        runCurrent()
+
+        viewModel.sendWakeOnLanByRouteKey(viewModel.detailRouteKey(device))
+        advanceUntilIdle()
+
+        assertEquals(DeviceDetailEvent.WakePacketSent, event.await())
+        assertEquals(before, viewModel.savedProfiles.value.single())
+        assertTrue(viewModel.deviceDetailEvents.replayCache.isEmpty())
+    }
+
+    @Test
+    fun `wake failure emits transient user feedback without persistent error state`() = runTest {
+        val context = context()
+        val device = device("10.0.1.35")
+        val config = WakeOnLanConfig(MacAddress.parse("02:11:22:33:44:55")!!)
+        val profile = LanFavoriteIdentity.createFavorite(device, context, now = 1L)!!
+            .copy(id = 8L, wolConfig = config)
+        val repository = FakeFavoriteDeviceRepository(initialFavorites = listOf(profile))
+        val viewModel = viewModel(
+            context = context,
+            device = device,
+            repository = repository,
+            sendWakeOnLan = SendWakeOnLan {
+                WakeOnLanResult.Failed(WakeOnLanFailureReason.SEND_FAILED)
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val event = async { viewModel.deviceDetailEvents.first() }
+        runCurrent()
+
+        viewModel.sendWakeOnLanByRouteKey(viewModel.detailRouteKey(device))
+        advanceUntilIdle()
+
+        assertEquals(
+            DeviceDetailEvent.WakePacketFailed("无法发送唤醒包，请检查当前局域网连接后重试。"),
+            event.await(),
+        )
+        assertEquals(profile, viewModel.savedProfiles.value.single())
+    }
+
+    @Test
+    fun `repeated wake actions emit a new event for each send`() = runTest {
+        val context = context()
+        val device = device("10.0.1.36")
+        val config = WakeOnLanConfig(MacAddress.parse("02:AA:BB:CC:DD:EE")!!)
+        val profile = LanFavoriteIdentity.createFavorite(device, context, now = 1L)!!
+            .copy(id = 9L, wolConfig = config)
+        val repository = FakeFavoriteDeviceRepository(initialFavorites = listOf(profile))
+        val viewModel = viewModel(
+            context = context,
+            device = device,
+            repository = repository,
+            sendWakeOnLan = SendWakeOnLan {
+                WakeOnLanResult.Sent("10.0.1.255", config.udpPort)
+            },
+        )
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val route = viewModel.detailRouteKey(device)
+
+        val firstEvent = async { viewModel.deviceDetailEvents.first() }
+        runCurrent()
+        viewModel.sendWakeOnLanByRouteKey(route)
+        advanceUntilIdle()
+        assertEquals(DeviceDetailEvent.WakePacketSent, firstEvent.await())
+
+        val secondEvent = async { viewModel.deviceDetailEvents.first() }
+        runCurrent()
+        viewModel.sendWakeOnLanByRouteKey(route)
+        advanceUntilIdle()
+        assertEquals(DeviceDetailEvent.WakePacketSent, secondEvent.await())
+        assertEquals(profile, viewModel.savedProfiles.value.single())
+    }
+
+    @Test
+    fun `saving wake configuration emits an event and persists a wol only profile`() = runTest {
+        val context = context()
+        val device = device("10.0.1.37")
+        val repository = FakeFavoriteDeviceRepository()
+        val viewModel = viewModel(context, device, repository)
+
+        advanceUntilIdle()
+        viewModel.startScan()
+        advanceUntilIdle()
+        val event = async { viewModel.deviceDetailEvents.first() }
+        runCurrent()
+
+        viewModel.saveWakeOnLanByRouteKey(
+            routeKey = viewModel.detailRouteKey(device),
+            rawMacAddress = "02-aa-bb-cc-dd-ee",
+            rawPort = "9",
+        )
+        advanceUntilIdle()
+
+        assertEquals(DeviceDetailEvent.WakeOnLanConfigurationSaved, event.await())
+        val saved = viewModel.savedProfiles.value.single()
+        assertTrue(saved.isFavorite.not())
+        assertEquals(null, saved.customName)
+        assertEquals(
+            WakeOnLanConfig(MacAddress.parse("02:AA:BB:CC:DD:EE")!!),
+            saved.wolConfig,
+        )
+    }
+
     private fun viewModel(
         context: NetworkContext,
         device: LanDevice,
         repository: SavedDeviceRepository,
+        sendWakeOnLan: SendWakeOnLan = NoOpSendWakeOnLan,
     ) = LanScannerViewModel(
         observeReadiness = ObserveLanScanReadiness {
             flowOf(
@@ -448,6 +589,7 @@ class LanFavoritesViewModelTest {
         reverseDnsEnricher = ReverseDnsEnricher { _, _ -> },
         mdnsEnricher = com.networktoolbox.feature.lanscan.domain.MdnsEnricher { _, _, _, _ -> },
         savedDeviceRepository = repository,
+        sendWakeOnLan = sendWakeOnLan,
     )
 
     private fun context() = NetworkContext(

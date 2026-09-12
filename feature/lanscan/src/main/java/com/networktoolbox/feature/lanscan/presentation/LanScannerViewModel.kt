@@ -47,8 +47,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -75,10 +78,10 @@ class LanScannerViewModel @Inject constructor(
     val favoriteActionError: StateFlow<String?> = _favoriteActionError.asStateFlow()
     private val _customNameActionError = MutableStateFlow<String?>(null)
     val customNameActionError: StateFlow<String?> = _customNameActionError.asStateFlow()
-    private val _wakeOnLanActionMessage = MutableStateFlow<String?>(null)
-    val wakeOnLanActionMessage: StateFlow<String?> = _wakeOnLanActionMessage.asStateFlow()
-    private val _wakeOnLanActionError = MutableStateFlow<String?>(null)
-    val wakeOnLanActionError: StateFlow<String?> = _wakeOnLanActionError.asStateFlow()
+    private val _deviceDetailEvents = MutableSharedFlow<DeviceDetailEvent>(
+        extraBufferCapacity = 8,
+    )
+    val deviceDetailEvents: SharedFlow<DeviceDetailEvent> = _deviceDetailEvents.asSharedFlow()
 
     private var latestReadiness: LanScanReadiness? = null
     private var scanJob: Job? = null
@@ -570,29 +573,30 @@ class LanScannerViewModel @Inject constructor(
     /** Saves only the local WoL configuration on the current device profile. */
     fun saveWakeOnLanByRouteKey(routeKey: String?, rawMacAddress: String, rawPort: String) {
         viewModelScope.launch {
-            _wakeOnLanActionMessage.value = null
-            _wakeOnLanActionError.value = null
+            val emitFailure: (String) -> Unit = { message ->
+                emitDeviceDetailEvent(DeviceDetailEvent.WakeOnLanConfigurationSaveFailed(message))
+            }
             val mac = MacAddress.parse(rawMacAddress)
             if (mac == null) {
-                _wakeOnLanActionError.value = "请输入有效的单播 MAC 地址。"
+                emitFailure("请输入有效的单播 MAC 地址。")
                 return@launch
             }
             val port = rawPort.trim().toIntOrNull()
             if (port == null || port !in WakeOnLanConfig.MIN_UDP_PORT..WakeOnLanConfig.MAX_UDP_PORT) {
-                _wakeOnLanActionError.value = "UDP 端口必须在 1 到 65535 之间。"
+                emitFailure("UDP 端口必须在 1 到 65535 之间。")
                 return@launch
             }
             val config = WakeOnLanConfig(macAddress = mac, udpPort = port)
-            runWakeOnLanOperation {
+            runWakeOnLanOperation(onFailure = emitFailure) {
                 val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return@runWakeOnLanOperation
                 val context = currentNetworkContext()
-                    ?: return@runWakeOnLanOperation failWakeOnLan("当前网络状态不可用，无法保存配置。")
+                    ?: return@runWakeOnLanOperation emitFailure("当前网络状态不可用，无法保存配置。")
                 val scope = LanNetworkScope.from(context)
-                    ?: return@runWakeOnLanOperation failWakeOnLan("当前没有可保存的局域网范围。")
+                    ?: return@runWakeOnLanOperation emitFailure("当前没有可保存的局域网范围。")
                 when (val target = resolveDeviceDetailActionTarget(parsed, context, scope)) {
                     is DeviceDetailActionTarget.Observed -> {
                         val candidate = LanFavoriteIdentity.candidate(target.device, target.context)
-                            ?: return@runWakeOnLanOperation failWakeOnLan("当前设备没有可保存的局域网信息。")
+                            ?: return@runWakeOnLanOperation emitFailure("当前设备没有可保存的局域网信息。")
                         val existing = savedDeviceRepository.findMatching(candidate)
                         if (existing != null) {
                             savedDeviceRepository.setWakeOnLanConfig(existing.id, config)
@@ -605,18 +609,18 @@ class LanScannerViewModel @Inject constructor(
                                 isFavorite = false,
                                 customName = null,
                                 wolConfig = config,
-                            ) ?: return@runWakeOnLanOperation failWakeOnLan("无法保存当前设备配置。")
+                            ) ?: return@runWakeOnLanOperation emitFailure("无法保存当前设备配置。")
                             savedDeviceRepository.save(profile)
                         }
-                        _wakeOnLanActionMessage.value = "唤醒配置已保存。"
+                        emitDeviceDetailEvent(DeviceDetailEvent.WakeOnLanConfigurationSaved)
                     }
 
                     is DeviceDetailActionTarget.SavedProfile -> {
                         savedDeviceRepository.setWakeOnLanConfig(target.profile.id, config)
-                        _wakeOnLanActionMessage.value = "唤醒配置已保存。"
+                        emitDeviceDetailEvent(DeviceDetailEvent.WakeOnLanConfigurationSaved)
                     }
 
-                    null -> failWakeOnLan("设备信息已不可用，请返回后重试。")
+                    null -> emitFailure("设备信息已不可用，请返回后重试。")
                 }
             }
         }
@@ -625,53 +629,57 @@ class LanScannerViewModel @Inject constructor(
     /** Sends one magic packet directly; sending does not imply the device woke up. */
     fun sendWakeOnLanByRouteKey(routeKey: String?) {
         viewModelScope.launch {
-            _wakeOnLanActionMessage.value = null
-            _wakeOnLanActionError.value = null
-            runWakeOnLanOperation {
+            val emitFailure: (String) -> Unit = { message ->
+                emitDeviceDetailEvent(DeviceDetailEvent.WakePacketFailed(message))
+            }
+            runWakeOnLanOperation(onFailure = emitFailure) {
                 val parsed = LanDeviceDetailRouteKey.parse(routeKey) ?: return@runWakeOnLanOperation
                 val context = currentNetworkContext()
-                    ?: return@runWakeOnLanOperation failWakeOnLan("当前网络状态不可用，无法发送唤醒包。")
+                    ?: return@runWakeOnLanOperation emitFailure("当前网络状态不可用，无法发送唤醒包。")
                 val scope = LanNetworkScope.from(context)
-                    ?: return@runWakeOnLanOperation failWakeOnLan("当前没有可用的局域网。")
+                    ?: return@runWakeOnLanOperation emitFailure("当前没有可用的局域网。")
                 val profile = when (val target = resolveDeviceDetailActionTarget(parsed, context, scope)) {
                     is DeviceDetailActionTarget.SavedProfile -> target.profile
                     is DeviceDetailActionTarget.Observed -> {
                         val candidate = LanFavoriteIdentity.candidate(target.device, target.context)
-                            ?: return@runWakeOnLanOperation failWakeOnLan("设备信息已不可用，请重试。")
+                            ?: return@runWakeOnLanOperation emitFailure("设备信息已不可用，请重试。")
                         savedDeviceRepository.findMatching(candidate)
                     }
 
                     null -> null
                 }
                 if (profile == null) {
-                    return@runWakeOnLanOperation failWakeOnLan("请先配置 MAC 地址。")
+                    return@runWakeOnLanOperation emitFailure("请先配置 MAC 地址。")
                 }
                 when (val result = sendWakeOnLan(profile)) {
                     is WakeOnLanResult.Sent -> {
-                        _wakeOnLanActionMessage.value = "唤醒包已发送"
+                        emitDeviceDetailEvent(DeviceDetailEvent.WakePacketSent)
                     }
 
-                    is WakeOnLanResult.Failed -> failWakeOnLan(result.reason.toUserMessage())
+                    is WakeOnLanResult.Failed -> emitFailure(result.reason.toUserMessage())
                     WakeOnLanResult.Cancelled -> Unit
                 }
             }
         }
     }
 
-    private suspend fun runWakeOnLanOperation(operation: suspend () -> Unit) {
+    private suspend fun runWakeOnLanOperation(
+        onFailure: (String) -> Unit,
+        operation: suspend () -> Unit,
+    ) {
         wakeOnLanOperationMutex.withLock {
             try {
                 operation()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                _wakeOnLanActionError.value = "唤醒包发送失败，请检查当前局域网连接后重试。"
+                onFailure("唤醒包发送失败，请检查当前局域网连接后重试。")
             }
         }
     }
 
-    private fun failWakeOnLan(message: String) {
-        _wakeOnLanActionError.value = message
+    private fun emitDeviceDetailEvent(event: DeviceDetailEvent) {
+        _deviceDetailEvents.tryEmit(event)
     }
 
     private suspend fun runCustomNameOperation(operation: suspend () -> Unit) {
