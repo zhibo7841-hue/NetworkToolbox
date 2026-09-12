@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -74,6 +75,7 @@ fun LanDeviceCenterScreen(
     onOpenDevice: (String) -> Unit = {},
     onQuickWake: (String) -> Unit = {},
     deviceDetailEvents: Flow<DeviceDetailEvent> = emptyFlow(),
+    listState: LazyListState? = null,
 ) {
     val savedProfileEvidence = stringResource(R.string.lan_scan_saved_not_scanned)
     val waitingProfileEvidence = stringResource(R.string.lan_scan_waiting_saved)
@@ -104,7 +106,10 @@ fun LanDeviceCenterScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        ToolScreenLazyLayout(modifier = Modifier.fillMaxSize()) {
+        ToolScreenLazyLayout(
+            modifier = Modifier.fillMaxSize(),
+            listState = listState,
+        ) {
             item {
                 NetworkToolboxTopLevelHeader(
                     title = "设备",

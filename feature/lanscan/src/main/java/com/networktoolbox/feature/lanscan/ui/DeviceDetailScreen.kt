@@ -69,8 +69,9 @@ fun DeviceDetailScreen(
     onSendWakeOnLan: () -> Unit = {},
     deviceDetailEvents: Flow<DeviceDetailEvent> = emptyFlow(),
     modifier: Modifier = Modifier,
+    scrollState: ScrollState? = null,
 ) {
-    val scrollState = rememberSaveable(detail?.detailKey, saver = ScrollState.Saver) {
+    val screenScrollState = scrollState ?: rememberSaveable(detail?.detailKey, saver = ScrollState.Saver) {
         ScrollState(initial = 0)
     }
     val snackbarHostState = remember(detail?.detailKey) { SnackbarHostState() }
@@ -109,7 +110,7 @@ fun DeviceDetailScreen(
     Box(modifier = modifier.fillMaxSize()) {
         ToolScreenLayout(
             modifier = Modifier.fillMaxSize(),
-            scrollState = scrollState,
+            scrollState = screenScrollState,
         ) {
         SecondaryInformationHeader(
             title = stringResource(com.networktoolbox.feature.lanscan.R.string.device_detail_title),

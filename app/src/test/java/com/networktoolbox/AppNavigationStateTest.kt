@@ -203,4 +203,52 @@ class AppNavigationStateTest {
 
         assertEquals(null, state.deviceDetailKey)
     }
+
+    @Test
+    fun backPolicy_prioritizesDrawerOverSearchAndNavigation() {
+        assertEquals(
+            AppBackAction.DISMISS_DRAWER,
+            AppShellPresentation.resolveBackAction(
+                drawerOpen = true,
+                deviceCenterVisible = true,
+                deviceCenterSearchActive = true,
+                hasNestedDestination = true,
+            ),
+        )
+    }
+
+    @Test
+    fun backPolicy_closesDeviceCenterSearchBeforePageNavigation() {
+        assertEquals(
+            AppBackAction.CLOSE_DEVICE_CENTER_SEARCH,
+            AppShellPresentation.resolveBackAction(
+                drawerOpen = false,
+                deviceCenterVisible = true,
+                deviceCenterSearchActive = true,
+                hasNestedDestination = false,
+            ),
+        )
+    }
+
+    @Test
+    fun backPolicy_navigatesOnlyWhenThereIsANestedDestination() {
+        assertEquals(
+            AppBackAction.NAVIGATE,
+            AppShellPresentation.resolveBackAction(
+                drawerOpen = false,
+                deviceCenterVisible = false,
+                deviceCenterSearchActive = false,
+                hasNestedDestination = true,
+            ),
+        )
+        assertEquals(
+            AppBackAction.UNHANDLED,
+            AppShellPresentation.resolveBackAction(
+                drawerOpen = false,
+                deviceCenterVisible = true,
+                deviceCenterSearchActive = false,
+                hasNestedDestination = false,
+            ),
+        )
+    }
 }

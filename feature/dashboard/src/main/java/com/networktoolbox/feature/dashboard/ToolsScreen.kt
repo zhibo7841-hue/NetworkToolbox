@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.dashboard
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ fun ToolsScreen(
     onOpenLanScan: () -> Unit,
     onOpenReport: () -> Unit,
     modifier: Modifier = Modifier,
+    scrollState: ScrollState? = null,
     onOpenMenu: () -> Unit = {},
 ) {
     val callbacks = DashboardNavigationCallbacks(
@@ -42,7 +44,7 @@ fun ToolsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState ?: rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
         ) {

@@ -11,12 +11,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.ScrollState
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,6 +55,8 @@ import com.networktoolbox.feature.history.presentation.HistoryViewModel
 import com.networktoolbox.feature.history.ui.HistoryScreen
 import com.networktoolbox.feature.lanscan.presentation.LanScannerViewModel
 import com.networktoolbox.feature.lanscan.presentation.LanScanRangeMode
+import com.networktoolbox.feature.lanscan.presentation.LanScannerUiState
+import com.networktoolbox.feature.lanscan.domain.LanNetworkFingerprint
 import com.networktoolbox.feature.lanscan.ui.LanDeviceCenterScreen
 import com.networktoolbox.feature.lanscan.ui.DeviceDetailScreen
 import com.networktoolbox.feature.lanscan.ui.LanScannerScreen
@@ -181,10 +186,28 @@ class MainActivity : ComponentActivity() {
             var navigationState by rememberSaveable(stateSaver = AppNavigationState.Saver) {
                 mutableStateOf(AppNavigationState())
             }
+            // Scroll belongs to the parent surface, not to a child route. Keeping
+            // these states here lets a parent disappear while a detail screen is
+            // shown without losing the user's position.
+            val homeScrollState = rememberScrollState()
+            val toolsScrollState = rememberScrollState()
+            val historyScrollState = rememberScrollState()
+            val lanScannerScrollState = rememberScrollState()
+            val deviceCenterListState = rememberLazyListState()
+            val reportScrollState = rememberScrollState()
+            val deviceDetailScrollStates = remember { mutableMapOf<String, ScrollState>() }
+            val deviceDetailScrollState = navigationState.deviceDetailKey?.let { detailKey ->
+                deviceDetailScrollStates.getOrPut(detailKey) { ScrollState(initial = 0) }
+            }
             val topLevelDestination = navigationState.topLevelDestination
             val toolScreen = navigationState.toolScreen
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
             val drawerScope = rememberCoroutineScope()
+            val lanNetworkContext = lanScannerUiState.scrollNetworkContext()
+            val lanNetworkFingerprint = remember(lanNetworkContext) {
+                lanNetworkContext?.let(LanNetworkFingerprint::from)
+            }
+            var previousLanNetworkFingerprint by remember { mutableStateOf<String?>(null) }
             var restoredDiagnosticReport by remember {
                 mutableStateOf<DiagnosticReportV2?>(null)
             }
@@ -213,6 +236,15 @@ class MainActivity : ComponentActivity() {
                     )
                     else -> Unit
                 }
+            }
+
+            LaunchedEffect(lanNetworkFingerprint) {
+                val previousFingerprint = previousLanNetworkFingerprint
+                if (previousFingerprint != null && previousFingerprint != lanNetworkFingerprint) {
+                    deviceCenterListState.scrollToItem(0)
+                    lanScannerScrollState.scrollTo(0)
+                }
+                previousLanNetworkFingerprint = lanNetworkFingerprint
             }
 
             fun openDrawer() {
@@ -329,11 +361,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            BackHandler(enabled = drawerState.isOpen) {
+            val backAction = AppShellPresentation.resolveBackAction(
+                drawerOpen = drawerState.isOpen,
+                deviceCenterVisible = topLevelDestination == TopLevelDestination.DEVICES &&
+                    toolScreen == ToolScreen.NONE,
+                deviceCenterSearchActive = deviceCenterSearchState.isSearchActive,
+                hasNestedDestination = toolScreen != ToolScreen.NONE,
+            )
+
+            BackHandler(enabled = backAction == AppBackAction.DISMISS_DRAWER) {
                 closeDrawer()
             }
 
-            BackHandler(enabled = !drawerState.isOpen && toolScreen != ToolScreen.NONE) {
+            BackHandler(enabled = backAction == AppBackAction.CLOSE_DEVICE_CENTER_SEARCH) {
+                // The X action and system Back deliberately share this ViewModel
+                // entry point so query/filter cleanup cannot drift.
+                lanScannerViewModel.closeDeviceCenterSearch()
+            }
+
+            BackHandler(enabled = backAction == AppBackAction.NAVIGATE) {
                 goBack()
             }
 
@@ -380,6 +426,7 @@ class MainActivity : ComponentActivity() {
                                 TopLevelDestination.HOME -> HomeScreen(
                                     uiState = dashboardUiState,
                                     recentHistory = recentHistory,
+                                    scrollState = homeScrollState,
                                     onOpenMenu = ::openDrawer,
                                     onOpenPing = { openTool(ToolScreen.PING) },
                                     onOpenDns = { openTool(ToolScreen.DNS) },
@@ -389,6 +436,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenLanScan = { openTool(ToolScreen.LAN_SCAN) },
                                 )
                                 TopLevelDestination.TOOLS -> ToolsScreen(
+                                    scrollState = toolsScrollState,
                                     onOpenMenu = ::openDrawer,
                                     onOpenPing = { openTool(ToolScreen.PING) },
                                     onOpenDns = { openTool(ToolScreen.DNS) },
@@ -400,6 +448,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 TopLevelDestination.DEVICES -> LanDeviceCenterScreen(
                                     uiState = lanScannerUiState,
+                                    listState = deviceCenterListState,
                                     favorites = savedDeviceProfiles,
                                     searchState = deviceCenterSearchState,
                                     onStartScan = lanScannerViewModel::startCurrentNetworkScan,
@@ -471,6 +520,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 restoredReport = restoredDiagnosticReport,
                                 restoredAutomaticResult = restoredAutomaticDiagnosticResult,
+                                scrollState = reportScrollState,
                                 onRunCheck = {
                                     restoredDiagnosticReport = null
                                     restoredAutomaticDiagnosticResult = null
@@ -486,6 +536,7 @@ class MainActivity : ComponentActivity() {
                             )
                             ToolScreen.HISTORY -> HistoryScreen(
                                 uiState = historyUiState,
+                                scrollState = historyScrollState,
                                 onLoad = historyViewModel::load,
                                 onDelete = historyViewModel::delete,
                                 onClear = historyViewModel::clear,
@@ -495,6 +546,7 @@ class MainActivity : ComponentActivity() {
                             )
                             ToolScreen.LAN_SCAN -> LanScannerScreen(
                                 uiState = lanScannerUiState,
+                                scrollState = lanScannerScrollState,
                                 savedProfiles = savedDeviceProfiles,
                                 onStartScan = lanScannerViewModel::startScan,
                                 onStopScan = lanScannerViewModel::stopScan,
@@ -510,6 +562,7 @@ class MainActivity : ComponentActivity() {
                                     routeKey = navigationState.deviceDetailKey,
                                     favorites = savedDeviceProfiles,
                                 ),
+                                scrollState = deviceDetailScrollState,
                                 favoriteErrorMessage = favoriteActionError,
                                 customNameErrorMessage = customNameActionError,
                                 onBack = ::goBack,
@@ -557,6 +610,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+}
+
+private fun LanScannerUiState.scrollNetworkContext() = when (this) {
+    LanScannerUiState.Idle -> null
+    is LanScannerUiState.Ready -> readiness.networkContext
+    is LanScannerUiState.Scanning -> networkContext
+    is LanScannerUiState.Completed -> session.initialNetworkContext
+    is LanScannerUiState.Cancelled -> session.initialNetworkContext
+    is LanScannerUiState.NetworkChanged -> session.initialNetworkContext
+    is LanScannerUiState.UnsupportedNetwork -> readiness.networkContext
+    is LanScannerUiState.VpnBlocked -> readiness.networkContext
+    is LanScannerUiState.Error -> readiness?.networkContext
 }
 
 private fun HistoryType.displayName(): String = when (this) {

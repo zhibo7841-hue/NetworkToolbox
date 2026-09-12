@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.report.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -91,6 +92,7 @@ fun ReportScreen(
     onStopCheck: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    scrollState: ScrollState? = null,
     onCopyReport: (String) -> Unit = {},
     onSavePdf: (ByteArray, String) -> Unit = { _, _ -> },
     onSharePdf: (ByteArray, String) -> Unit = { _, _ -> },
@@ -102,7 +104,7 @@ fun ReportScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState ?: rememberScrollState())
                 .padding(horizontal = NetworkToolboxSpacing.LG, vertical = NetworkToolboxSpacing.SM),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
         ) {

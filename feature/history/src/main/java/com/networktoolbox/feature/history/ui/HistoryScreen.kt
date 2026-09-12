@@ -1,6 +1,7 @@
 package com.networktoolbox.feature.history.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -49,6 +51,7 @@ fun HistoryScreen(
     onOpenReport: (HistoryRecord) -> Unit = {},
     canOpenReport: (HistoryRecord) -> Boolean = { false },
     modifier: Modifier = Modifier,
+    scrollState: ScrollState? = null,
 ) {
     var showClearDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -56,7 +59,7 @@ fun HistoryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState ?: rememberScrollState())
                 .padding(NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.MD),
         ) {
@@ -83,12 +86,14 @@ fun HistoryScreen(
                 is HistoryUiState.Error -> ErrorCard(state.message, onLoad)
                 is HistoryUiState.Success -> {
                     state.records.forEach { record ->
-                        HistoryRecordCard(
-                            record = record,
-                            onDelete = onDelete,
-                            onOpenReport = onOpenReport,
-                            canOpenReport = canOpenReport,
-                        )
+                        key(record.id) {
+                            HistoryRecordCard(
+                                record = record,
+                                onDelete = onDelete,
+                                onOpenReport = onOpenReport,
+                                canOpenReport = canOpenReport,
+                            )
+                        }
                     }
                 }
             }

@@ -2,6 +2,7 @@ package com.networktoolbox.feature.dashboard
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -82,6 +83,7 @@ fun HomeScreen(
     onOpenReport: () -> Unit,
     onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier,
+    scrollState: ScrollState? = null,
     onOpenMenu: () -> Unit = {},
     onOpenTraceroute: () -> Unit = {},
     onOpenLanScan: () -> Unit = {},
@@ -100,7 +102,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState ?: rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = NetworkToolboxSpacing.LG),
             verticalArrangement = Arrangement.spacedBy(NetworkToolboxSpacing.LG),
         ) {

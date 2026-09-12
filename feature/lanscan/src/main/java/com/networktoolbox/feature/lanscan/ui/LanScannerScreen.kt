@@ -1,5 +1,6 @@
 package com.networktoolbox.feature.lanscan.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -53,8 +55,12 @@ fun LanScannerScreen(
     savedProfiles: List<FavoriteDevice> = emptyList(),
     isTopLevelDestination: Boolean = false,
     onOpenMenu: () -> Unit = {},
+    scrollState: ScrollState? = null,
 ) {
-    ToolScreenLayout(modifier = modifier) {
+    ToolScreenLayout(
+        modifier = modifier,
+        scrollState = scrollState,
+    ) {
         if (isTopLevelDestination) {
             NetworkToolboxTopLevelHeader(
                 title = "设备",
@@ -450,10 +456,12 @@ private fun DeviceList(
             )
         }
         deviceItems.forEach { deviceItem ->
-            LanDeviceCard(
-                presentation = deviceItem.card,
-                showMac = true,
-            )
+            key(deviceItem.detailKey) {
+                LanDeviceCard(
+                    presentation = deviceItem.card,
+                    showMac = true,
+                )
+            }
         }
     }
 }

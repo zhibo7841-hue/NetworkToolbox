@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -57,11 +59,14 @@ fun ToolScreenLayout(
 @Composable
 fun ToolScreenLazyLayout(
     modifier: Modifier = Modifier,
+    listState: LazyListState? = null,
     content: LazyListScope.() -> Unit,
 ) {
+    val rememberedListState = listState ?: rememberLazyListState()
     Surface(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = rememberedListState,
             contentPadding = PaddingValues(
                 start = NetworkToolboxSpacing.XL,
                 top = NetworkToolboxSpacing.LG,
